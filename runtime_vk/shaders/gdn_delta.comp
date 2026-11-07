@@ -1,0 +1,102 @@
+#version 450
+// gdn_delta.comp - the Gated Delta Net recurrence for ONE token, fused: state decay, delta
+// correction, state store and output. It replaces the fork's GGML_OP_GATED_DELTA_NET, whose
+// dispatch shape this mirrors: workgroup count {H, n_seqs, S_v} = (32 v-heads, 1, 128 columns),
+// 128 lanes = the 128 k-dim elements of ONE state column.
+//
+// WHY A COLUMN PER WORKGROUP: the state is stored as ne {128, 128, 32} = (i, j, h) with i fastest,
+// so element (i,j,h) sits at i + 128*j + 16384*h and a k-column is 128 CONTIGUOUS floats. One
+// lane per i makes the load and the store fully coalesced, and both reductions
+// (pred = sum_i S*k, o = sum_i S*q) stay inside the workgroup.
+//
+// THE RECURRENCE, per v-head h and column j (order is what has to be proven, not assumed):
+//   a    = exp(g[h])                     g is the per-head log decay (32 values/token), so the
+//                                        decay is a SCALAR per head broadcast over the 128 k-dim
+//                                        lanes - NOT per channel. This is what the shapes say:
+//                                        gate-0 is {32,2} (dump line 436) while the state is
+//                                        {128,128,32}.
+//   S_i <- S_i * a                       (1) decay first
+//   pred = sum_i S_i * k_i               (2) read the decayed state
+//   u    = beta * (v_j - pred)           (3) the delta correction, beta on the difference
+//   S_i <- S_i + k_i * u                 (4) rank-1 update, written back
+//   o_j  = scale * sum_i S_i * q_i       (5) read the updated state; scale = 1/sqrt(128)
+// Steps (1)-(2) and (4)-(5) are two shared-memory reductions, 7 tree steps each.
+//
+// (1) before (2) is the FLA fused_recurrent_gated_delta_rule order and it is the ONLY step order
+// that the 2-token prefill oracle cannot discriminate (its initial state is all zeros, so decay
+// and pred commute trivially there). tools/spirv_gdn_decode.py reads the official kernel's
+// SPIR-V to confirm it, and the one-token decode step in runs/dbg_full_real.log - the only dump
+// with a non-zero state - is the number that decides it in practice. Until then this order is a
+// labelled 【前提】, and mode=0 vs mode=1 below is the switch that tests both without a rebuild.
+//
+// GROUPING: 16 q/k heads serve 32 v heads (qwen35.ssm.group_count = 16, time_step_rank = 32).
+// hq = (h % 16) is read off the graph: the fused output is reshaped {128,32} -> {128,16,2} and
+// PERMUTEd to {128,2,16,...} before ssm_out (dump lines 780-960), which says the kernel's own head
+// axis runs a + 16*b with a the q/k head. gmap picks the other reading (h/2) so one dispatch
+// difference is measurable rather than arguable.
+layout(local_size_x = 128, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly buffer A { float a[]; };   // the activation arena: l2 q/k, v, g, beta
+layout(binding = 1)       buffer  S { float s[]; };     // the per-layer 128x128x32 state
+layout(binding = 2)       buffer  O { float o[]; };     // output arena
+
+layout(push_constant) uniform PC {
+    uint n_head;     // 32 v-heads (workgroup x)
+    uint dim;        // 128 = qwen35.ssm.state_size (workgroup z, and the local size)
+    uint nq;         // 16 q/k heads
+    uint gmap;       // 0: hq = h % nq   1: hq = h / (n_head/nq)
+    uint mode;       // 0: decay before pred   1: pred before decay
+    uint q_off;      // float units: l2-normalised q rows, [nq][dim]
+    uint k_off;      // float units: l2-normalised k rows, [nq][dim]
+    uint v_off;      // float units: conv+silu output's v block, [n_head][dim]
+    uint g_off;      // float units: per-head log decay, [n_head]
+    uint beta_off;   // float units: [n_head]
+    uint o_off;      // float units: [n_head][dim]
+    uint st_off;     // float units: this layer's state base
+    float scale;     // 1/sqrt(dim), from the fork's own host code
+    uint _p0, _p1, _p2;   // pad to 64 B
+};
+
+shared float sh[128];
+
+// Two reductions per workgroup, so the read of sh[0] has to be fenced on BOTH sides: without the
+// trailing barrier a lane still reading sh[0] races the next reduction's write of sh[lane].
+float tree_reduce(float v) {
+    const uint lane = gl_LocalInvocationID.x;
+    barrier();
+    sh[lane] = v;
+    barrier();
+    for (uint s = 64u; s > 0u; s >>= 1u) {
+        if (lane < s) sh[lane] += sh[lane + s];
+        barrier();
+    }
+    const float r = sh[0];
+    barrier();
+    return r;
+}
+
+void main() {
+    const uint h = gl_WorkGroupID.x;
+    const uint j = gl_WorkGroupID.z;
+    const uint i = gl_LocalInvocationID.x;          // one k-dim element per lane
+    const uint npg = n_head / nq;
+    const uint hq = (gmap == 0u) ? (h % nq) : (h / npg);
+
+    const float kv = a[k_off + hq * dim + i];
+    const float qv = a[q_off + hq * dim + i];
+    const uint sidx = st_off + i + dim * j + dim * dim * h;
+    float S = s[sidx];
+
+    const float g = a[g_off + h];
+    const float beta = a[beta_off + h];
+    const float v = a[v_off + h * dim + j];
+
+    if (mode == 0u) S *= exp(g);                    // decay first, then predict from the decayed
+    float pred = tree_reduce(S * kv);               // state (the FLA fused_recurrent order)
+    if (mode == 1u) S *= exp(g);                    // the other reading, kept measurable
+    const float u = beta * (v - pred);
+    S += kv * u;
+    s[sidx] = S;
+    const float ov = tree_reduce(S * qv) * scale;
+    if (i == 0u) o[o_off + h * dim + j] = ov;
+}

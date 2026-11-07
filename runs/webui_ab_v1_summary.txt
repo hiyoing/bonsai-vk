@@ -1,0 +1,7 @@
+NEW1  rc=0 availRAM=1499MB | 48 generated tokens in 3420.3 ms  ->  14.03 tok/s | steady-state: 71.3 ms/token | gate: PASS (bitmask 0 = A ok A2 ok A3 ok A4 ok B ok C ok D ok E ok) | dedicated  2539.23 MiB
+OLD1  rc=0 availRAM=1472MB | 48 generated tokens in 3427.6 ms  ->  14.00 tok/s | steady-state: 71.4 ms/token | gate: PASS (bitmask 0 = A ok A2 ok A3 ok A4 ok B ok C ok D ok E ok) | dedicated  2539.23 MiB
+NEW2  rc=0 availRAM=1788MB | 48 generated tokens in 3423.8 ms  ->  14.02 tok/s | steady-state: 71.3 ms/token | gate: PASS (bitmask 0 = A ok A2 ok A3 ok A4 ok B ok C ok D ok E ok) | dedicated  2539.23 MiB
+OLD2  rc=0 availRAM=1838MB | 48 generated tokens in 3420.7 ms  ->  14.03 tok/s | steady-state: 71.3 ms/token | gate: PASS (bitmask 0 = A ok A2 ok A3 ok A4 ok B ok C ok D ok E ok) | dedicated  2539.23 MiB
+NEW3  rc=0 availRAM=1945MB | 48 generated tokens in 3425.9 ms  ->  14.01 tok/s | steady-state: 71.4 ms/token | gate: PASS (bitmask 0 = A ok A2 ok A3 ok A4 ok B ok C ok D ok E ok) | dedicated  2539.23 MiB
+OLD3  rc=0 availRAM=1984MB | 48 generated tokens in 3431.0 ms  ->  13.99 tok/s | steady-state: 71.5 ms/token | gate: PASS (bitmask 0 = A ok A2 ok A3 ok A4 ok B ok C ok D ok E ok) | dedicated  2539.23 MiB
+=== full logs concatenated in ../runs/webui_ab_v1.log ===

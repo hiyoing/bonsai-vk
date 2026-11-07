@@ -1,0 +1,139 @@
+== 0/2 reference oracle: inline the official dequant head ==
+wrote runtime_vk\shaders\dequant_ptq1_0_ref.comp  (110 lines: 45 head + 61 official)
+== 1/2 shaders: GLSL -> SPIR-V ==
+    add.comp
+shaders\add.comp
+    attn_norm_rope.comp
+shaders\attn_norm_rope.comp
+    attn_norm_rope2.comp
+shaders\attn_norm_rope2.comp
+    attn_pv.comp
+shaders\attn_pv.comp
+    attn_pv_q8v.comp
+shaders\attn_pv_q8v.comp
+    attn_pv_q8v_gqa.comp
+shaders\attn_pv_q8v_gqa.comp
+    attn_qk_softmax.comp
+shaders\attn_qk_softmax.comp
+    attn_qk_softmax_gqa_h4_q1024.comp
+shaders\attn_qk_softmax_gqa_h4_q1024.comp
+    attn_qk_softmax_gqa_h4_q256.comp
+shaders\attn_qk_softmax_gqa_h4_q256.comp
+    attn_qk_softmax_gqa_h4_q512.comp
+shaders\attn_qk_softmax_gqa_h4_q512.comp
+    attn_qk_softmax_tile_q1024.comp
+shaders\attn_qk_softmax_tile_q1024.comp
+    attn_qk_softmax_tile_q2048.comp
+shaders\attn_qk_softmax_tile_q2048.comp
+    attn_qk_softmax_tile_q4096.comp
+shaders\attn_qk_softmax_tile_q4096.comp
+    attn_qk_softmax_tile_q8192.comp
+shaders\attn_qk_softmax_tile_q8192.comp
+    attn_qk_softmax_wide.comp
+shaders\attn_qk_softmax_wide.comp
+    bench_shm_n1024.comp
+shaders\bench_shm_n1024.comp
+    bench_shm_n2048.comp
+shaders\bench_shm_n2048.comp
+    bench_shm_n4096.comp
+shaders\bench_shm_n4096.comp
+    bench_shm_n512.comp
+shaders\bench_shm_n512.comp
+    conv_silu.comp
+shaders\conv_silu.comp
+    deint_qg.comp
+shaders\deint_qg.comp
+    dequant_ptq1_0_ref.comp
+shaders\dequant_ptq1_0_ref.comp
+    embd_gather.comp
+shaders\embd_gather.comp
+    f16_map.comp
+shaders\f16_map.comp
+    f16_pack_probe.comp
+shaders\f16_pack_probe.comp
+    gather_rows.comp
+shaders\gather_rows.comp
+    gdn_delta.comp
+shaders\gdn_delta.comp
+    gemv_f32.comp
+shaders\gemv_f32.comp
+    gemv_ternary.comp
+shaders\gemv_ternary.comp
+    hadamard_fwht.comp
+shaders\hadamard_fwht.comp
+    hat4096.comp
+shaders\hat4096.comp
+    l2_norm.comp
+shaders\l2_norm.comp
+    math_probe.comp
+shaders\math_probe.comp
+    mul.comp
+shaders\mul.comp
+    mul_bcast.comp
+shaders\mul_bcast.comp
+    permute_vg.comp
+shaders\permute_vg.comp
+    probe_shm_n3072.comp
+shaders\probe_shm_n3072.comp
+    probe_shm_n4000.comp
+shaders\probe_shm_n4000.comp
+    probe_shm_n4090.comp
+shaders\probe_shm_n4090.comp
+    probe_shm_n4096.comp
+shaders\probe_shm_n4096.comp
+    probe_shm_n4224.comp
+shaders\probe_shm_n4224.comp
+    probe_shm_n4608.comp
+shaders\probe_shm_n4608.comp
+    reduce.comp
+shaders\reduce.comp
+    repack_ptq1_0.comp
+shaders\repack_ptq1_0.comp
+    rms_norm.comp
+shaders\rms_norm.comp
+    set_pos.comp
+shaders\set_pos.comp
+    sigmoid.comp
+shaders\sigmoid.comp
+    signs_mul.comp
+shaders\signs_mul.comp
+    silu.comp
+shaders\silu.comp
+    softplus.comp
+shaders\softplus.comp
+    swiglu.comp
+shaders\swiglu.comp
+    xsum.comp
+shaders\xsum.comp
+== 2/2 host: g++ -> bonsai_vk.exe + the alignment tests + the fleet driver ==
+    bonsai_vk.exe OK
+    align_tokenizer.exe OK
+    align_dequant.exe OK
+    align_f16.exe OK
+    align_attn.exe OK
+    shared_probe.exe OK
+    align_27b.exe OK
+    bonsai_fleet.exe OK
+
+== run: one token-op of the hidden 4096 / ffn 12288 projection set ==
+device: Radeon RX 550X | driver 2.0.279 | device-local heap 3840 MiB | timestampPeriod 40.000 ns
+  queue family 0: flags=0xF COMPUTE TRANSFER GRAPHICS SPARSE   tiler=64  contexts=1
+  queue family 1: flags=0xE COMPUTE TRANSFER SPARSE   tiler=64  contexts=1
+  queue family 2: flags=0xC TRANSFER SPARSE   tiler=64  contexts=8
+  compute queue = family 0, transfer-only queue = family 2
+
+arena (single vkAllocateMemory, DEVICE_LOCAL):
+  ptq_src   size=  11010048 B  alignment=4  -> offset 0
+  codes     size=  12582912 B  alignment=4  -> offset 11010048
+  scales    size=   1572864 B  alignment=4  -> offset 23592960
+  x         size=     16384 B  alignment=4  -> offset 25165824
+  xsum      size=       128 B  alignment=4  -> offset 25182208
+  out       size=    196608 B  alignment=4  -> offset 25182336
+  tensors=24.2 MiB  alignment padding=0 B (0.0000%)  arena=24.2 MiB
+  upload on the transfer-only queue (family 2): 10.5 MiB, engine 1862.4 us = 5.92 GB/s, wall 2462.9 us
+repack: 11.0 MB -> 12.6 MB in 0.72 ms (32.7 GB/s effective, one-time cost)
+correctness: max|err|=0.00001  max|ref|=72.2  rel=1.06e-07  (expect ~1e-6 rel in f32 over K=4096)
+M=12288 K=4096 splits=4 : 0.285 ms/token-op  176.9 Gop/s  44.2 GB/s (packed weights)
+  cross-check: wall 0.286 ms vs timestamps 0.285 ms = 99.6% of wall -> limits.timestampPeriod 40.0 ns is trustworthy here
+WGSL reference on this card (probe 13): 143-155 Gop/s for these shapes.
+per-token projection cost for a 9B dense model: 9e9 MACs / rate; see report.

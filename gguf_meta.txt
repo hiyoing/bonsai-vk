@@ -1,0 +1,362 @@
+  hit: empyrealworks/Ternary-Bonsai-2-9B-PTQ1_0-MTP-GGUF          downloads=4
+  hit: prism-ml/Ternary-Bonsai-2-9B-gguf                          downloads=522957
+  hit: prism-ml/Ternary-Bonsai-2-9B-mlx-2bit                      downloads=11286
+  hit: AtomicChat/Ternary-Bonsai-2-9B-Uncensored-LoRA-GGUF        downloads=1057
+  hit: EigenLabs/Ternary-Bonsai-2-9B-MLX-2bit                     downloads=705
+  hit: danyalmalik/Ternary-Bonsai-2-9B-ONNX-WebGPU                downloads=26
+  hit: nativ-community/Ternary-Bonsai-2-9B-2bit                   downloads=278
+  hit: mlx-community/Ternary-Bonsai-2-9B-2bit                     downloads=677
+  hit: ryugyosoft/Ternary-Bonsai-2-9B-onwx                        downloads=29
+  hit: ryugyosoft/Ternary-Bonsai-2-9B-onw                         downloads=40
+  hit: suryatmodulus/Ternary-Bonsai-2-9B-gguf                     downloads=1417
+  hit: suryatmodulus/Ternary-Bonsai-2-9B-mlx-2bit                 downloads=500
+  hit: flackzz/Ternary-Bonsai-2-9B-ONNX-WebGPU                    downloads=186
+  hit: Mike0021/Ternary-Bonsai-2-9B-text-ONNX                     downloads=172
+  hit: fyb1214/Ternary-Bonsai-2-9B-ninfer                         downloads=691
+  hit: jonathan-kellerai/Ternary-Bonsai-2-9B-hf-bf16              downloads=53
+  hit: mradermacher/Ternary-Bonsai-2-9B-hf-bf16-GGUF              downloads=1108
+  hit: thread13/Ternary-Bonsai-2-9B-llamafile                     downloads=0
+  hit: mentriaai/Ternary-Bonsai-2-9B-mentria                      downloads=0
+  hit: korokoboom/Bonsai-2-9b-Shakespeare-SFT                     downloads=389
+  hit: PentaVM/ArchieOS-Bonsai2-9B-WSL                            downloads=0
+  hit: darkmaniac7/TokForge-Bonsai-2-9B-MNN                       downloads=50
+  hit: showeed/ollama_bonsai_2_9b                                 downloads=0
+
+empyrealworks/Ternary-Bonsai-2-9B-PTQ1_0-MTP-GGUF -> gguf files: ['Ternary-Bonsai-2-9B-PTQ1_0-MTP-Q8_0.gguf']
+
+======== empyrealworks/Ternary-Bonsai-2-9B-PTQ1_0-MTP-GGUF / Ternary-Bonsai-2-9B-PTQ1_0-MTP-Q8_0.gguf ========
+  url: https://hf-mirror.com/empyrealworks/Ternary-Bonsai-2-9B-PTQ1_0-MTP-GGUF/resolve/main/Ternary-Bonsai-2-9B-PTQ1_0-MTP-Q8_0.gguf
+  file size: 2256.0 MB
+  GGUF v3, 442 tensors, 50 metadata keys, header = 11.04 MB
+    general.architecture                                 = qwen35
+    general.file_type                                    = 143
+    general.name                                         = Ternary-Bonsai-2-9B
+    general.quantization_version                         = 2
+    general.sampling.min_p                               = 0.0
+    general.sampling.penalty_repeat                      = 1.0
+    general.sampling.temp                                = 1.0
+    general.sampling.top_k                               = 20
+    general.sampling.top_p                               = 0.949999988079071
+    general.size_label                                   = 9B
+    general.type                                         = model
+    prism.hadamard.axis                                  = input-last-dimension
+    prism.hadamard.block_size                            = 4096
+    prism.hadamard.gdn_v_grouped                         = 1
+    prism.hadamard.inverse_weight_names                  = ['token_embd.weight']
+    prism.hadamard.sign_mode                             = explicit
+    prism.hadamard.sign_widths                           = [4096, 12288]
+    prism.hadamard.transform                             = normalized-sylvester-walsh-hadamard
+    prism.hadamard.version                               = 1
+    prism.hadamard.weight_names                          = ['output.weight', 'blk.0.attn_qkv.weight', 'blk.0.attn_gate.weight', 'blk.0.ssm_out.weight', 'blk.0.ffn_down.weight', 'blk.0.ffn_gate.weight', 'blk.0.ffn_up.weight', 'blk.1.attn_qkv.weight', 'blk.1.attn_gate.weight', 'blk.1.ssm_out.weight'... (+191)
+    qwen35.attention.head_count                          = 16
+    qwen35.attention.head_count_kv                       = 4
+    qwen35.attention.key_length                          = 256
+    qwen35.attention.layer_norm_rms_epsilon              = 9.999999974752427e-07
+    qwen35.attention.value_length                        = 256
+    qwen35.block_count                                   = 33
+    qwen35.context_length                                = 262144
+    qwen35.embedding_length                              = 4096
+    qwen35.feed_forward_length                           = 12288
+    qwen35.full_attention_interval                       = 4
+    qwen35.nextn_predict_layers                          = 1
+    qwen35.rope.dimension_count                          = 64
+    qwen35.rope.dimension_sections                       = [11, 11, 10, 0]
+    qwen35.rope.freq_base                                = 10000000.0
+    qwen35.ssm.conv_kernel                               = 4
+    qwen35.ssm.group_count                               = 16
+    qwen35.ssm.inner_size                                = 4096
+    qwen35.ssm.state_size                                = 128
+    qwen35.ssm.time_step_rank                            = 32
+    tokenizer.chat_template                              = {%- set image_count = namespace(value=0) %}\n{%- set video_co...<7756 chars>
+    tokenizer.ggml.add_bos_token                         = 0
+    tokenizer.ggml.bos_token_id                          = 248044
+    tokenizer.ggml.eos_token_id                          = 248046
+    tokenizer.ggml.merges                                = <247587 entries, skipped>
+    tokenizer.ggml.model                                 = gpt2
+    tokenizer.ggml.padding_token_id                      = 248044
+    tokenizer.ggml.pre                                   = <6 entries, skipped>
+    tokenizer.ggml.token_type                            = <248320 entries, skipped>
+    tokenizer.ggml.tokens                                = <248320 entries, skipped>
+  prism.hadamard.sign_values: 16384 entries (skipped)
+  == tensor table: 33 layers (blk.0..blk.32) ==
+    attn_gate.weight                   x24  shape [4096, 4096]                 dtype=143
+    attn_k.weight                      x9   shape [4096, 1024]                 dtype=143
+    attn_k_norm.weight                 x9   shape [256]                        dtype=0
+    attn_norm.weight                   x33  shape [4096]                       dtype=0
+    attn_output.weight                 x9   shape [4096, 4096]                 dtype=143
+    attn_q.weight                      x9   shape [4096, 8192]                 dtype=143
+    attn_q_norm.weight                 x9   shape [256]                        dtype=0
+    attn_qkv.weight                    x24  shape [4096, 8192]                 dtype=143
+    attn_v.weight                      x9   shape [4096, 1024]                 dtype=143
+    ffn_down.weight                    x33  shape [12288, 4096]                dtype=143
+    ffn_gate.weight                    x33  shape [4096, 12288]                dtype=143
+    ffn_up.weight                      x33  shape [4096, 12288]                dtype=143
+    nextn.eh_proj.weight               x1   shape [8192, 4096]                 dtype=8
+    nextn.enorm.weight                 x1   shape [4096]                       dtype=0
+    nextn.hnorm.weight                 x1   shape [4096]                       dtype=0
+    nextn.shared_head_norm.weight      x1   shape [4096]                       dtype=0
+    output.weight                      x1   shape [4096, 248320]               dtype=143
+    output_norm.weight                 x1   shape [4096]                       dtype=0
+    post_attention_norm.weight         x33  shape [4096]                       dtype=0
+    ssm_a                              x24  shape [32]                         dtype=0
+    ssm_alpha.weight                   x24  shape [4096, 32]                   dtype=0
+    ssm_beta.weight                    x24  shape [4096, 32]                   dtype=0
+    ssm_conv1d.weight                  x24  shape [4, 8192]                    dtype=0
+    ssm_dt.bias                        x24  shape [32]                         dtype=0
+    ssm_norm.weight                    x24  shape [128]                        dtype=0
+    ssm_out.weight                     x24  shape [4096, 4096]                 dtype=143
+    token_embd.weight                  x1   shape [4096, 248320]               dtype=143
+  == recurrent/linear-attention tensors per layer: ['attn_gate.weight', 'ffn_gate.weight', 'ssm_a', 'ssm_alpha.weight', 'ssm_beta.weight', 'ssm_conv1d.weight', 'ssm_dt.bias', 'ssm_norm.weight', 'ssm_out.weight'] ==
+
+prism-ml/Ternary-Bonsai-2-9B-gguf -> gguf files: ['Ternary-Bonsai-2-9B-DFlash2-Q8_0.gguf', 'Ternary-Bonsai-2-9B-PQ2_0-MTP-Q8_0.gguf', 'Ternary-Bonsai-2-9B-PQ2_0.gguf', 'Ternary-Bonsai-2-9B-PTQ1_0.gguf', 'Ternary-Bonsai-2-9B-Q2_0.gguf', 'Ternary-Bonsai-2-9B-mmproj-BF16.gguf', 'Ternary-Bonsai-2-9B-mmproj-Q8_0.gguf']
+
+======== prism-ml/Ternary-Bonsai-2-9B-gguf / Ternary-Bonsai-2-9B-DFlash2-Q8_0.gguf ========
+  url: https://hf-mirror.com/prism-ml/Ternary-Bonsai-2-9B-gguf/resolve/main/Ternary-Bonsai-2-9B-DFlash2-Q8_0.gguf
+  file size: 1574.2 MB
+  GGUF v3, 96 tensors, 39 metadata keys, header = 10.95 MB
+    dflash.attention.head_count                          = 32
+    dflash.attention.head_count_kv                       = 8
+    dflash.attention.key_length                          = 128
+    dflash.attention.layer_norm_rms_epsilon              = 9.999999974752427e-07
+    dflash.attention.sliding_window                      = 4096
+    dflash.attention.sliding_window_pattern              = [1, 1, 1, 1, 1, 0]
+    dflash.attention.value_length                        = 128
+    dflash.block_count                                   = 6
+    dflash.block_size                                    = 16
+    dflash.context_length                                = 262144
+    dflash.conv_group_size                               = 16
+    dflash.conv_kernel_size                              = 2
+    dflash.embedding_length                              = 4096
+    dflash.feed_forward_length                           = 12288
+    dflash.rope.dimension_sections                       = [64, 0, 0, 0]
+    dflash.rope.freq_base                                = 10000000.0
+    dflash.rope.scaling.factor                           = 16.0
+    dflash.rope.scaling.original_context_length          = 16384
+    dflash.rope.scaling.type                             = yarn
+    dflash.selector_rank                                 = 256
+    dflash.selector_top_k                                = 16
+    dflash.target_layers                                 = [2, 6, 10, 14, 18, 22, 26, 30]
+    general.architecture                                 = dflash
+    general.file_type                                    = 7
+    general.name                                         = Ternary-Bonsai-2-9B-DFlash2
+    general.quantization_version                         = 2
+    general.size_label                                   = 2.4B
+    general.type                                         = model
+    tokenizer.chat_template                              = {%- set image_count = namespace(value=0) %}\n{%- set video_co...<7756 chars>
+    tokenizer.ggml.add_bos_token                         = 0
+    tokenizer.ggml.bos_token_id                          = 248044
+    tokenizer.ggml.eos_token_id                          = 248046
+    tokenizer.ggml.mask_token_id                         = 248077
+    tokenizer.ggml.merges                                = <247587 entries, skipped>
+    tokenizer.ggml.model                                 = gpt2
+    tokenizer.ggml.padding_token_id                      = 248044
+    tokenizer.ggml.pre                                   = <6 entries, skipped>
+    tokenizer.ggml.token_type                            = <248320 entries, skipped>
+    tokenizer.ggml.tokens                                = <248320 entries, skipped>
+  prism.hadamard.sign_values: 0 entries (skipped)
+  == tensor table: 6 layers (blk.0..blk.5) ==
+    attn_conv_base                     x6   shape [4096, 2, 2]                 dtype=0
+    attn_conv_proj.weight              x6   shape [4096, 1024]                 dtype=8
+    attn_k.weight                      x6   shape [4096, 1024]                 dtype=8
+    attn_k_norm.weight                 x6   shape [128]                        dtype=0
+    attn_norm.weight                   x6   shape [4096]                       dtype=0
+    attn_output.weight                 x6   shape [4096, 4096]                 dtype=8
+    attn_q.weight                      x6   shape [4096, 4096]                 dtype=8
+    attn_q_norm.weight                 x6   shape [128]                        dtype=0
+    attn_v.weight                      x6   shape [4096, 1024]                 dtype=8
+    enc.output_norm.weight             x1   shape [4096]                       dtype=0
+    fc.weight                          x1   shape [32768, 4096]                dtype=8
+    ffn_conv_base                      x6   shape [4096, 2, 2]                 dtype=0
+    ffn_conv_proj.weight               x6   shape [4096, 1024]                 dtype=8
+    ffn_down.weight                    x6   shape [12288, 4096]                dtype=8
+    ffn_gate.weight                    x6   shape [4096, 12288]                dtype=8
+    ffn_norm.weight                    x6   shape [4096]                       dtype=0
+    ffn_up.weight                      x6   shape [4096, 12288]                dtype=8
+    output_norm.weight                 x1   shape [4096]                       dtype=0
+    selector_hidden.weight             x1   shape [4096, 256]                  dtype=8
+    selector_predecessor.weight        x1   shape [256, 248320]                dtype=8
+    selector_successor.weight          x1   shape [256, 248320]                dtype=8
+  == recurrent/linear-attention tensors per layer: ['attn_conv_base', 'attn_conv_proj.weight', 'ffn_gate.weight', 'ffn_conv_base', 'ffn_conv_proj.weight'] ==
+
+
+########## APPENDED RUN: probe_gguf_meta.py --only prism-ml/Ternary-Bonsai-2-9B-gguf/Ternary-Bonsai-2-9B-PTQ1_0.gguf ##########
+
+======== prism-ml/Ternary-Bonsai-2-9B-gguf / Ternary-Bonsai-2-9B-PTQ1_0.gguf ========
+  url: https://hf-mirror.com/prism-ml/Ternary-Bonsai-2-9B-gguf/resolve/main/Ternary-Bonsai-2-9B-PTQ1_0.gguf
+  file size: 1997.5 MB
+  GGUF v3, 427 tensors, 49 metadata keys, header = 11.04 MB
+    general.architecture                                 = qwen35
+    general.file_type                                    = 143
+    general.name                                         = Ternary-Bonsai-2-9B
+    general.quantization_version                         = 2
+    general.sampling.min_p                               = 0.0
+    general.sampling.penalty_repeat                      = 1.0
+    general.sampling.temp                                = 1.0
+    general.sampling.top_k                               = 20
+    general.sampling.top_p                               = 0.949999988079071
+    general.size_label                                   = 9B
+    general.type                                         = model
+    prism.hadamard.axis                                  = input-last-dimension
+    prism.hadamard.block_size                            = 4096
+    prism.hadamard.gdn_v_grouped                         = 1
+    prism.hadamard.inverse_weight_names                  = ['token_embd.weight']
+    prism.hadamard.sign_mode                             = explicit
+    prism.hadamard.sign_widths                           = [4096, 12288]
+    prism.hadamard.transform                             = normalized-sylvester-walsh-hadamard
+    prism.hadamard.version                               = 1
+    prism.hadamard.weight_names                          = ['output.weight', 'blk.0.attn_qkv.weight', 'blk.0.attn_gate.weight', 'blk.0.ssm_out.weight', 'blk.0.ffn_down.weight', 'blk.0.ffn_gate.weight', 'blk.0.ffn_up.weight', 'blk.1.attn_qkv.weight', 'blk.1.attn_gate.weight', 'blk.1.ssm_out.weight'... (+191)
+    qwen35.attention.head_count                          = 16
+    qwen35.attention.head_count_kv                       = 4
+    qwen35.attention.key_length                          = 256
+    qwen35.attention.layer_norm_rms_epsilon              = 9.999999974752427e-07
+    qwen35.attention.value_length                        = 256
+    qwen35.block_count                                   = 32
+    qwen35.context_length                                = 262144
+    qwen35.embedding_length                              = 4096
+    qwen35.feed_forward_length                           = 12288
+    qwen35.full_attention_interval                       = 4
+    qwen35.rope.dimension_count                          = 64
+    qwen35.rope.dimension_sections                       = [11, 11, 10, 0]
+    qwen35.rope.freq_base                                = 10000000.0
+    qwen35.ssm.conv_kernel                               = 4
+    qwen35.ssm.group_count                               = 16
+    qwen35.ssm.inner_size                                = 4096
+    qwen35.ssm.state_size                                = 128
+    qwen35.ssm.time_step_rank                            = 32
+    tokenizer.chat_template                              = {%- set image_count = namespace(value=0) %}\n{%- set video_co...<7756 chars>
+    tokenizer.ggml.add_bos_token                         = 0
+    tokenizer.ggml.bos_token_id                          = 248044
+    tokenizer.ggml.eos_token_id                          = 248046
+    tokenizer.ggml.merges                                = <247587 entries, skipped>
+    tokenizer.ggml.model                                 = gpt2
+    tokenizer.ggml.padding_token_id                      = 248044
+    tokenizer.ggml.pre                                   = <6 entries, skipped>
+    tokenizer.ggml.token_type                            = <248320 entries, skipped>
+    tokenizer.ggml.tokens                                = <248320 entries, skipped>
+  prism.hadamard.sign_values: 16384 entries (skipped)
+  == tensor table: 32 layers (blk.0..blk.31) ==
+    attn_gate.weight                   x24  shape [4096, 4096]                 dtype=143
+    attn_k.weight                      x8   shape [4096, 1024]                 dtype=143
+    attn_k_norm.weight                 x8   shape [256]                        dtype=0
+    attn_norm.weight                   x32  shape [4096]                       dtype=0
+    attn_output.weight                 x8   shape [4096, 4096]                 dtype=143
+    attn_q.weight                      x8   shape [4096, 8192]                 dtype=143
+    attn_q_norm.weight                 x8   shape [256]                        dtype=0
+    attn_qkv.weight                    x24  shape [4096, 8192]                 dtype=143
+    attn_v.weight                      x8   shape [4096, 1024]                 dtype=143
+    ffn_down.weight                    x32  shape [12288, 4096]                dtype=143
+    ffn_gate.weight                    x32  shape [4096, 12288]                dtype=143
+    ffn_up.weight                      x32  shape [4096, 12288]                dtype=143
+    output.weight                      x1   shape [4096, 248320]               dtype=143
+    output_norm.weight                 x1   shape [4096]                       dtype=0
+    post_attention_norm.weight         x32  shape [4096]                       dtype=0
+    ssm_a                              x24  shape [32]                         dtype=0
+    ssm_alpha.weight                   x24  shape [4096, 32]                   dtype=0
+    ssm_beta.weight                    x24  shape [4096, 32]                   dtype=0
+    ssm_conv1d.weight                  x24  shape [4, 8192]                    dtype=0
+    ssm_dt.bias                        x24  shape [32]                         dtype=0
+    ssm_norm.weight                    x24  shape [128]                        dtype=0
+    ssm_out.weight                     x24  shape [4096, 4096]                 dtype=143
+    token_embd.weight                  x1   shape [4096, 248320]               dtype=143
+  == recurrent/linear-attention tensors per layer: ['attn_gate.weight', 'ffn_gate.weight', 'ssm_a', 'ssm_alpha.weight', 'ssm_beta.weight', 'ssm_conv1d.weight', 'ssm_dt.bias', 'ssm_norm.weight', 'ssm_out.weight'] ==
+
+########## APPENDED: derived arithmetic for the same file (dtype block sizes / per-group bytes / KV-state math; produced by a throwaway script in %TEMP% importing probe_gguf_meta.py, run 2026-10-31) ##########
+FILE SIZE bytes = 1997486976 (1.8603 GiB / 1997.5 MB)  [source: Content-Range 'bytes 0-0/1997486976' + HEAD Content-Length]
+GGUF v3 tensors=427 meta=49 header_bytes=11039588
+general.alignment present in metadata? False -> using 32
+data_start = align_up(11039588,32) = 11039616 ; data span = filesize-data_start = 1986447360 B = 1894.424 MiB
+tensor dtype enum values present: [0, 143]
+general.file_type=143 general.quantization_version=2
+
+== FULL tensor table (suffix | shape | dtype | count | elems each) ==
+  attn_gate.weight               [4096, 4096]           dtype=143  x24  elems/instance=16777216     total_elems=402653184
+  attn_k.weight                  [4096, 1024]           dtype=143  x8   elems/instance=4194304      total_elems=33554432
+  attn_k_norm.weight             [256]                  dtype=0    x8   elems/instance=256          total_elems=2048
+  attn_norm.weight               [4096]                 dtype=0    x32  elems/instance=4096         total_elems=131072
+  attn_output.weight             [4096, 4096]           dtype=143  x8   elems/instance=16777216     total_elems=134217728
+  attn_q.weight                  [4096, 8192]           dtype=143  x8   elems/instance=33554432     total_elems=268435456
+  attn_q_norm.weight             [256]                  dtype=0    x8   elems/instance=256          total_elems=2048
+  attn_qkv.weight                [4096, 8192]           dtype=143  x24  elems/instance=33554432     total_elems=805306368
+  attn_v.weight                  [4096, 1024]           dtype=143  x8   elems/instance=4194304      total_elems=33554432
+  ffn_down.weight                [12288, 4096]          dtype=143  x32  elems/instance=50331648     total_elems=1610612736
+  ffn_gate.weight                [4096, 12288]          dtype=143  x32  elems/instance=50331648     total_elems=1610612736
+  ffn_up.weight                  [4096, 12288]          dtype=143  x32  elems/instance=50331648     total_elems=1610612736
+  output.weight                  [4096, 248320]         dtype=143  x1   elems/instance=1017118720   total_elems=1017118720
+  output_norm.weight             [4096]                 dtype=0    x1   elems/instance=4096         total_elems=4096
+  post_attention_norm.weight     [4096]                 dtype=0    x32  elems/instance=4096         total_elems=131072
+  ssm_a                          [32]                   dtype=0    x24  elems/instance=32           total_elems=768
+  ssm_alpha.weight               [4096, 32]             dtype=0    x24  elems/instance=131072       total_elems=3145728
+  ssm_beta.weight                [4096, 32]             dtype=0    x24  elems/instance=131072       total_elems=3145728
+  ssm_conv1d.weight              [4, 8192]              dtype=0    x24  elems/instance=32768        total_elems=786432
+  ssm_dt.bias                    [32]                   dtype=0    x24  elems/instance=32           total_elems=768
+  ssm_norm.weight                [128]                  dtype=0    x24  elems/instance=128          total_elems=3072
+  ssm_out.weight                 [4096, 4096]           dtype=143  x24  elems/instance=16777216     total_elems=402653184
+  token_embd.weight              [4096, 248320]         dtype=143  x1   elems/instance=1017118720   total_elems=1017118720
+
+== per-group size (PTQ1_0 assumed 28 B per 128 elems = 1.75 bpw) ==
+  token_embd                                     tensors=1    elems=1017118720    bytes=222494720       212.19 MiB    0.207 GiB dtypes=[143]
+  output (lm_head)                               tensors=1    elems=1017118720    bytes=222494720       212.19 MiB    0.207 GiB dtypes=[143]
+  full-attn proj attn_q/k/v/output               tensors=32   elems=469762048     bytes=102760448        98.00 MiB    0.096 GiB dtypes=[143]
+  GDN proj attn_qkv/attn_gate/ssm_out            tensors=72   elems=1610612736    bytes=352321536       336.00 MiB    0.328 GiB dtypes=[143]
+  FFN gate/up/down                               tensors=96   elems=4831838208    bytes=1056964608     1008.00 MiB    0.984 GiB dtypes=[143]
+  SSM aux f32 alpha/beta/conv1d/a/dt/norm        tensors=144  elems=7082496       bytes=28329984         27.02 MiB    0.026 GiB dtypes=[0]
+  norms f32 attn/post/q_norm/k_norm/output_norm  tensors=81   elems=270336        bytes=1081344           1.03 MiB    0.001 GiB dtypes=[0]
+  nextn / MTP                                    tensors=0    elems=0             bytes=0                 0.00 MiB    0.000 GiB dtypes=[]
+  UNASSIGNED tensors: 0 []
+  SUM predicted data = 1986447360 B = 1894.424 MiB = 1.8500 GiB
+  data_start(11039616)+sum(1986447360)=1997486976  vs filesize 1997486976  => diff +0 B (+0.0000 MiB) => matches within header size? True
+
+== solve the unknown dtype-143 bytes/weight from the file itself ==
+  dtype143 elems=8946450432 ; non-143 bytes=29411328 ; data span=1986447360
+  implied B/elem for 143 = 0.21875000 -> 1.750000 bits/weight ; 28/128=0.21875000 (1.75 bits) ; ratio=1.000000
+    PTQ1_0 as (blk 128 elems, 28 B) -> data 1986447360 B, header+data 1997486976 B, diff vs file +0 B
+    PTQ1_0 as (blk 128 elems, 32 B) -> data 2266023936 B, header+data 2277063552 B, diff vs file -279576576 B
+    PTQ1_0 as (blk 128 elems, 34 B) -> data 2405812224 B, header+data 2416851840 B, diff vs file -419364864 B
+    PTQ1_0 as (blk  64 elems, 14 B) -> data 1986447360 B, header+data 1997486976 B, diff vs file +0 B
+    PTQ1_0 as (blk 256 elems, 56 B) -> data 1986447360 B, header+data 1997486976 B, diff vs file +0 B
+    PTQ1_0 as (blk 128 elems, 30 B) -> data 2126235648 B, header+data 2137275264 B, diff vs file -139788288 B
+
+== offset cross-check ==
+  last tensor blk.31.post_attention_norm.weight dims=[4096] dtype=0 offset=1986430976 -> measured 16384 B, formula 16384 B, elems 4096, B/elem 4.000000
+  offset-gap minus formula: min=0 max=0 ; sum of positive pads=0 (no negative => no tensor overruns its slot)
+
+== metadata keys mentioning state / ssm / cache / memory ==
+  qwen35.rope.dimension_count                    = 64
+  qwen35.rope.dimension_sections                 = [11, 11, 10, 0]
+  qwen35.rope.freq_base                          = 10000000.0
+  qwen35.ssm.conv_kernel                         = 4
+  qwen35.ssm.group_count                         = 16
+  qwen35.ssm.inner_size                          = 4096
+  qwen35.ssm.state_size                          = 128
+  qwen35.ssm.time_step_rank                      = 32
+  keys matching kv|cache|memory|n_gpu|offload: ['qwen35.attention.head_count_kv']
+  chat_template present? True (len 7756 chars)
+
+== KV / state arithmetic ==
+  head_count=16 head_count_kv=4 key_length=256 value_length=256 block_count=32 interval=4
+  layers carrying attn_q (full attention) = 8 -> [3, 7, 11, 15, 19, 23, 27, 31]
+  layers carrying attn_qkv (GDN)          = 24 -> [0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14, 16, 17, 18, 20, 21, 22, 24, 25, 26, 28, 29, 30]
+  K elems/token/layer = 4*256 = 1024 ; V = 4*256 = 1024 ; K+V = 2048 elems/token/layer
+  all 8 full-attn layers: 8192 K + 8192 V = 16384 elems/token
+   @f16: 32768 B/token (32.0 KiB/token) ; 1k ctx 32.00 MiB ; 4k ctx 128.00 MiB ; 32k 1024.00 MiB ; 262144 ctx 8.00 GiB
+   @f32: 65536 B/token (64.0 KiB/token) ; 1k ctx 64.00 MiB ; 4k ctx 256.00 MiB ; 32k 2048.00 MiB ; 262144 ctx 16.00 GiB
+  attn_q elems/token = 16*256 = 4096 (q not cached); attn_q shape per full layer = [[4096, 8192]]
+  full-attn per-layer shapes: q=[[4096, 8192]] k=[[4096, 1024]] v=[[4096, 1024]] o=[[4096, 4096]]
+  GDN: conv1d shape=[4, 8192] -> conv state 8192 chans x (kernel-1)=3 = 24576 elems ; recurrent state v_heads*state_size=32*128=4096
+  GDN per-layer state elems = 28672 (conv 24576 + recurrent 4096) ; x 24 layers = 688128 elems ; @f32 = 2.62 MiB (constant, independent of ctx)
+  hybrid total @4096 ctx: KV 128.00 MiB + GDN state 2.62 MiB = 130.62 MiB
+
+== prism.hadamard.* recap ==
+  prism.hadamard.axis                      type=str len=- val=input-last-dimension
+  prism.hadamard.block_size                type=int len=- val=4096
+  prism.hadamard.gdn_v_grouped             type=int len=- val=1
+  prism.hadamard.inverse_weight_names      type=list len=1 val=['token_embd.weight']
+  prism.hadamard.sign_mode                 type=str len=- val=explicit
+  prism.hadamard.sign_values               type=list len=16384 val=[-1, -1, -1, 1, 1, -1, -1, 1, -1, 1, -1, 1, -1, 1, 1, 1, 1, -1, -1, -1, -1, 1, 1, -1, 1, 1, 1, 1, -1, -1, 1, 1, -1, 1, 1
+  prism.hadamard.sign_widths               type=list len=2 val=[4096, 12288]
+  prism.hadamard.transform                 type=str len=- val=normalized-sylvester-walsh-hadamard
+  prism.hadamard.version                   type=int len=- val=1
+  prism.hadamard.weight_names              type=list len=201 val=['output.weight', 'blk.0.attn_qkv.weight', 'blk.0.attn_gate.weight', 'blk.0.ssm_out.weight', 'blk.0.ffn_down.weight', 'b
+  weight_names count=201 ; inverse_weight_names=['token_embd.weight']
+  weight_names present in tensor table: 201/201 ; missing: []
+  tensors NOT in weight_names (by suffix, top 12): ['attn_k_norm.weight', 'attn_norm.weight', 'attn_q_norm.weight', 'output_norm.weight', 'post_attention_norm.weight', 'ssm_a', 'ssm_alpha.weight', 'ssm_beta.weight', 'ssm_conv1d.weight', 'ssm_dt.bias', 'ssm_norm.weight', 'token_embd.weight']

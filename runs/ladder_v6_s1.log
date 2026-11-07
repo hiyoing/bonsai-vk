@@ -1,0 +1,178 @@
+device: Radeon RX 550X | driver 2.0.279 | device-local heap 3840 MiB | timestampPeriod 40.000 ns
+  limits: maxComputeWorkGroupSize[0]=1024 maxComputeWorkGroupCount[0]=4294967295 bufferImageGranularity=1
+  compute queue = family 0, transfer-only queue = family 2
+
+=== weight plan, read from the tensor table (实测, not estimated) ===
+  tensors 427 = 202 PTQ1_0 + 225 f32   weights 8953803264 elems = 8.954 B
+  per-tensor shapes are K x M with K in {4096, 12288}; sign_widths says the same, so the
+  activation-side Hadamard has exactly two widths to cover.
+  checkpoint's own block form : 1957036032 B = 1.823 GiB  (1.75 bpw)
+  our 2-bit random-access form: 2516189184 B = 2.343 GiB  (codes 2.083 GiB + scales 0.260 GiB, 2.125 bpw)
+  f32 blob                    :  29411328 B = 28.049 MiB
+  LAYOUT COST = 0.521 GiB extra = 17064 tokens of KV at 32768 B/token
+
+=== the rest of the footprint ===
+  blocks: 24 GDN + 8 softmax-attention (full_attention_interval=4)
+  recurrent state, context-INDEPENDENT: 2097152 B/layer state + 98304 B/layer conv = 50.2 MiB over 24 layers
+  KV cache: 32768 B/token (32.0 MiB per 1k tokens), fp16, 8 layers
+  device-local heap: 0 MiB
+
+arena (single DEVICE_LOCAL allocation; sizes are the plan's, offsets are the driver's):
+  codes           2236612608 B  align 4    -> offset 0
+  scales           279576576 B  align 4    -> offset 2236612608
+  f32blob           29411328 B  align 4    -> offset 2516189184
+  ptq_scratch       33554432 B  align 4    -> offset 2545600512
+  x                    65536 B  align 4    -> offset 2579154944
+  xsum                  4096 B  align 4    -> offset 2579220480
+  out                8388608 B  align 4    -> offset 2579224576
+  arena committed 2.410 GiB, alignment padding 0 B
+
+=== forward bring-up ===
+  driver: minStorageBufferOffsetAlignment = 4 B, maxStorageBufferRange = 4096.000 MiB
+  split-K scratch sized from the plan: 256 floats (0.0 MiB) - max S*M over 202 PTQ tensors
+  activation arena: 15939104 floats = 60.803 MiB (state 48.0 MiB + KV 8.0 MiB + logits 0.95 MiB)
+  act               63756416 B  align 4    -> offset 0
+  signs: sum(0..4095) = 60, sum(4096..16383) = -94   (the file's own values; 60 / -94
+  were the numbers read off the metadata, and they are what makes this upload checkable)
+  pipelines: 21 elementwise/GEMV + 8 layers x 3 attention descriptor sets
+
+=== region table (float units; every offset is a multiple of 16) ===
+  RES      off         0  size      4096
+  NRM      off      4096  size      4096
+  AN       off      8192  size      4096
+  ROT      off     12288  size      4096
+  HR       off     16384  size      4096
+  EMB      off     20480  size      4096
+  QKV      off     24576  size      8192
+  K        off     32768  size      1024
+  V        off     33792  size      1024
+  Z        off     34816  size      4096
+  ALPHA    off     38912  size        32
+  BETA     off     38944  size        32
+  G1       off     38976  size        32
+  G2       off     39008  size        32
+  GATE32   off     39040  size        32
+  CONV     off     39072  size      8192
+  L2       off     47264  size      4096
+  GDNO     off     51360  size      4096
+  GDNORM   off     55456  size      4096
+  SWG      off     59552  size      4096
+  PERM     off     63648  size      4096
+  FG       off     67744  size     12288
+  FU       off     80032  size     12288
+  FS       off     92320  size     12288
+  PART     off    104608  size       256
+  XS       off    104864  size       128
+  LOGITS   off    104992  size    248320
+  Q16      off    353312  size      2048
+  QF       off    355360  size      4096
+  QD       off    359456  size      4096
+  GD       off    363552  size      4096
+  SCORE    off    367648  size      4096
+  PROB     off    371744  size      4096
+  P16      off    375840  size      2048
+  PGATE    off    377888  size      4096
+  GOUT     off    381984  size      4096
+  MASK     off    386080  size       256
+  POS      off    386336  size       256
+  KF       off    386592  size    262144
+  QKWN     off    648736  size      4096
+  SIGNS    off    652832  size     16384
+  KV       off    669216  size    262144
+  ST       off   2766368  size    524288
+  CH       off  15349280  size     24576
+  signs on device: sum4096 = 60, sum12288 = -94, nonzero = 16384/16384
+
+  weight load 1095.7 ms, forward bring-up 42.1 ms
+  device-local total: weights 2.410 GiB + activations 60.803 MiB
+
+=== per-block residual ladder vs the same dump (tok 365, pos 0, cold caches) ===
+  block   type      branch ours/official   ffn ours/official   residual ours/official   head3 vs official
+  emb     input_embed   -0.46415                                [  0.0002  0.0116  0.0131 ]
+  0       gdn       br     0.88466/0.88392     b-OK   ffn     3.25912/3.23698     f-FAIL  res     3.67963/3.65675     r-FAIL  [ -0.0838  0.1474 -0.0270 ] vs [ -0.0845  0.1474 -0.0267 ] h-OK 
+  1       gdn       br     1.85507/1.84711     b-FAIL  ffn    -4.20844/-4.17801    f-FAIL  res     1.32626/1.32585     r-OK   [ -0.1420  0.1811 -0.0404 ] vs [ -0.1427  0.1804 -0.0394 ] h-FAIL
+  2       gdn       br     0.43134/0.45031     b-FAIL  ffn    -3.74412/-3.68865    f-FAIL  res    -1.98652/-1.91251    r-FAIL  [ -0.2605  0.3704  0.0526 ] vs [ -0.2604  0.3694  0.0538 ] h-FAIL
+  --- inside block 3 (softmax over 1 position, so probs are exactly 1) ---
+   QKV total    (=Qcur_full)              sum   -16926.21503 vs   -16964.92969  FAIL   [  -0.5816   0.3609  -0.6745 ]
+   QD   (contig q = Qcur_reshaped)        sum      131.44647 vs      131.81242  FAIL   [  -0.5816   0.3609  -0.6745 ]
+   GD   (contig gate = gate_reshap)       sum   -17057.66151 vs   -17096.73438  FAIL   [  -3.6318  -4.0033  -4.5470 ]
+   V          (=Vcur)                     sum       45.94858 vs       46.23100  FAIL   [  -0.0155  -0.0094  -0.2522 ]
+   K          (=Kcur, pre norm/rope)      sum      -62.70860 vs      -62.64296  FAIL   [   1.6721   1.0898  -0.6790 ]
+   PGATE      (=attn_pregate)             sum      183.80469 vs      184.92822  FAIL   [  -0.0155  -0.0094  -0.2522 ]
+   GOUT      (=attn_gated)                sum       -0.79351 vs       -0.83441  FAIL   [  -0.0004  -0.0002  -0.0026 ]
+   GDNO       (=attn_output)              sum        4.28057 vs        4.16793  FAIL   [   0.0033   0.0098   0.0115 ]
+   QKV per-256-row sums (want: q rows ~+131.8 total, gate rows ~-17096.7):
+       27.8 -1003.2    36.4  -977.6    20.8  -991.5     2.2  -954.4
+       -6.4 -1237.5     9.5 -1183.5    30.5 -1242.7    -7.9 -1218.2
+       -6.4 -1052.7   -12.4 -1050.8   -18.5  -948.7   -19.4 -1100.5
+       19.4 -1074.1    18.0 -1031.2    53.9  -947.0   -16.2 -1044.0
+   
+  3       attn      br     4.28057/4.16793     b-FAIL  ffn    -1.47414/-1.51732    f-FAIL  res     0.81992/0.73810     r-FAIL  [ -0.3352  0.5268  0.0528 ] vs [ -0.3339  0.5213  0.0561 ] h-FAIL
+  4       gdn       br     2.40644/2.37760     b-FAIL  ffn     3.92028/4.00535     f-FAIL  res     7.14664/7.12107     r-FAIL  [ -0.3021  0.8101 -0.0964 ] vs [ -0.3005  0.7992 -0.0914 ] h-FAIL
+  5       gdn       br     8.37457/8.47444     b-FAIL  ffn    -2.54877/-2.42617    f-FAIL  res    12.97243/13.16938    r-FAIL  [ -0.6151  2.5235  0.1682 ] vs [ -0.6100  2.5083  0.1739 ] h-FAIL
+  6       gdn       br   -11.17162/-11.21024   b-FAIL  ffn    62.24400/62.10569    f-FAIL  res    64.04481/64.06475    r-FAIL  [ -0.5941  5.3076  0.7854 ] vs [ -0.5905  5.2933  0.7950 ] h-FAIL
+  7       attn      br   -27.88635/-27.99823   b-FAIL  ffn     4.65053/4.67318     f-FAIL  res    40.80897/40.74003    r-FAIL  [ -0.7249  5.7483  1.3572 ] vs [ -0.7214  5.7275  1.3662 ] h-FAIL
+  8       gdn       br    -1.47405/-1.46289    b-FAIL  ffn    -3.88816/-3.77908    f-FAIL  res    35.44676/35.49759    r-FAIL  [ -0.7577  5.9331  1.2802 ] vs [ -0.7546  5.9108  1.2907 ] h-FAIL
+  9       gdn       br    14.03565/13.99852    b-FAIL  ffn    -9.06176/-9.00972    f-FAIL  res    40.42065/40.48676    r-FAIL  [ -0.8840  6.5453  1.0126 ] vs [ -0.8803  6.5198  1.0209 ] h-FAIL
+  10      gdn       br    25.22733/25.27124    b-FAIL  ffn    -7.77397/-7.71453    f-FAIL  res    57.87400/58.04319    r-FAIL  [ -1.0342  7.5847  1.3779 ] vs [ -1.0310  7.5587  1.3875 ] h-FAIL
+  11      attn      br   -36.59236/-36.57276   b-FAIL  ffn     7.21785/7.26381     f-FAIL  res    28.49950/28.73402    r-FAIL  [ -1.0565  7.7939  1.3766 ] vs [ -1.0559  7.7688  1.3856 ] h-FAIL
+  12      gdn       br    -2.23549/-2.24203    b-FAIL  ffn    -2.68039/-2.73979    f-FAIL  res    23.58361/23.75252    r-FAIL  [ -1.0361  7.8675  1.3706 ] vs [ -1.0370  7.8423  1.3800 ] h-FAIL
+  13      gdn       br    -0.95657/-0.97088    b-FAIL  ffn    -3.06994/-3.17846    f-FAIL  res    19.55710/19.60300    r-FAIL  [ -1.1008  7.8979  1.1281 ] vs [ -1.1030  7.8720  1.1361 ] h-FAIL
+  14      gdn       br    13.11337/13.15762    b-FAIL  ffn     0.67494/0.64639     f-FAIL  res    33.34540/33.40787    r-FAIL  [ -0.7791  8.6254  1.2564 ] vs [ -0.7811  8.6008  1.2642 ] h-FAIL
+  15      attn      br   -16.07635/-15.97187   b-FAIL  ffn    -3.29375/-3.39565    f-FAIL  res    13.97529/14.03937    r-FAIL  [ -1.0132  8.8419  0.2823 ] vs [ -1.0184  8.8191  0.2921 ] h-FAIL
+  16      gdn       br     0.42362/0.40496     b-FAIL  ffn   -14.34369/-14.41515   f-FAIL  res     0.05522/0.02875     r-FAIL  [ -0.9818  8.5542  0.3070 ] vs [ -0.9895  8.5309  0.3157 ] h-FAIL
+  17      gdn       br     3.78459/3.76889     b-FAIL  ffn     6.29168/6.35733     f-FAIL  res    10.13149/10.15533    r-FAIL  [ -1.0003  8.5552  0.0937 ] vs [ -1.0093  8.5308  0.1043 ] h-FAIL
+  18      gdn       br    -1.92389/-1.93761    b-FAIL  ffn    41.49146/41.63199    f-FAIL  res    49.69905/49.84984    r-FAIL  [ -1.3056  9.7568 -0.5091 ] vs [ -1.3150  9.7305 -0.4983 ] h-FAIL
+  19      attn      br   -98.06195/-98.50532   b-FAIL  ffn    14.67243/14.73398    f-FAIL  res   -33.69047/-33.92183   r-FAIL  [ -1.7352  9.4080 -0.0854 ] vs [ -1.7433  9.3851 -0.0845 ] h-FAIL
+  20      gdn       br   -38.05439/-38.29461   b-FAIL  ffn    -4.32299/-4.32834    f-FAIL  res   -76.06785/-76.54443   r-FAIL  [ -1.7336  9.3847  0.0434 ] vs [ -1.7373  9.3646  0.0399 ] h-FAIL
+  21      gdn       br  -104.83482/-104.79242  b-FAIL  ffn   -16.02045/-15.96112   f-FAIL  res  -196.92312/-197.29811  r-FAIL  [ -1.5385  7.5559  0.5564 ] vs [ -1.5489  7.5411  0.5483 ] h-FAIL
+  22      gdn       br   -72.57311/-72.27520   b-FAIL  ffn     5.99432/6.09859     f-FAIL  res  -263.50190/-263.47467  r-OK   [ -1.4312  7.3887  0.8249 ] vs [ -1.4415  7.3812  0.8197 ] h-FAIL
+  23      attn      br   -95.34989/-95.21632   b-FAIL  ffn    -1.19163/-1.25665    f-FAIL  res  -360.04341/-359.94754  r-FAIL  [ -1.6235  6.9063  0.9444 ] vs [ -1.6368  6.9114  0.9435 ] h-FAIL
+  24      gdn       br   -37.81830/-37.58355   b-FAIL  ffn     0.46924/0.55386     f-FAIL  res  -397.39247/-396.97711  r-FAIL  [ -1.5205  6.5923  1.1434 ] vs [ -1.5336  6.5993  1.1397 ] h-FAIL
+  25      gdn       br   -57.60484/-57.49511   b-FAIL  ffn     3.58568/3.51788     f-FAIL  res  -451.41164/-450.95447  r-FAIL  [ -1.8011  5.4268  1.3593 ] vs [ -1.8176  5.4363  1.3522 ] h-FAIL
+  26      gdn       br   -66.00374/-65.70564   b-FAIL  ffn    -0.51756/-0.50053    f-FAIL  res  -517.93296/-517.16113  r-FAIL  [ -2.9015  3.5810  2.2883 ] vs [ -2.9041  3.5853  2.2778 ] h-FAIL
+  27      attn      br  -125.63059/-125.18578  b-FAIL  ffn    90.33388/90.29969    f-FAIL  res  -553.22968/-552.04675  r-FAIL  [ -3.5082  4.0348  2.1430 ] vs [ -3.5103  4.0357  2.1354 ] h-FAIL
+  28      gdn       br   -48.65222/-48.87466   b-FAIL  ffn     4.68864/4.79667     f-FAIL  res  -597.19323/-596.12457  r-FAIL  [ -1.6950  7.3106  4.1923 ] vs [ -1.7040  7.3090  4.1831 ] h-FAIL
+  29      gdn       br    25.25170/25.45360    b-FAIL  ffn    11.94697/11.92795    f-FAIL  res  -559.99456/-558.74304  r-FAIL  [ -1.5327  7.5259  4.9870 ] vs [ -1.5466  7.5255  4.9780 ] h-FAIL
+  30      gdn       br   -15.53513/-15.99736   b-FAIL  ffn    -4.83209/-5.08281    f-FAIL  res  -580.36178/-579.82349  r-FAIL  [ -2.6175 10.1599  4.0374 ] vs [ -2.6307 10.1688  4.0183 ] h-FAIL
+  31      attn      br   -14.72170/-15.40237   b-FAIL  ffn   213.79707/213.42201   f-FAIL  res  -381.28644/-381.80414  r-FAIL  [ -2.9611  9.1066  4.7955 ] vs [ -2.9615  9.1218  4.7726 ] h-FAIL
+
+=== residual-sum discrepancy, scaled by each block's own cancellation ===
+  delta = ours - official, Sum|x| = the block's magnitude scale, rho = |delta|/Sum|x|,
+  cancel = |official sum|/Sum|x| (how much the 4096 terms annihilate each other)
+  blk  0 delta     0.02288  Sum|x|       172.8  rho  1.32e-04  cancel  0.0212   <- outside the band
+  blk  1 delta     0.00041  Sum|x|       252.9  rho  1.64e-06  cancel  0.0052
+  blk  2 delta    -0.07400  Sum|x|       478.5  rho  1.55e-04  cancel  0.0040   <- outside the band
+  blk  3 delta     0.08182  Sum|x|       591.9  rho  1.38e-04  cancel  0.0012   <- outside the band
+  blk  4 delta     0.02557  Sum|x|       949.9  rho  2.69e-05  cancel  0.0075   <- outside the band
+  blk  5 delta    -0.19694  Sum|x|      2075.7  rho  9.49e-05  cancel  0.0063   <- outside the band
+  blk  6 delta    -0.01995  Sum|x|      4600.8  rho  4.34e-06  cancel  0.0139   <- outside the band
+  blk  7 delta     0.06894  Sum|x|      4765.5  rho  1.45e-05  cancel  0.0085   <- outside the band
+  blk  8 delta    -0.05083  Sum|x|      4749.1  rho  1.07e-05  cancel  0.0075   <- outside the band
+  blk  9 delta    -0.06611  Sum|x|      5474.5  rho  1.21e-05  cancel  0.0074   <- outside the band
+  blk 10 delta    -0.16919  Sum|x|      6106.3  rho  2.77e-05  cancel  0.0095   <- outside the band
+  blk 11 delta    -0.23452  Sum|x|      6186.9  rho  3.79e-05  cancel  0.0046   <- outside the band
+  blk 12 delta    -0.16892  Sum|x|      6174.3  rho  2.74e-05  cancel  0.0038   <- outside the band
+  blk 13 delta    -0.04591  Sum|x|      6185.2  rho  7.42e-06  cancel  0.0032   <- outside the band
+  blk 14 delta    -0.06248  Sum|x|      6530.3  rho  9.57e-06  cancel  0.0051   <- outside the band
+  blk 15 delta    -0.06408  Sum|x|      6827.0  rho  9.39e-06  cancel  0.0021   <- outside the band
+  blk 16 delta     0.02647  Sum|x|      6873.5  rho  3.85e-06  cancel  0.0000   <- outside the band
+  blk 17 delta    -0.02384  Sum|x|      6942.8  rho  3.43e-06  cancel  0.0015   <- outside the band
+  blk 18 delta    -0.15078  Sum|x|      7696.2  rho  1.96e-05  cancel  0.0065   <- outside the band
+  blk 19 delta     0.23136  Sum|x|      7689.4  rho  3.01e-05  cancel  0.0044   <- outside the band
+  blk 20 delta     0.47659  Sum|x|      7842.2  rho  6.08e-05  cancel  0.0098   <- outside the band
+  blk 21 delta     0.37499  Sum|x|      9045.1  rho  4.15e-05  cancel  0.0218   <- outside the band
+  blk 22 delta    -0.02723  Sum|x|      9694.4  rho  2.81e-06  cancel  0.0272
+  blk 23 delta    -0.09587  Sum|x|      9931.1  rho  9.65e-06  cancel  0.0362   <- outside the band
+  blk 24 delta    -0.41536  Sum|x|     10069.9  rho  4.12e-05  cancel  0.0394   <- outside the band
+  blk 25 delta    -0.45717  Sum|x|     10459.6  rho  4.37e-05  cancel  0.0431   <- outside the band
+  blk 26 delta    -0.77183  Sum|x|     11254.3  rho  6.86e-05  cancel  0.0460   <- outside the band
+  blk 27 delta    -1.18293  Sum|x|     11749.4  rho  1.01e-04  cancel  0.0470   <- outside the band
+  blk 28 delta    -1.06866  Sum|x|     14151.0  rho  7.55e-05  cancel  0.0421   <- outside the band
+  blk 29 delta    -1.25152  Sum|x|     14413.7  rho  8.68e-05  cancel  0.0388   <- outside the band
+  blk 30 delta    -0.53830  Sum|x|     15354.2  rho  3.51e-05  cancel  0.0378   <- outside the band
+  blk 31 delta     0.51770  Sum|x|     15194.9  rho  3.41e-05  cancel  0.0251   <- outside the band
+  rho spread: min 1.64e-06 (blk 1)  max 1.55e-04 (blk 2)  ratio 94.3x
+  one fp32 accumulation-noise coefficient explains every block if that ratio is O(1)
+  first block whose residual sum leaves the band: 
+  -> block 0 (gdn)

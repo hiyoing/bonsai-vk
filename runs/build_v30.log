@@ -1,0 +1,107 @@
+== 0/2 reference oracle: inline the official dequant head ==
+wrote runtime_vk\shaders\dequant_ptq1_0_ref.comp  (110 lines: 45 head + 61 official)
+== 1/2 shaders: GLSL -> SPIR-V ==
+    add.comp
+shaders\add.comp
+    attn_norm_rope.comp
+shaders\attn_norm_rope.comp
+    attn_norm_rope2.comp
+shaders\attn_norm_rope2.comp
+    attn_pv.comp
+shaders\attn_pv.comp
+    attn_pv_q8v.comp
+shaders\attn_pv_q8v.comp
+    attn_qk_softmax.comp
+shaders\attn_qk_softmax.comp
+    attn_qk_softmax_tile_q1024.comp
+shaders\attn_qk_softmax_tile_q1024.comp
+    attn_qk_softmax_tile_q2048.comp
+shaders\attn_qk_softmax_tile_q2048.comp
+    attn_qk_softmax_tile_q4096.comp
+shaders\attn_qk_softmax_tile_q4096.comp
+    attn_qk_softmax_wide.comp
+shaders\attn_qk_softmax_wide.comp
+    bench_shm_n1024.comp
+shaders\bench_shm_n1024.comp
+    bench_shm_n2048.comp
+shaders\bench_shm_n2048.comp
+    bench_shm_n4096.comp
+shaders\bench_shm_n4096.comp
+    bench_shm_n512.comp
+shaders\bench_shm_n512.comp
+    conv_silu.comp
+shaders\conv_silu.comp
+    deint_qg.comp
+shaders\deint_qg.comp
+    dequant_ptq1_0_ref.comp
+shaders\dequant_ptq1_0_ref.comp
+    embd_gather.comp
+shaders\embd_gather.comp
+    f16_map.comp
+shaders\f16_map.comp
+    f16_pack_probe.comp
+shaders\f16_pack_probe.comp
+    fwht.comp
+shaders\fwht.comp
+    gather_rows.comp
+shaders\gather_rows.comp
+    gdn_delta.comp
+shaders\gdn_delta.comp
+    gemv_f32.comp
+shaders\gemv_f32.comp
+    gemv_ternary.comp
+shaders\gemv_ternary.comp
+    hat4096.comp
+shaders\hat4096.comp
+    l2_norm.comp
+shaders\l2_norm.comp
+    math_probe.comp
+shaders\math_probe.comp
+    mul.comp
+shaders\mul.comp
+    mul_bcast.comp
+shaders\mul_bcast.comp
+    permute_vg.comp
+shaders\permute_vg.comp
+    probe_shm_n3072.comp
+shaders\probe_shm_n3072.comp
+    probe_shm_n4000.comp
+shaders\probe_shm_n4000.comp
+    probe_shm_n4090.comp
+shaders\probe_shm_n4090.comp
+    probe_shm_n4096.comp
+shaders\probe_shm_n4096.comp
+    probe_shm_n4224.comp
+shaders\probe_shm_n4224.comp
+    probe_shm_n4608.comp
+shaders\probe_shm_n4608.comp
+    reduce.comp
+shaders\reduce.comp
+    repack_ptq1_0.comp
+shaders\repack_ptq1_0.comp
+    rms_norm.comp
+shaders\rms_norm.comp
+    set_pos.comp
+shaders\set_pos.comp
+    sigmoid.comp
+shaders\sigmoid.comp
+    signs_mul.comp
+shaders\signs_mul.comp
+    silu.comp
+shaders\silu.comp
+    softplus.comp
+shaders\softplus.comp
+    swiglu.comp
+shaders\swiglu.comp
+    xsum.comp
+shaders\xsum.comp
+== 2/2 host: g++ -> bonsai_vk.exe + the four alignment tests ==
+In file included from bonsai_vk.cpp:180:
+bonsai_forward.h: In function 'int fwd_main(int, char**)':
+bonsai_forward.h:2616:103: error: expected ';' before 'return'
+ 2616 |                       " residence. Use BONSAI_QKERNEL=3 (tiled) to go past 2048 without paying that.")
+      |                                                                                                       ^
+      |                                                                                                       ;
+ 2617 |         return 4;
+      |         ~~~~~~                                                                                         
+[!] compile failed 

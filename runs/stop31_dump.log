@@ -1,0 +1,112 @@
+device: Radeon RX 550X | driver 2.0.279 | device-local heap 3840 MiB | timestampPeriod 40.000 ns
+  limits: maxComputeWorkGroupSize[0]=1024 maxComputeWorkGroupCount[0]=4294967295 bufferImageGranularity=1
+  compute queue = family 0, transfer-only queue = family 2
+
+=== weight plan, read from the tensor table (实测, not estimated) ===
+  tensors 427 = 202 PTQ1_0 + 225 f32   weights 8953803264 elems = 8.954 B
+  per-tensor shapes are K x M with K in {4096, 12288}; sign_widths says the same, so the
+  activation-side Hadamard has exactly two widths to cover.
+  checkpoint's own block form : 1957036032 B = 1.823 GiB  (1.75 bpw)
+  our 2-bit random-access form: 2516189184 B = 2.343 GiB  (codes 2.083 GiB + scales 0.260 GiB, 2.125 bpw)
+  f32 blob                    :  29411328 B = 28.049 MiB
+  LAYOUT COST = 0.521 GiB extra = 17064 tokens of KV at 32768 B/token
+
+=== the rest of the footprint ===
+  blocks: 24 GDN + 8 softmax-attention (full_attention_interval=4)
+  recurrent state, context-INDEPENDENT: 2097152 B/layer state + 98304 B/layer conv = 50.2 MiB over 24 layers
+  KV cache: 32768 B/token (32.0 MiB per 1k tokens), fp16, 8 layers
+  device-local heap: 0 MiB
+
+arena (single DEVICE_LOCAL allocation; sizes are the plan's, offsets are the driver's):
+  codes           2236612608 B  align 4    -> offset 0
+  scales           279576576 B  align 4    -> offset 2236612608
+  f32blob           29411328 B  align 4    -> offset 2516189184
+  ptq_scratch       33554432 B  align 4    -> offset 2545600512
+  x                    65536 B  align 4    -> offset 2579154944
+  xsum                  4096 B  align 4    -> offset 2579220480
+  out                8388608 B  align 4    -> offset 2579224576
+  arena committed 2.410 GiB, alignment padding 0 B
+
+=== forward bring-up ===
+  driver: minStorageBufferOffsetAlignment = 4 B, maxStorageBufferRange = 4096.000 MiB
+  split-K scratch sized from the plan: 65536 floats (0.2 MiB) - max S*M over 202 PTQ tensors
+  activation arena: 15996192 floats = 61.021 MiB (state 48.0 MiB + KV 8.0 MiB + logits 0.95 MiB)
+  act               63984768 B  align 4    -> offset 0
+  signs: sum(0..4095) = 60, sum(4096..16383) = -94   (the file's own values; 60 / -94
+  were the numbers read off the metadata, and they are what makes this upload checkable)
+  pipelines: 20 elementwise/GEMV + 8 layers x 3 attention descriptor sets
+
+=== region table (float units; every offset is a multiple of 16) ===
+  RES      off         0  size      4096
+  NRM      off      4096  size      4096
+  AN       off      8192  size      4096
+  ROT      off     12288  size      4096
+  HR       off     16384  size      4096
+  EMB      off     20480  size      4096
+  QKV      off     24576  size      8192
+  K        off     32768  size      1024
+  V        off     33792  size      1024
+  Z        off     34816  size      4096
+  ALPHA    off     38912  size        32
+  BETA     off     38944  size        32
+  G1       off     38976  size        32
+  G2       off     39008  size        32
+  GATE32   off     39040  size        32
+  CONV     off     39072  size      8192
+  L2       off     47264  size      4096
+  GDNO     off     51360  size      4096
+  GDNORM   off     55456  size      4096
+  SWG      off     59552  size      4096
+  PERM     off     63648  size      4096
+  FG       off     67744  size     12288
+  FU       off     80032  size     12288
+  FS       off     92320  size     12288
+  PART     off    104608  size     65536
+  XS       off    170144  size       128
+  LOGITS   off    170272  size    248320
+  Q16      off    418592  size      2048
+  QF       off    420640  size      4096
+  SCORE    off    424736  size      4096
+  PROB     off    428832  size      4096
+  P16      off    432928  size      2048
+  PGATE    off    434976  size      4096
+  GOUT     off    439072  size      4096
+  MASK     off    443168  size       256
+  POS      off    443424  size       256
+  KF       off    443680  size    262144
+  QKWN     off    705824  size      4096
+  SIGNS    off    709920  size     16384
+  KV       off    726304  size    262144
+  ST       off   2823456  size    524288
+  CH       off  15406368  size     24576
+  signs on device: sum4096 = 60, sum12288 = -94, nonzero = 16384/16384
+
+  weight load 1145.5 ms, forward bring-up 43.7 ms
+  device-local total: weights 2.410 GiB + activations 61.021 MiB
+  prompt 6 tokens: 95826 110827 98682 95986 96326 103725
+  sampler: temp=0.00 top_k=0 top_p=1.00 eos=248046 cap=256
+
+=== region stats after the cut (compare against runs/oracle_nodes.txt) ===
+  embedding row (EMB)  sum =       0.078247  max|.| =   0.017365   [ 0.00000  0.01429  0.00000]  (4096)
+  input_embed (RES)    sum =      10.005330  max|.| = 220.877899   [ 3.12694  1.78317  5.88748]  (4096)
+  normed (NRM)         sum =     -89.419689  max|.| =   7.179059   [-0.66148  0.73430  0.30526]  (4096)
+  attn_norm-0 (AN)     sum =    -102.255147  max|.| =   6.917906   [-0.82556  0.86840  0.38813]  (4096)
+  signs*AN (ROT)       sum =      95.839187  max|.| =   6.917906   [ 0.82556 -0.86840 -0.38813]  (4096)
+  rotated (HR)         sum =      52.835710  max|.| =   4.548737   [ 1.49749 -1.63033  1.24282]  (4096)
+  qkv mixed            sum =   -9496.572536  max|.| =  17.392466   [-5.65456  2.60336 -1.81181]  (8192)
+  gate z               sum =     -15.938933  max|.| =  11.459410   [ 3.56520  1.20097  1.69947]  (4096)
+  conv+silu            sum =     -55.546665  max|.| =   3.300665   [-0.05960 -0.04234  0.08194]  (8192)
+  l2 q/k               sum =     -44.713625  max|.| =   0.671778   [-0.04576 -0.03250  0.06291]  (4096)
+  alpha                sum =     101.086486  max|.| =   9.512798   [-3.80254  0.61712  6.40493]  (32)
+  beta                 sum =      24.870651  max|.| =   0.999920   [ 0.97195  0.94518  0.99343]  (32)
+  g (log decay)        sum =     -17.135751  max|.| =   3.105474   [-0.70795 -0.08750 -2.49352]  (32)
+  delta o              sum =     552.988767  max|.| = 217.082825   [ 7.14365 -2.67572  4.03386]  (4096)
+  swiglu z*o           sum =     127.316804  max|.| =  76.429131   [-0.80088 -0.11341  3.24122]  (4096)
+  permuted             sum =     127.316804  max|.| =  76.429131   [-0.80088 -0.11341  3.24122]  (4096)
+  ffn gate             sum =  -12949.096284  max|.| =  34.645653   [ 1.54750 -4.90391  0.56652]  (12288)
+  ffn up               sum =     126.925634  max|.| =  24.877169   [ 0.17226  0.85671  1.58658]  (12288)
+  ffn swiglu           sum =    1217.937667  max|.| =  17.406197   [-0.74576  3.63412  2.70874]  (12288)
+  xsum[0..3]           sum =      -7.703121  max|.| =  42.436058   [-32.75168 26.50571 -42.43606]  (4)
+  PART[0..3]           sum =       0.335671  max|.| =   1.039380   [-0.28932  0.37988  1.03938]  (4)
+  cut after block 31: no logits, alignment mode
+  gdn_mode=0 gdn_gmap=0 l2_mode=1 gate_second_half=1 round_probs=1 cap=256

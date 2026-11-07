@@ -1,0 +1,56 @@
+0.00.104.992 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.105.400 W srv  llama_server: -----------------
+0.00.105.402 W srv  llama_server: CORS is set to allow all origins ('*') and no API key is set
+0.00.105.403 W srv  llama_server: this can be a security risk (cross-origin attacks)
+0.00.105.403 W srv  llama_server: more info: https://github.com/ggml-org/llama.cpp/pull/25655
+0.00.105.403 W srv  llama_server: -----------------
+0.00.112.270 I srv    load_model: loading model 'models\Ternary-Bonsai-2-9B-PTQ1_0.gguf'
+0.00.814.568 W common_fit_params: failed to fit params to free device memory: n_gpu_layers already set by user to 99, abort
+0.02.942.578 I cmn          init: llama threadpool init, n_threads = 6
+0.03.638.387 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 49152, kv_unified = 'false'
+0.03.648.169 I srv  llama_server: model loaded
+0.03.648.173 I srv  llama_server: listening on http://127.0.0.1:59507
+0.03.693.635 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = -1
+0.03.693.700 I slot launch_slot_: id  0 | task 0 | processing task, is_child = 0
+0.06.437.092 I slot print_timing: id  0 | task 0 | prompt eval time =    2743.36 ms /    17 tokens (  161.37 ms per token,     6.20 tokens per second)
+0.06.437.096 I slot print_timing: id  0 | task 0 |        eval time =       0.00 ms /     1 tokens (    0.00 ms per token,     0.00 tokens per second)
+0.06.437.098 I slot print_timing: id  0 | task 0 |       total time =    2743.36 ms /    18 tokens
+0.06.437.098 I slot print_timing: id  0 | task 0 |    graphs reused =          1
+0.06.437.122 I slot      release: id  0 | task 0 | stop processing: n_tokens = 17, truncated = 0
+
+
+Loading model... 
+
+▄▄ ▄▄
+██ ██
+██ ██  ▀▀█▄ ███▄███▄  ▀▀█▄    ▄████ ████▄ ████▄
+██ ██ ▄█▀██ ██ ██ ██ ▄█▀██    ██    ██ ██ ██ ██
+██ ██ ▀█▄██ ██ ██ ██ ▀█▄██ ██ ▀████ ████▀ ████▀
+                                    ██    ██
+                                    ▀▀    ▀▀
+
+build      : b10777-e3de71522
+model      : models\Ternary-Bonsai-2-9B-PTQ1_0.gguf
+ftype      : PTQ1_0 - 1.75 bpw ternary (group 128)
+modalities : text
+
+available commands:
+  /exit or Ctrl+C     stop or exit
+  /regen              regenerate the last response
+  /clear              clear the chat history
+  /read <file>        add a text file
+  /glob <pattern>     add text files using globbing pattern
+
+
+
+> 用一句话解释什么是三值模型
+
+[Start thinking]
+
+Thinking
+0.06.437.702 I srv   operator (): operator (): cleaning up before exit...
+
+[ Prompt: 6.2 t/s | Generation: 0.0 t/s ]
+
+
+Exiting...

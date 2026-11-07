@@ -1,0 +1,19 @@
+=== KV fidelity: q8_0-V against the fp16-V arena (same binary, same prompt) ===
+  layer 0   positions 37   nkv 4   head_dim 256   kk 512  kvd 512  kvs 0
+  reference : ../runs/kv_none_v4.tsv (V stored fp16)
+  candidate : ../runs/kv_q8_0_v4.tsv (V stored q8_0, block 32: 32 int8 + 1 fp16 scale, decoded back to float)
+  K arena  : 37888 elements, 0 differ  ->  BITWISE IDENTICAL, the two runs are comparable
+
+  band A  position 0        (pure quantisation: identical inputs in both runs)
+            1024 elements   max|err| 0.0550537   mean 0.00567528   rms 0.00887994   max|ref| 13.9609
+          signal rms 1.00883  ->  err/signal 8.802e-03   (41.11 dB)
+          mean of the per-element relative error 3.781e-02  max 1.000e+00
+  band B  positions 1..36   (quantisation + the drift that quantisation causes upstream)
+           36864 elements   max|err| 0.0170288   mean 0.00342113   rms 0.00417594
+          signal rms 0.736101  ->  err/signal 5.673e-03
+          worst single element overall: |err| 0.0550537 at V pos 0 head 3 dim 227
+
+  V scales: 1184 block scales, 1184 nonzero, max 0.109924, min nonzero 0.00615311
+
+  gate: band A max|err| 0.0550537 WITHIN 2% of band A max|ref| (0.279219)
+  per-position table written: ../runs/kv_err_v4.tsv

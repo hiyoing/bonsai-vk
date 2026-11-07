@@ -1,0 +1,36 @@
+bases probed: 10, 100, 1000, 100000, 1e+07, 1e+09, 1e+12, 1e+14  (8 runs)
+
+gate 0  pre-rope tensor identical across all bases (probe validity) : True
+        post-rope sums per base : 10:-13.302, 100:-30.299, 1000:-7.863, 100000:36.726, 1e+07:63.024, 1e+09:78.996, 1e+12:93.952, 1e+14:100.653  <- they move
+gate 1  dims 253..255 (>= n_rot) untouched           : 0 mismatches
+gate 2  token 0 (position 0) untouched               : 0 mismatches
+gate 3  dim 0 (theta_0 = base^0 = 1) base-independent: True
+
+== rejection test A: interleaved pairing (partner = p^1). Pair 0 => theta = 1 for ANY D,
+   so dims 0 and 1 predict each other with ZERO free parameters:
+   worst |interleaved prediction - measured| = 7.6814   (print quantum 5e-5) => REJECTED
+
+== test B: half-split pairing, scan the frequency-law denominator D
+   per (dim, token, head) recover x_q from every base; rel.spread = (max-min)/|mean|
+   (only equations with |sin| > 0.2 are counted, so the estimate is well conditioned)
+   D=16   dim1 med=1.58e+00 max=2.47e+00(n=18)  dim2 med=1.07e+00 max=1.14e+00(n=12)
+   D=32   dim1 med=1.21e+00 max=3.18e+00(n=18)  dim2 med=1.05e+00 max=1.57e+00(n=18)
+   D=48   dim1 med=4.89e-01 max=2.09e+00(n=18)  dim2 med=5.56e-01 max=2.37e+00(n=18)
+   D=64   dim1 med=1.14e-04 max=6.48e-04(n=18)  dim2 med=2.74e-04 max=2.41e-03(n=18)
+   D=96   dim1 med=5.16e-01 max=1.42e+01(n=18)  dim2 med=1.12e+00 max=7.02e+00(n=18)
+   D=128  dim1 med=8.54e-01 max=1.12e+01(n=18)  dim2 med=1.50e+00 max=1.30e+01(n=18)
+   D=192  dim1 med=1.30e+00 max=3.69e+01(n=18)  dim2 med=2.05e+00 max=1.76e+01(n=18)
+   D=256  dim1 med=1.59e+00 max=4.08e+01(n=18)  dim2 med=2.50e+00 max=6.47e+02(n=18)
+
+   => smallest worst-case drift at D = 64  (= qwen35.rope.dimension_count = n_rot = 64)
+
+== detail under the winning law (D = 64): recovered partner x_q per base, head 0, token 1
+   dim 0 partner(dim32) = 10:-1.4614  100:-1.4614  1000:-1.4614  100000:-1.4614  1e+07:-1.4614  1e+09:-1.4614  1e+12:-1.4614  1e+14:-1.4614
+   dim 1 partner(dim33) = 10:-1.6711  100:-1.6711  1000:-1.6711  100000:-1.6712  1e+07:-1.6711  1e+09:-1.6710  1e+12:-1.6710  1e+14:-1.6710
+   dim 2 partner(dim34) = 10:+0.3201  100:+0.3201  1000:+0.3202  100000:+0.3202  1e+07:+0.3202  1e+09:+0.3201  1e+12:+0.3199  1e+14:+0.3199
+
+VERDICT (measured):  out_p(s) = x_p*cos(s*base^(-2p/64)) - x_{p+32}*sin(s*base^(-2p/64))
+                     p = 0..31 within the first n_rot=64 dims of each head;
+                     dims 64..255 pass through; position = absolute sequence index;
+                     the 4 mrope fields per token are equal for plain text, so the
+                     [11,11,10,0] section split is numerically inert here.

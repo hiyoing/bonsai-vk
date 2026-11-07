@@ -1,0 +1,85 @@
+==== PTQ1_0 block-scale census over the WHOLE checkpoint ====
+  model            models/Ternary-Bonsai-2-9B-PTQ1_0.gguf
+  PTQ1_0 tensors   202 of 427   blocks 69894144   bytes 1957036032 (1.823 GiB)
+  scale patterns used 7724 distinct out of 65536
+  d == 0 (either sign) 0   subnormal 89   negative 0   Inf 0   NaN 0
+  |d| range        [5.96046448e-08 (0x0001), 0.267822266 (0x3449)]
+  exponent-field histogram (exp: count), exp 0 = zero+subnormal, 31 = Inf/NaN:
+      0          89
+      1           8
+      2          85
+      3         267
+      4        1084
+      5        5277
+      6       37761
+      7      371122
+      8    45474770
+      9    23931440
+     10       71029
+     11        1019
+     12         191
+     13           2
+  edge scales by (tensor, pattern), 48 distinct combinations:
+          1 x  token_embd.weight          scale 0x00CA  d=1.20401382e-05
+          3 x  token_embd.weight          scale 0x00EA  d=1.39474869e-05
+          1 x  token_embd.weight          scale 0x00DA  d=1.29938126e-05
+          2 x  token_embd.weight          scale 0x00D6  d=1.2755394e-05 
+          2 x  token_embd.weight          scale 0x00E6  d=1.37090683e-05
+          1 x  token_embd.weight          scale 0x00F6  d=1.46627426e-05
+          1 x  token_embd.weight          scale 0x00D8  d=1.28746033e-05
+          2 x  token_embd.weight          scale 0x00D2  d=1.25169754e-05
+          1 x  token_embd.weight          scale 0x00F1  d=1.43647194e-05
+          1 x  token_embd.weight          scale 0x00F7  d=1.47223473e-05
+          1 x  token_embd.weight          scale 0x00CD  d=1.22189522e-05
+          1 x  token_embd.weight          scale 0x00D4  d=1.26361847e-05
+          2 x  token_embd.weight          scale 0x00E8  d=1.38282776e-05
+          1 x  token_embd.weight          scale 0x00DF  d=1.32918358e-05
+          2 x  token_embd.weight          scale 0x00DB  d=1.30534172e-05
+          3 x  token_embd.weight          scale 0x00E0  d=1.33514404e-05
+          2 x  token_embd.weight          scale 0x00E7  d=1.37686729e-05
+          1 x  token_embd.weight          scale 0x00EB  d=1.40070915e-05
+          1 x  token_embd.weight          scale 0x00D5  d=1.26957893e-05
+          1 x  token_embd.weight          scale 0x00E3  d=1.35302544e-05
+          1 x  token_embd.weight          scale 0x00D1  d=1.24573708e-05
+          1 x  token_embd.weight          scale 0x00FD  d=1.50799751e-05
+         32 x  token_embd.weight          scale 0x0001  d=5.96046448e-08
+          1 x  token_embd.weight          scale 0x0375  d=5.27501106e-05
+          1 x  token_embd.weight          scale 0x036A  d=5.20944595e-05
+          1 x  token_embd.weight          scale 0x03CE  d=5.8054924e-05 
+          1 x  token_embd.weight          scale 0x03DC  d=5.8889389e-05 
+          1 x  token_embd.weight          scale 0x03D2  d=5.82933426e-05
+          1 x  token_embd.weight          scale 0x0393  d=5.453825e-05  
+          1 x  token_embd.weight          scale 0x03ED  d=5.9902668e-05 
+          1 x  token_embd.weight          scale 0x039B  d=5.50150871e-05
+          1 x  token_embd.weight          scale 0x0342  d=4.97102737e-05
+          1 x  token_embd.weight          scale 0x03D6  d=5.85317612e-05
+          1 x  token_embd.weight          scale 0x03B7  d=5.66840172e-05
+          1 x  token_embd.weight          scale 0x038B  d=5.40614128e-05
+          1 x  token_embd.weight          scale 0x03E1  d=5.91874123e-05
+          1 x  token_embd.weight          scale 0x03AC  d=5.60283661e-05
+          1 x  token_embd.weight          scale 0x03E7  d=5.95450401e-05
+          1 x  token_embd.weight          scale 0x03EF  d=6.00218773e-05
+          1 x  token_embd.weight          scale 0x037C  d=5.31673431e-05
+          1 x  token_embd.weight          scale 0x03E3  d=5.93066216e-05
+          1 x  token_embd.weight          scale 0x03DB  d=5.88297844e-05
+          1 x  token_embd.weight          scale 0x03A1  d=5.5372715e-05 
+          1 x  token_embd.weight          scale 0x0397  d=5.47766685e-05
+          1 x  token_embd.weight          scale 0x03CD  d=5.79953194e-05
+          1 x  token_embd.weight          scale 0x039C  d=5.50746918e-05
+          1 x  token_embd.weight          scale 0x038A  d=5.40018082e-05
+          1 x  token_embd.weight          scale 0x037A  d=5.30481339e-05
+  first 12 occurrences (tensor, block index within it):
+     token_embd.weight        blk=3440544   bits=0x00CA  d=1.20401382e-05 (subnormal)
+     token_embd.weight        blk=3440545   bits=0x00EA  d=1.39474869e-05 (subnormal)
+     token_embd.weight        blk=3440546   bits=0x00DA  d=1.29938126e-05 (subnormal)
+     token_embd.weight        blk=3440547   bits=0x00D6  d=1.2755394e-05  (subnormal)
+     token_embd.weight        blk=3440548   bits=0x00E6  d=1.37090683e-05 (subnormal)
+     token_embd.weight        blk=3440549   bits=0x00F6  d=1.46627426e-05 (subnormal)
+     token_embd.weight        blk=3440550   bits=0x00D8  d=1.28746033e-05 (subnormal)
+     token_embd.weight        blk=3440551   bits=0x00D2  d=1.25169754e-05 (subnormal)
+     token_embd.weight        blk=3440552   bits=0x00F1  d=1.43647194e-05 (subnormal)
+     token_embd.weight        blk=3440553   bits=0x00F7  d=1.47223473e-05 (subnormal)
+     token_embd.weight        blk=3440554   bits=0x00CD  d=1.22189522e-05 (subnormal)
+     token_embd.weight        blk=3440555   bits=0x00D4  d=1.26361847e-05 (subnormal)
+  -> every edge pattern this test synthesises (0, subnormal, negative, Inf, NaN)
+     DOES occur in the checkpoint.

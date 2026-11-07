@@ -1,0 +1,59 @@
+0.00.604.996 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.694.834 W srv  llama_server: -----------------
+0.00.694.838 W srv  llama_server: CORS is set to allow all origins ('*') and no API key is set
+0.00.694.838 W srv  llama_server: this can be a security risk (cross-origin attacks)
+0.00.694.839 W srv  llama_server: more info: https://github.com/ggml-org/llama.cpp/pull/25655
+0.00.694.839 W srv  llama_server: -----------------
+0.00.701.410 I srv    load_model: loading model 'models\_cold_probe.gguf'
+0.15.976.370 I cmn          init: llama threadpool init, n_threads = 6
+0.16.755.398 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 4096, kv_unified = 'false'
+0.16.871.566 I srv  llama_server: model loaded
+0.16.871.570 I srv  llama_server: listening on http://127.0.0.1:59604
+0.17.101.255 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = -1
+0.17.101.461 I slot launch_slot_: id  0 | task 0 | processing task, is_child = 0
+0.19.893.248 I slot print_timing: id  0 | task 0 | prompt eval time =    2791.65 ms /    17 tokens (  164.21 ms per token,     6.09 tokens per second)
+0.19.893.252 I slot print_timing: id  0 | task 0 |        eval time =       0.00 ms /     1 tokens (    0.00 ms per token,     0.00 tokens per second)
+0.19.893.254 I slot print_timing: id  0 | task 0 |       total time =    2791.65 ms /    18 tokens
+0.19.893.254 I slot print_timing: id  0 | task 0 |    graphs reused =          1
+0.19.893.279 I slot      release: id  0 | task 0 | stop processing: n_tokens = 17, truncated = 0
+
+
+Loading model... 
+
+▄▄ ▄▄
+██ ██
+██ ██  ▀▀█▄ ███▄███▄  ▀▀█▄    ▄████ ████▄ ████▄
+██ ██ ▄█▀██ ██ ██ ██ ▄█▀██    ██    ██ ██ ██ ██
+██ ██ ▀█▄██ ██ ██ ██ ▀█▄██ ██ ▀████ ████▀ ████▀
+                                    ██    ██
+                                    ▀▀    ▀▀
+
+build      : b10777-e3de71522
+model      : models\_cold_probe.gguf
+ftype      : PTQ1_0 - 1.75 bpw ternary (group 128)
+modalities : text
+
+available commands:
+  /exit or Ctrl+C     stop or exit
+  /regen              regenerate the last response
+  /clear              clear the chat history
+  /read <file>        add a text file
+  /glob <pattern>     add text files using globbing pattern
+
+
+
+> 用一句话解释什么是三值模型
+
+[Start thinking]
+
+Thinking
+0.19.894.406 I srv   operator (): operator (): cleaning up before exit...
+
+[ Prompt: 6.1 t/s | Generation: 0.0 t/s ]
+
+
+Exiting...
+
+real	0m20.710s
+user	0m0.000s
+sys	0m0.046s

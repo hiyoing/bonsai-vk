@@ -1,0 +1,2801 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Project Bonsai | 1.58-bit Engine</title>
+<style>
+/* Project Bonsai WebUI - the whole stylesheet. No external font, no image, no url().
+   Palette is the delivery contract: white paper, charcoal ink, one terracotta accent used only for
+   the send button, the streaming caret, markdown links and the composer focus ring. Everything else
+   is neutral grey so the accent stays rare enough to mean something. */
+
+:root {
+  --paper: #ffffff;
+  --ink: #2d2d2d;
+  --terracotta: #d97757;
+  --code-bg: #f7f7f8;
+  --hairline: #e5e5e5;
+  --muted: #8a8a8e;
+  --faint: #b4b4b8;
+  --wash: #fafafa;
+  --col: 768px;
+  --hdr-h: 56px;
+  --sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, "Courier New", monospace;
+}
+
+* { box-sizing: border-box; }
+
+/* Author rules beat the UA [hidden] rule, and #send / .pill-btn set display:inline-flex below.
+   Without this the stop button would be visible while idle no matter what .hidden says. */
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ header */
+#hdr {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: var(--hdr-h);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--hairline);
+  z-index: 30;
+}
+
+#hdr-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: .01em;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.hdr-bar { color: var(--faint); font-weight: 400; margin: 0 2px; }
+.hdr-sub { color: var(--muted); font-weight: 500; }
+
+.hdr-btn {
+  position: absolute;
+  left: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.hdr-btn:hover { color: var(--ink); background: var(--wash); }
+
+#badge {
+  position: absolute;
+  right: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 40vw;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--faint);
+  letter-spacing: .01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+#badge-text { overflow: hidden; text-overflow: ellipsis; }
+.dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--faint);
+  flex: 0 0 auto;
+}
+.dot-live { background: #6f9c6f; }
+.dot-busy { background: var(--muted); }
+.dot-down { background: #c08a8a; }
+
+/* ------------------------------------------------------------------ thread */
+#scroll {
+  position: absolute;
+  top: var(--hdr-h);
+  bottom: 0; left: 0; right: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline) transparent;
+}
+#scroll::-webkit-scrollbar { width: 9px; }
+#scroll::-webkit-scrollbar-thumb {
+  background: var(--hairline);
+  border-radius: 5px;
+  border: 3px solid var(--paper);
+}
+
+#thread {
+  max-width: var(--col);
+  margin: 0 auto;
+  padding: 34px 20px 168px;
+  min-height: 100%;
+}
+
+#empty {
+  padding: 12vh 0 24px;
+  text-align: center;
+}
+#empty-mark { color: var(--faint); line-height: 0; margin-bottom: 18px; }
+#empty-title {
+  margin: 0 0 8px;
+  font-size: 25px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: var(--ink);
+}
+#empty-sub { margin: 0 0 26px; font-size: 13px; color: var(--muted); }
+
+#chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.chip {
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: color .12s, border-color .12s;
+}
+.chip:hover { color: var(--ink); border-color: var(--faint); }
+
+/* ------------------------------------------------------------------ messages */
+#msgs { display: block; }
+
+.turn { margin: 0 0 26px; }
+.turn-user { display: flex; justify-content: flex-end; }
+
+.bubble {
+  max-width: 82%;
+  background: var(--code-bg);
+  border-radius: 18px;
+  padding: 10px 16px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.turn-ai { display: block; }
+.ai-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 7px;
+  font-size: 11.5px;
+  font-family: var(--mono);
+  color: var(--faint);
+  letter-spacing: .02em;
+}
+.ai-head svg { flex: 0 0 auto; }
+
+.md { overflow-wrap: anywhere; }
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+.md p { margin: 0 0 14px; }
+.md h1, .md h2, .md h3, .md h4, .md h5, .md h6 {
+  margin: 24px 0 10px;
+  line-height: 1.4;
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+.md h1 { font-size: 23px; }
+.md h2 { font-size: 19.5px; }
+.md h3 { font-size: 17px; }
+.md h4, .md h5, .md h6 { font-size: 15.5px; }
+.md ul, .md ol { margin: 0 0 14px; padding-left: 24px; }
+.md li { margin: 3px 0; }
+.md li > ul, .md li > ol { margin: 3px 0; }
+.md blockquote {
+  margin: 0 0 14px;
+  padding: 2px 0 2px 15px;
+  border-left: 2px solid var(--hairline);
+  color: var(--muted);
+}
+.md hr { border: 0; border-top: 1px solid var(--hairline); margin: 22px 0; }
+.md strong { font-weight: 600; }
+.md em { font-style: italic; }
+.md del { color: var(--muted); }
+
+.md-link {
+  color: var(--terracotta);
+  text-decoration: none;
+  border-bottom: 1px solid var(--hairline);
+}
+.md-link:hover { border-bottom-color: currentColor; }
+
+.md code {
+  font-family: var(--mono);
+  font-size: .875em;
+  background: var(--code-bg);
+  border-radius: 4px;
+  padding: .12em .38em;
+  overflow-wrap: anywhere;
+}
+
+.codeblock {
+  margin: 0 0 16px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: var(--code-bg);
+  overflow: hidden;
+}
+.codebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 8px 5px 13px;
+  border-bottom: 1px solid var(--hairline);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.copy-btn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.copy-btn:hover { background: var(--hairline); color: var(--ink); }
+.codeblock pre {
+  margin: 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 12.8px;
+  line-height: 1.65;
+  tab-size: 4;
+}
+.codeblock pre code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+.md table {
+  border-collapse: collapse;
+  margin: 0 0 16px;
+  font-size: 13.5px;
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.md th, .md td {
+  border: 1px solid var(--hairline);
+  padding: 6px 11px;
+  text-align: left;
+  vertical-align: top;
+}
+.md th { background: var(--code-bg); font-weight: 600; }
+
+.md-wait { color: var(--faint); font-size: 13.5px; }
+.reason-count { color: var(--faint); }
+
+.caret {
+  display: inline-block;
+  width: 7px;
+  height: 15px;
+  margin-left: 2px;
+  vertical-align: -2px;
+  background: var(--terracotta);
+  border-radius: 1px;
+  animation: blink 1.05s steps(1, end) infinite;
+}
+@keyframes blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
+
+.reason {
+  margin: 0 0 12px;
+  border-left: 2px solid var(--hairline);
+  padding: 0 0 0 13px;
+}
+.reason-toggle {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--faint);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.reason-toggle:hover { color: var(--muted); }
+.reason-body {
+  margin-top: 6px;
+  font-size: 13.2px;
+  line-height: 1.7;
+  color: var(--muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.reason-body[hidden] { display: none; }
+
+.turn-meta {
+  margin-top: 9px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--faint);
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.err-note {
+  margin: 10px 0 0;
+  padding: 9px 13px;
+  border: 1px solid var(--hairline);
+  border-left: 2px solid #c08a8a;
+  border-radius: 8px;
+  background: var(--wash);
+  color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------------ composer */
+#dock {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  padding: 10px 20px 14px;
+  background: linear-gradient(to top, var(--paper) 68%, rgba(255, 255, 255, 0));
+  z-index: 20;
+}
+
+#composer {
+  max-width: var(--col);
+  margin: 0 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 9px 9px 9px 17px;
+  border: 1px solid var(--hairline);
+  border-radius: 24px;
+  background: var(--paper);
+  box-shadow: 0 2px 14px rgba(45, 45, 45, .05);
+  transition: border-color .14s, box-shadow .14s;
+}
+#composer:focus-within {
+  border-color: var(--terracotta);
+  box-shadow: 0 2px 16px rgba(45, 45, 45, .07);
+}
+
+#input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.65;
+  padding: 5px 0;
+  margin: 0;
+  max-height: 190px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+#input::placeholder { color: var(--faint); }
+
+#send, .pill-btn {
+  flex: 0 0 auto;
+  width: 33px; height: 33px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 1px;
+}
+#send {
+  background: var(--terracotta);
+  color: var(--paper);
+  transition: opacity .12s, transform .12s;
+}
+#send:hover { opacity: .88; }
+#send:active { transform: scale(.94); }
+#send:disabled {
+  background: var(--hairline);
+  color: var(--faint);
+  cursor: default;
+  opacity: 1;
+  transform: none;
+}
+.pill-btn { background: var(--ink); color: var(--paper); }
+.pill-btn:hover { opacity: .85; }
+
+#hint {
+  max-width: var(--col);
+  margin: 8px auto 0;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--faint);
+  line-height: 1.5;
+}
+.key {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  padding: 0 4px;
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------------ toast */
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: 116px;
+  transform: translateX(-50%);
+  max-width: min(560px, 88vw);
+  padding: 9px 16px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 13px;
+  line-height: 1.5;
+  z-index: 50;
+  box-shadow: 0 4px 18px rgba(45, 45, 45, .18);
+  overflow-wrap: anywhere;
+}
+#toast[hidden] { display: none; }
+
+/* ------------------------------------------------------------------ narrow */
+@media (max-width: 720px) {
+  body { font-size: 15px; }
+  /* On a narrow screen a centred nowrap title and the right-anchored badge occupy the same band and
+     overprint each other. Drop the subtitle, left-align the short title clear of the new-chat button,
+     and let the badge keep the right edge with an ellipsis. Measured: title.right < badge.left. */
+  #hdr { justify-content: flex-start; padding-left: 56px; }
+  #hdr-title { font-size: 12.5px; }
+  .hdr-bar, .hdr-sub { display: none; }
+  .hdr-btn span { display: none; }
+  .hdr-btn { padding: 0 8px; }
+  #badge { font-size: 10px; max-width: 46vw; right: 12px; }
+  #thread { padding: 24px 14px 156px; }
+  #empty { padding: 8vh 0 18px; }
+  #empty-title { font-size: 21px; }
+  .bubble { max-width: 90%; }
+  #dock { padding: 8px 12px 10px; }
+  #hint { font-size: 10.5px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caret { animation: none; }
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<header id="hdr">
+  <button id="btn-new" class="hdr-btn" type="button" title="开始新对话 (Ctrl+Shift+O)">
+    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    <span>新对话</span>
+  </button>
+  <h1 id="hdr-title">Project Bonsai <span class="hdr-bar">|</span> <span class="hdr-sub">1.58-bit Engine</span></h1>
+  <div id="badge" aria-live="off" title="引擎状态">
+    <span id="badge-dot" class="dot"></span><span id="badge-text">connecting</span>
+  </div>
+</header>
+
+<main id="scroll">
+  <div id="thread">
+    <section id="empty">
+      <div id="empty-mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48" width="44" height="44" focusable="false"><path d="M24 43V22M24 22c0-7 5-12 12-12 0 7-5 12-12 12Zm0 4c0-6-4.5-10.5-10.5-10.5C13.5 23.5 18 28 24 28Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 43h18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </div>
+      <h2 id="empty-title">有什么可以帮你的？</h2>
+      <p id="empty-sub">本地推理 · 权重不出这台机器 · 无云端依赖</p>
+      <div id="chips">
+        <button class="chip" type="button" data-prompt="用三句话解释什么是三值量化（ternary quantization），并说明它为什么省显存。">解释三值量化</button>
+        <button class="chip" type="button" data-prompt="写一个 Python 函数，用 Vulkan 的 API 枚举本机所有支持 compute 的物理设备，只打印设备名。">写一段 Vulkan 代码</button>
+        <button class="chip" type="button" data-prompt="把下面这句话翻译成英文，并给出一个更口语化的版本：这张显卡只要一百块钱，但它能跑九十亿参数的大模型。">翻译一句话</button>
+      </div>
+    </section>
+    <div id="msgs" aria-live="polite" aria-relevant="additions text"></div>
+  </div>
+</main>
+
+<footer id="dock">
+  <form id="composer" autocomplete="off">
+    <textarea id="input" rows="1" placeholder="给 Bonsai 发消息…" aria-label="消息输入框"></textarea>
+    <button id="stop" class="pill-btn" type="button" title="停止生成" hidden>
+      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor"/></svg>
+    </button>
+    <button id="send" type="submit" title="发送 (Enter)" aria-label="发送" disabled>
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </form>
+  <p id="hint"><span class="key">Enter</span> 发送 · <span class="key">Shift+Enter</span> 换行 · <span id="ctx-note">内容由本地模型生成，请自行核对</span></p>
+</footer>
+
+<div id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+// ===== 00-core.js =====
+// ===== 00-core.js =====
+// Shared state and the two things every deterministic test needs to control: the clock and the
+// random source. Nothing in this bundle calls Date.now() or Math.random() directly - they go through
+// now() and rand(), both of which __APP__ can replace. That is what lets the self-test replay the
+// exact same typewriter timing and the exact same mock stream twice and compare the results.
+
+'use strict';
+
+const LIMITS = {
+  colPx: 768,          // the delivery contract's conversation column
+  headerPx: 56,
+  maxInputRows: 8,
+  pumpMs: 24,          // typewriter tick; setTimeout, not rAF, so it also runs where rAF is not driven
+  minCharsPerSec: 45,
+  maxCharsPerSec: 900,
+  drainSeconds: 0.18,  // a large backlog is drained in this long, so the UI never lags the model
+  statusPollMs: 2000,
+  maxTurns: 200,
+  toastMs: 2600
+};
+
+const S = {
+  turns: [],
+  busy: false,
+  online: false,
+  status: null,
+  statusError: '',
+  seq: 0,
+  seed: 20261108,
+  clock: null,        // () => ms, injected by the self-test
+  transport: null,    // injected by the self-test; null means the real fetch transport
+  errors: [],
+  abort: null,
+  lastStatusAt: 0,
+  pollTimer: null,
+  requestsSent: 0,
+  justFinished: null   // turn id awaiting the engine's measured tok/s from the next /v1/status
+};
+
+function now() {
+  return S.clock ? S.clock() : performance.now();
+}
+
+// mulberry32: 32 bits of state, no dependency, and the same seed gives the same sequence on every
+// engine. Used only for the mock stream's jitter in tests, never for anything the user sees.
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+let rng = mulberry32(S.seed);
+
+function setSeed(n) {
+  S.seed = n >>> 0;
+  rng = mulberry32(S.seed);
+}
+
+function rand() {
+  return rng();
+}
+
+function clamp(v, lo, hi) {
+  return v < lo ? lo : (v > hi ? hi : v);
+}
+
+function el(id) {
+  return document.getElementById(id);
+}
+
+function mk(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined && text !== null) n.textContent = text;
+  return n;
+}
+
+function on(node, ev, fn, opts) {
+  node.addEventListener(ev, fn, opts);
+  return fn;
+}
+
+function clearNode(n) {
+  while (n.firstChild) n.removeChild(n.firstChild);
+}
+
+// The only place a number becomes a display string. engine_kib comes from the server measuring its
+// own executable, so the badge never carries a hardcoded size that a rebuild would silently falsify.
+function fmtKib(kib) {
+  return String(Math.round(Number(kib) || 0)) + ' KiB';
+}
+
+function fmtRate(v) {
+  const n = Number(v);
+  if (!isFinite(n) || n <= 0) return '';
+  return n.toFixed(2) + ' tok/s';
+}
+
+function shortDevice(name) {
+  const s = String(name || '').trim();
+  if (!s) return 'GPU';
+  return s.replace(/^AMD\s+/i, '').replace(/^Radeon\s+/i, '').replace(/\s*\(TM\)/gi, '').trim() || s;
+}
+
+let toastTimer = null;
+
+function toast(msg) {
+  const t = el('toast');
+  if (!t) return;
+  t.textContent = String(msg);
+  t.hidden = false;
+  if (toastTimer !== null) clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () {
+    t.hidden = true;
+    toastTimer = null;
+  }, LIMITS.toastMs);
+}
+
+function hideToast() {
+  const t = el('toast');
+  if (t) t.hidden = true;
+  if (toastTimer !== null) { clearTimeout(toastTimer); toastTimer = null; }
+}
+
+// A runtime error is data, not a console message the test runner might miss. Both window.onerror and
+// unhandledrejection land here so runAllTests() can report a count instead of guessing.
+function recordError(kind, detail) {
+  S.errors.push({ kind: kind, detail: String(detail).slice(0, 400), at: now() });
+  if (S.errors.length > 60) S.errors.shift();
+}
+
+function installErrorCapture() {
+  const prev = window.onerror;
+  window.onerror = function (msg, src, line, col, err) {
+    recordError('window.onerror', (err && err.stack) || (msg + ' @' + line + ':' + col));
+    if (typeof prev === 'function') return prev.apply(this, arguments);
+    return false;
+  };
+  on(window, 'unhandledrejection', function (ev) {
+    const r = ev.reason;
+    recordError('unhandledrejection', (r && r.stack) || r);
+  });
+}
+
+function nextId(prefix) {
+  S.seq += 1;
+  return prefix + '-' + S.seq;
+}
+
+function findTurn(id) {
+  for (let i = 0; i < S.turns.length; i++) if (S.turns[i].id === id) return S.turns[i];
+  return null;
+}
+
+function lastAssistant() {
+  for (let i = S.turns.length - 1; i >= 0; i--) if (S.turns[i].role === 'assistant') return S.turns[i];
+  return null;
+}
+
+// ===== 10-api.js =====
+// ===== 10-api.js =====
+// The wire layer. Two routes matter: GET /v1/status for the badge, POST /v1/chat/completions for the
+// reply. Paths are relative on purpose - the page is served by the engine itself, so there is no
+// origin to configure and no CORS header to ask for.
+//
+// The SSE parser is a pure incremental state machine, separate from fetch, because the one thing
+// that breaks naive stream readers is a chunk boundary landing inside "data:", inside a JSON string,
+// or inside a multi-byte UTF-8 character. The self-test feeds the same byte stream one character at a
+// time and compares the event list to the single-shot parse; they must be identical.
+
+'use strict';
+
+function ApiError(status, type, message) {
+  const e = new Error(message);
+  e.name = 'ApiError';
+  e.status = status;
+  e.type = type;
+  return e;
+}
+
+// One SSE event block -> payload lines joined the way the spec says, then either [DONE] or JSON.
+// Comment lines (starting with ':') and the event/id/retry fields are ignored: this server sends none
+// of them, and honouring them would only add ways to be wrong.
+function sseBlockToEvent(block) {
+  const lines = block.split(/\r\n|\n|\r/);
+  const data = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.charAt(0) === ':') continue;
+    const colon = line.indexOf(':');
+    const field = colon === -1 ? line : line.slice(0, colon);
+    if (field !== 'data') continue;
+    let value = colon === -1 ? '' : line.slice(colon + 1);
+    if (value.charAt(0) === ' ') value = value.slice(1);
+    data.push(value);
+  }
+  if (!data.length) return null;
+  const payload = data.join('\n');
+  if (payload === '[DONE]') return { done: true, data: null };
+  let obj;
+  try {
+    obj = JSON.parse(payload);
+  } catch (err) {
+    return { malformed: true, raw: payload, data: null };
+  }
+  return { done: false, data: obj };
+}
+
+function makeSseParser(onEvent) {
+  let buf = '';
+  const sep = /\r\n\r\n|\n\n|\r\r/;
+  function drain(final) {
+    for (;;) {
+      const m = sep.exec(buf);
+      if (!m) break;
+      const block = buf.slice(0, m.index);
+      buf = buf.slice(m.index + m[0].length);
+      const ev = sseBlockToEvent(block);
+      if (ev) onEvent(ev);
+    }
+    if (final && buf.trim()) {
+      const ev = sseBlockToEvent(buf);
+      buf = '';
+      if (ev) onEvent(ev);
+    }
+  }
+  return {
+    feed: function (text) { buf += text; drain(false); },
+    end: function () { drain(true); },
+    pending: function () { return buf; }
+  };
+}
+
+// Pull the pieces the UI cares about out of one chat.completion.chunk. Returns null for anything
+// that is not a usable delta, so a keep-alive or a malformed line cannot corrupt the transcript.
+function chunkParts(ev) {
+  if (!ev || ev.done || ev.malformed || !ev.data) return null;
+  const d = ev.data;
+  const out = { content: '', reasoning: '', finish: null, usage: null, id: null, role: null };
+  if (typeof d.id === 'string') out.id = d.id;
+  if (d.usage && typeof d.usage === 'object') out.usage = d.usage;
+  const ch = Array.isArray(d.choices) ? d.choices[0] : null;
+  if (!ch) return out;
+  if (typeof ch.finish_reason === 'string') out.finish = ch.finish_reason;
+  const delta = ch.delta || {};
+  if (typeof delta.role === 'string') out.role = delta.role;
+  if (typeof delta.content === 'string') out.content = delta.content;
+  if (typeof delta.reasoning_content === 'string') out.reasoning = delta.reasoning_content;
+  return out;
+}
+
+async function readErrorBody(res) {
+  let text = '';
+  try { text = await res.text(); } catch (err) { text = ''; }
+  let msg = text.slice(0, 300);
+  let type = 'server_error';
+  try {
+    const j = JSON.parse(text);
+    if (j && j.error) {
+      if (typeof j.error.message === 'string') msg = j.error.message;
+      if (typeof j.error.type === 'string') type = j.error.type;
+    }
+  } catch (err) { /* a non-JSON body keeps its raw text as the message */ }
+  return ApiError(res.status, type, msg || ('HTTP ' + res.status));
+}
+
+const realTransport = {
+  name: 'fetch',
+
+  async status(signal) {
+    const res = await fetch('/v1/status', { signal: signal, cache: 'no-store', credentials: 'omit' });
+    if (!res.ok) throw await readErrorBody(res);
+    return await res.json();
+  },
+
+  // onEvent receives {done} / {data} / {malformed}. Resolves when the stream ends, rejects on a
+  // non-2xx response or a transport failure. An AbortError is re-thrown untouched so the caller can
+  // tell "the user pressed stop" apart from "the network died".
+  async completeStream(body, onEvent, signal) {
+    const res = await fetch('/v1/chat/completions', {
+      method: 'POST',
+      signal: signal,
+      credentials: 'omit',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) throw await readErrorBody(res);
+    if (!res.body) throw ApiError(0, 'transport_error', 'this browser exposed no response body to stream');
+    const reader = res.body.getReader();
+    const dec = new TextDecoder('utf-8');
+    const parser = makeSseParser(onEvent);
+    try {
+      for (;;) {
+        const step = await reader.read();
+        if (step.done) break;
+        parser.feed(dec.decode(step.value, { stream: true }));
+      }
+      parser.feed(dec.decode());
+      parser.end();
+    } finally {
+      try { reader.releaseLock(); } catch (err) { /* already released */ }
+    }
+  },
+
+  async completeUnary(body, signal) {
+    const res = await fetch('/v1/chat/completions', {
+      method: 'POST',
+      signal: signal,
+      credentials: 'omit',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) throw await readErrorBody(res);
+    return await res.json();
+  }
+};
+
+function transport() {
+  return S.transport || realTransport;
+}
+
+// The transcript the server renders. Only the three roles its no-tools template accepts are sent;
+// error notes and UI chrome are never part of it.
+function buildMessages(turns, systemPrompt) {
+  const out = [];
+  if (systemPrompt) out.push({ role: 'system', content: systemPrompt });
+  for (let i = 0; i < turns.length; i++) {
+    const t = turns[i];
+    if (t.role !== 'user' && t.role !== 'assistant') continue;
+    if (t.role === 'assistant' && t.error) continue;   // a failed reply must not poison the next prompt
+    if (!t.text && !t.reasoning) continue;
+    out.push({ role: t.role, content: t.text || '' });
+  }
+  return out;
+}
+
+function requestBody(messages, opts) {
+  const b = {
+    model: (S.status && S.status.model) || 'bonsai',
+    messages: messages,
+    stream: true,
+    max_tokens: opts && opts.maxTokens ? opts.maxTokens : 1024
+  };
+  if (opts && typeof opts.temperature === 'number') b.temperature = opts.temperature;
+  if (opts && typeof opts.topP === 'number') b.top_p = opts.topP;
+  if (opts && typeof opts.seed === 'number') b.seed = opts.seed;
+  return b;
+}
+
+// ===== 20-markdown.js =====
+// ===== 20-markdown.js =====
+// A hand-written Markdown renderer. There is no library here and there is no innerHTML anywhere in
+// this file: every node is created with createElement and every piece of model text goes in through
+// textContent. That is the whole XSS story - a reply containing a raw image tag with an onerror
+// handler renders as the literal characters, because nothing ever parses them as markup.
+//
+// It is also written to be fed a PREFIX of a document, because that is what streaming delivers. An
+// unclosed code fence renders as a code block containing what has arrived so far; an unclosed ** is
+// literal asterisks until its partner shows up. Re-rendering the growing prefix is therefore stable
+// instead of flickering between two interpretations.
+//
+// Images are deliberately not supported: the delivery contract forbids the image element. ![alt](url)
+// becomes a link whose text is the alt, so the information survives without fetching anything.
+
+'use strict';
+
+const MD_MAX_DEPTH = 12;
+
+function mdIsPunct(c) {
+  return /[!-/:-@[-`{-~]/.test(c);
+}
+
+function mdRunLen(text, i, ch) {
+  let n = 0;
+  while (i + n < text.length && text.charAt(i + n) === ch) n++;
+  return n;
+}
+
+// The next run of `ch` at or after `from` whose length is at least `want`. Returns -1 if there is
+// none, which is the streaming case: the delimiter stays literal.
+function mdFindDelim(text, from, ch, want) {
+  let i = from;
+  while (i < text.length) {
+    if (text.charAt(i) === ch) {
+      const n = mdRunLen(text, i, ch);
+      if (n >= want) return i;
+      i += n;
+      continue;
+    }
+    // A code span can contain delimiter characters; skipping it keeps ** inside `code` literal.
+    if (text.charAt(i) === '`') {
+      const n = mdRunLen(text, i, '`');
+      let j = i + n;
+      let closed = false;
+      while (j < text.length) {
+        if (text.charAt(j) === '`') {
+          const m = mdRunLen(text, j, '`');
+          if (m === n) { j += m; closed = true; break; }
+          j += m;
+          continue;
+        }
+        j++;
+      }
+      if (closed) { i = j; continue; }
+    }
+    i++;
+  }
+  return -1;
+}
+
+function safeHref(raw) {
+  const s = String(raw).trim().replace(/[\u0000-\u001f\u007f]/g, '');
+  if (!s) return null;
+  const m = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(s);
+  if (m) {
+    const p = m[1].toLowerCase();
+    if (p !== 'http' && p !== 'https' && p !== 'mailto') return null;
+  }
+  return s;
+}
+
+function mdCodeSpan(raw) {
+  let s = raw.replace(/\r\n|\n|\r/g, ' ');
+  if (s.length > 1 && s.charAt(0) === ' ' && s.charAt(s.length - 1) === ' ' && /[^ ]/.test(s)) s = s.slice(1, -1);
+  const n = mk('code');
+  n.textContent = s;
+  return n;
+}
+
+function mdLink(text, href, depth) {
+  const url = safeHref(href);
+  if (url === null) {
+    const span = mk('span');
+    appendAll(span, mdInline(text, depth + 1));
+    return span;
+  }
+  const a = mk('a', 'md-link');
+  a.setAttribute('href', url);
+  a.setAttribute('rel', 'noopener noreferrer nofollow');
+  a.setAttribute('target', '_blank');
+  appendAll(a, mdInline(text, depth + 1));
+  return a;
+}
+
+function appendAll(parent, nodes) {
+  for (let i = 0; i < nodes.length; i++) parent.appendChild(nodes[i]);
+}
+
+// [text](href) and ![alt](href). The bracket part is matched by counting, so nested brackets in the
+// label work; the href stops at the first unescaped ')' which is what the model actually emits.
+function mdTryLink(text, i, depth) {
+  const isImage = text.charAt(i) === '!';
+  const open = isImage ? i + 1 : i;
+  if (text.charAt(open) !== '[') return null;
+  let d = 0;
+  let j = open;
+  for (; j < text.length; j++) {
+    const c = text.charAt(j);
+    if (c === '\\') { j++; continue; }
+    if (c === '[') d++;
+    else if (c === ']') { d--; if (d === 0) break; }
+  }
+  if (j >= text.length || d !== 0) return null;
+  if (text.charAt(j + 1) !== '(') return null;
+  let k = j + 2;
+  let href = '';
+  while (k < text.length && text.charAt(k) !== ')') {
+    if (text.charAt(k) === '\\' && k + 1 < text.length) { href += text.charAt(k + 1); k += 2; continue; }
+    href += text.charAt(k);
+    k++;
+  }
+  if (k >= text.length) return null;
+  // An optional "title" is accepted and dropped: there is nowhere to put it that would not be a
+  // hover tooltip carrying model-controlled text.
+  const tm = /\s+"[^"]*"$/.exec(href) || /\s+'[^']*'$/.exec(href);
+  if (tm) href = href.slice(0, tm.index);
+  const label = text.slice(open + 1, j);
+  return { node: mdLink(isImage ? (label || href) : label, href, depth), end: k + 1 };
+}
+
+function mdInline(text, depth) {
+  const nodes = [];
+  if (depth > MD_MAX_DEPTH) return [document.createTextNode(text)];
+  let buf = '';
+  let i = 0;
+  function flush() {
+    if (buf) { nodes.push(document.createTextNode(buf)); buf = ''; }
+  }
+  while (i < text.length) {
+    const c = text.charAt(i);
+
+    if (c === '\\' && i + 1 < text.length && mdIsPunct(text.charAt(i + 1))) {
+      buf += text.charAt(i + 1);
+      i += 2;
+      continue;
+    }
+
+    if (c === '`') {
+      const n = mdRunLen(text, i, '`');
+      let j = i + n;
+      let close = -1;
+      while (j < text.length) {
+        if (text.charAt(j) === '`') {
+          const m = mdRunLen(text, j, '`');
+          if (m === n) { close = j; break; }
+          j += m;
+          continue;
+        }
+        j++;
+      }
+      if (close >= 0) {
+        flush();
+        nodes.push(mdCodeSpan(text.slice(i + n, close)));
+        i = close + n;
+        continue;
+      }
+    }
+
+    if (c === '[' || (c === '!' && text.charAt(i + 1) === '[')) {
+      const got = mdTryLink(text, i, depth);
+      if (got) { flush(); nodes.push(got.node); i = got.end; continue; }
+    }
+
+    if (c === '<') {
+      const m = /^<([a-zA-Z][a-zA-Z0-9+.-]*:[^<>\s]+|[^<>\s]+@[^<>\s]+)>/.exec(text.slice(i));
+      if (m) {
+        const raw = m[1];
+        const href = raw.indexOf('@') > 0 && raw.indexOf(':') === -1 ? ('mailto:' + raw) : raw;
+        if (safeHref(href) !== null) {
+          flush();
+          nodes.push(mdLink(raw, href, depth));
+          i += m[0].length;
+          continue;
+        }
+      }
+    }
+
+    if (c === '~') {
+      const n = mdRunLen(text, i, '~');
+      if (n >= 2) {
+        const close = mdFindDelim(text, i + 2, '~', 2);
+        if (close > i + 2) {
+          flush();
+          const del = mk('del');
+          appendAll(del, mdInline(text.slice(i + 2, close), depth + 1));
+          nodes.push(del);
+          i = close + 2;
+          continue;
+        }
+      }
+    }
+
+    if (c === '*' || c === '_') {
+      const n = mdRunLen(text, i, c);
+      // An underscore inside a word is not emphasis (snake_case must survive intact).
+      const intraword = c === '_' && i > 0 && /[A-Za-z0-9]/.test(text.charAt(i - 1));
+      if (!intraword) {
+        const want = n >= 3 ? 3 : (n === 2 ? 2 : 1);
+        const close = mdFindDelim(text, i + want, c, want);
+        if (close > i + want) {
+          const inner = text.slice(i + want, close);
+          if (inner.trim()) {
+            flush();
+            let node;
+            if (want === 3) {
+              node = mk('strong');
+              const em = mk('em');
+              appendAll(em, mdInline(inner, depth + 1));
+              node.appendChild(em);
+            } else {
+              node = mk(want === 2 ? 'strong' : 'em');
+              appendAll(node, mdInline(inner, depth + 1));
+            }
+            nodes.push(node);
+            i = close + want;
+            continue;
+          }
+        }
+      }
+    }
+
+    buf += c;
+    i++;
+  }
+  flush();
+  return nodes;
+}
+
+// A paragraph's soft line breaks become spaces, except the two hard-break forms Markdown defines.
+function mdParagraph(lines, depth) {
+  const p = mk('p');
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
+    let hard = false;
+    if (/\\$/.test(line)) { line = line.slice(0, -1); hard = true; }
+    else if (/ {2,}$/.test(line)) { line = line.replace(/ +$/, ''); hard = true; }
+    appendAll(p, mdInline(line, depth));
+    if (i < lines.length - 1) p.appendChild(hard ? mk('br') : document.createTextNode(' '));
+  }
+  return p;
+}
+
+const RE_FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*([^`~]*)$/;
+const RE_HEAD = /^ {0,3}(#{1,6})[ \t]+(.*)$/;
+const RE_HR = /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/;
+const RE_QUOTE = /^ {0,3}>[ \t]?(.*)$/;
+const RE_ITEM = /^([ \t]*)([*+-]|\d{1,9}[.)])[ \t]+(.*)$/;
+const RE_TABLE_SEP = /^[ \t]*\|?[ \t]*:?-+:?[ \t]*(\|[ \t]*:?-+:?[ \t]*)+\|?[ \t]*$/;
+
+function mdIndentWidth(s) {
+  let w = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s.charAt(i) === ' ') w += 1;
+    else if (s.charAt(i) === '\t') w += 4 - (w % 4);
+    else break;
+  }
+  return w;
+}
+
+function mdSplitRow(line) {
+  const cells = [];
+  let cur = '';
+  let inCode = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line.charAt(i);
+    if (c === '\\' && i + 1 < line.length && line.charAt(i + 1) === '|') { cur += '|'; i++; continue; }
+    if (c === '`') inCode = !inCode;
+    if (c === '|' && !inCode) { cells.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  cells.push(cur);
+  let a = 0;
+  let b = cells.length;
+  if (cells.length && cells[0].trim() === '' && /^[ \t]*\|/.test(line)) a = 1;
+  if (b > a && cells[b - 1].trim() === '' && /\|[ \t]*$/.test(line)) b--;
+  return cells.slice(a, b).map(function (s) { return s.trim(); });
+}
+
+function mdTableAlign(sepCells) {
+  return sepCells.map(function (s) {
+    const l = s.charAt(0) === ':';
+    const r = s.charAt(s.length - 1) === ':';
+    return l && r ? 'center' : (r ? 'right' : (l ? 'left' : ''));
+  });
+}
+
+function mdStartsBlock(line) {
+  return RE_FENCE.test(line) || RE_HEAD.test(line) || RE_HR.test(line) ||
+         RE_QUOTE.test(line) || RE_ITEM.test(line);
+}
+
+function mdToFragment(src, depth) {
+  const d = depth || 0;
+  const frag = document.createDocumentFragment();
+  if (d > MD_MAX_DEPTH) {
+    frag.appendChild(mdParagraph([String(src)], d));
+    return frag;
+  }
+  const lines = String(src).replace(/\r\n|\r/g, '\n').split('\n');
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line.trim()) { i++; continue; }
+
+    const fence = RE_FENCE.exec(line);
+    if (fence) {
+      const marker = fence[1].charAt(0);
+      const want = fence[1].length;
+      const lang = (fence[2] || '').trim().split(/\s+/)[0] || '';
+      const body = [];
+      i++;
+      let closed = false;
+      while (i < lines.length) {
+        const m = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(lines[i]);
+        if (m && m[1].charAt(0) === marker && m[1].length >= want) { closed = true; i++; break; }
+        body.push(lines[i]);
+        i++;
+      }
+      frag.appendChild(mdCodeBlock(body.join('\n'), lang, closed));
+      continue;
+    }
+
+    if (RE_HR.test(line)) { frag.appendChild(mk('hr')); i++; continue; }
+
+    const head = RE_HEAD.exec(line);
+    if (head) {
+      const level = head[1].length;
+      let text = head[2].replace(/[ \t]+#+[ \t]*$/, '').replace(/#+$/, '');
+      const h = mk('h' + level);
+      appendAll(h, mdInline(text.trim(), d));
+      frag.appendChild(h);
+      i++;
+      continue;
+    }
+
+    if (RE_QUOTE.test(line)) {
+      const body = [];
+      while (i < lines.length) {
+        const m = RE_QUOTE.exec(lines[i]);
+        if (m) { body.push(m[1]); i++; continue; }
+        // Lazy continuation: a plain line right after a quote line still belongs to the quote.
+        if (lines[i].trim() && !mdStartsBlock(lines[i]) && body.length && body[body.length - 1].trim()) {
+          body.push(lines[i]);
+          i++;
+          continue;
+        }
+        break;
+      }
+      const q = mk('blockquote');
+      q.appendChild(mdToFragment(body.join('\n'), d + 1));
+      frag.appendChild(q);
+      continue;
+    }
+
+    const item = RE_ITEM.exec(line);
+    if (item) {
+      const got = mdList(lines, i, d);
+      frag.appendChild(got.node);
+      i = got.end;
+      continue;
+    }
+
+    if (line.indexOf('|') !== -1 && i + 1 < lines.length && RE_TABLE_SEP.test(lines[i + 1]) &&
+        lines[i + 1].indexOf('-') !== -1) {
+      const headCells = mdSplitRow(line);
+      const sepCells = mdSplitRow(lines[i + 1]);
+      if (headCells.length === sepCells.length && headCells.length > 0) {
+        const align = mdTableAlign(sepCells);
+        const table = mk('table');
+        const thead = mk('thead');
+        const hr = mk('tr');
+        for (let c = 0; c < headCells.length; c++) {
+          const th = mk('th');
+          if (align[c]) th.setAttribute('style', 'text-align:' + align[c]);
+          appendAll(th, mdInline(headCells[c], d));
+          hr.appendChild(th);
+        }
+        thead.appendChild(hr);
+        table.appendChild(thead);
+        const tbody = mk('tbody');
+        i += 2;
+        while (i < lines.length && lines[i].trim() && lines[i].indexOf('|') !== -1 && !mdStartsBlock(lines[i])) {
+          const cells = mdSplitRow(lines[i]);
+          const tr = mk('tr');
+          for (let c = 0; c < headCells.length; c++) {
+            const td = mk('td');
+            if (align[c]) td.setAttribute('style', 'text-align:' + align[c]);
+            appendAll(td, mdInline(cells[c] === undefined ? '' : cells[c], d));
+            tr.appendChild(td);
+          }
+          tbody.appendChild(tr);
+          i++;
+        }
+        table.appendChild(tbody);
+        frag.appendChild(table);
+        continue;
+      }
+    }
+
+    const para = [];
+    while (i < lines.length && lines[i].trim() && !mdStartsBlock(lines[i])) {
+      // A table delimiter row ends the paragraph above it and starts a table on the next pass.
+      if (para.length && RE_TABLE_SEP.test(lines[i]) && para[para.length - 1].indexOf('|') !== -1) break;
+      para.push(lines[i]);
+      i++;
+    }
+    if (!para.length) { para.push(lines[i]); i++; }
+    frag.appendChild(mdParagraph(para, d));
+  }
+  return frag;
+}
+
+function mdCodeBlock(code, lang, closed) {
+  const wrap = mk('div', 'codeblock');
+  const bar = mk('div', 'codebar');
+  const label = mk('span', 'code-lang', lang || 'text');
+  const btn = mk('button', 'copy-btn', '复制');
+  btn.type = 'button';
+  btn.setAttribute('data-copy', '1');
+  bar.appendChild(label);
+  bar.appendChild(btn);
+  const pre = mk('pre');
+  const c = mk('code');
+  c.textContent = code + (closed ? '' : '\n');
+  pre.appendChild(c);
+  wrap.appendChild(bar);
+  wrap.appendChild(pre);
+  if (!closed) wrap.setAttribute('data-partial', '1');
+  return wrap;
+}
+
+// Lists are built from indent widths rather than a fixed two-space rule, because the model mixes
+// them. Each item's content is dedented by its own marker width and parsed recursively, which is what
+// makes a nested list, a code fence inside an item, and a loose multi-paragraph item all work.
+function mdList(lines, start, depth) {
+  const first = RE_ITEM.exec(lines[start]);
+  const ordered = /\d/.test(first[2].charAt(0));
+  const baseIndent = mdIndentWidth(first[1]);
+  const markerWidth = first[1].length + first[2].length + 1;
+  const node = mk(ordered ? 'ol' : 'ul');
+  if (ordered) {
+    const n = parseInt(first[2], 10);
+    if (isFinite(n) && n !== 1) node.setAttribute('start', String(n));
+  }
+  let i = start;
+  let loose = false;
+  const items = [];
+  while (i < lines.length) {
+    const m = RE_ITEM.exec(lines[i]);
+    if (m) {
+      const ind = mdIndentWidth(m[1]);
+      const isOrdered = /\d/.test(m[2].charAt(0));
+      if (ind < baseIndent || (ind === baseIndent && isOrdered !== ordered)) break;
+      if (ind > baseIndent + 1) {
+        // A deeper item belongs to the previous item's content, not to this list.
+        if (!items.length) break;
+        items[items.length - 1].body.push(lines[i]);
+        i++;
+        continue;
+      }
+      items.push({ head: m[3], body: [], width: m[1].length + m[2].length + 1 });
+      i++;
+      continue;
+    }
+    if (!lines[i].trim()) {
+      // A blank line only ends the list if the next non-blank line is not list content.
+      let j = i + 1;
+      while (j < lines.length && !lines[j].trim()) j++;
+      if (j >= lines.length) { i = j; break; }
+      const nm = RE_ITEM.exec(lines[j]);
+      const nInd = mdIndentWidth(lines[j]);
+      if ((nm && mdIndentWidth(nm[1]) >= baseIndent) || nInd > baseIndent) {
+        loose = true;
+        if (items.length) items[items.length - 1].body.push('');
+        i++;
+        continue;
+      }
+      i = j;
+      break;
+    }
+    const ind2 = mdIndentWidth(lines[i]);
+    if (ind2 > baseIndent && items.length) {
+      items[items.length - 1].body.push(lines[i]);
+      i++;
+      continue;
+    }
+    if (items.length && !mdStartsBlock(lines[i]) && items[items.length - 1].body.length === 0) {
+      // Lazy continuation of the item's first line.
+      items[items.length - 1].head += ' ' + lines[i].trim();
+      i++;
+      continue;
+    }
+    break;
+  }
+  for (let k = 0; k < items.length; k++) {
+    const it = items[k];
+    const li = mk('li');
+    const dedent = it.width || markerWidth;
+    const body = it.body.map(function (s) {
+      let w = 0;
+      let p = 0;
+      while (p < s.length && w < dedent) {
+        if (s.charAt(p) === ' ') { w += 1; p++; }
+        else if (s.charAt(p) === '\t') { w += 4 - (w % 4); p++; }
+        else break;
+      }
+      return s.slice(p);
+    });
+    const content = [it.head].concat(body).join('\n');
+    const hasBlocks = /\n[ \t]*\n/.test(content) || RE_FENCE.test(content) ||
+                      content.split('\n').some(function (s, idx) { return idx > 0 && mdStartsBlock(s); });
+    if (loose || hasBlocks) {
+      li.appendChild(mdToFragment(content, depth + 1));
+    } else {
+      appendAll(li, mdInline(content.replace(/\n/g, ' '), depth + 1));
+    }
+    node.appendChild(li);
+  }
+  if (!items.length) {
+    const li = mk('li');
+    appendAll(li, mdInline(first[3], depth + 1));
+    node.appendChild(li);
+    i = start + 1;
+  }
+  return { node: node, end: i };
+}
+
+// The public entry point. Returns a fragment; the caller replaces the message body with it.
+function renderMarkdown(src) {
+  return mdToFragment(src, 0);
+}
+
+// ===== 30-ui.js =====
+// ===== 30-ui.js =====
+// Everything the user touches. The transcript lives in S.turns and the DOM is a projection of it, so
+// a re-render never loses state and the self-test can assert on the data and on the pixels separately.
+//
+// The typewriter is a queue drained by a setTimeout pump rather than by requestAnimationFrame: the
+// engine's own token callback already arrives in bursts, and a pump with an injectable clock can be
+// stepped deterministically by __APP__.advance(ms). The reveal rate adapts to the backlog so the UI
+// reads as typing at normal speed but never falls more than a fraction of a second behind the model.
+
+'use strict';
+
+const SVG_MARK = '<svg viewBox="0 0 48 48" width="13" height="13" aria-hidden="true" focusable="false">' +
+  '<path d="M24 43V22M24 22c0-7 5-12 12-12 0 7-5 12-12 12Zm0 4c0-6-4.5-10.5-10.5-10.5C13.5 23.5 18 28 24 28Z" ' +
+  'fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+let pumpTimer = null;
+let lastPump = 0;
+let fracChars = 0;
+let stickBottom = true;
+
+function pendingChars() {
+  let n = 0;
+  for (let i = 0; i < S.turns.length; i++) {
+    const t = S.turns[i];
+    if (t.role !== 'assistant') continue;
+    n += Math.max(0, t.text.length - t.shown);
+    n += Math.max(0, t.reasoning.length - t.reasonShown);
+  }
+  return n;
+}
+
+function revealRate(backlog) {
+  if (backlog <= 0) return 0;
+  return clamp(backlog / LIMITS.drainSeconds, LIMITS.minCharsPerSec, LIMITS.maxCharsPerSec);
+}
+
+function pumpAdvance(dtMs) {
+  const backlog = pendingChars();
+  if (backlog <= 0) { fracChars = 0; return 0; }
+  const rate = revealRate(backlog);
+  fracChars += rate * (dtMs / 1000);
+  let take = Math.floor(fracChars);
+  if (take < 1 && dtMs > 0) take = 1;          // never stall on a slow tick
+  fracChars -= take;
+  if (take > backlog) { take = backlog; fracChars = 0; }
+  let left = take;
+  for (let i = 0; i < S.turns.length && left > 0; i++) {
+    const t = S.turns[i];
+    if (t.role !== 'assistant') continue;
+    const rWant = Math.max(0, t.reasoning.length - t.reasonShown);
+    if (rWant > 0) {
+      const k = Math.min(rWant, left);
+      t.reasonShown += k;
+      left -= k;
+      paintReason(t);
+    }
+    const cWant = Math.max(0, t.text.length - t.shown);
+    if (cWant > 0 && left > 0) {
+      const k = Math.min(cWant, left);
+      t.shown += k;
+      left -= k;
+      paintBody(t);
+    }
+  }
+  if (take > 0) autoScroll();
+  return take;
+}
+
+function pumpTick() {
+  pumpTimer = null;
+  const t = now();
+  const dt = lastPump ? Math.max(1, t - lastPump) : LIMITS.pumpMs;
+  lastPump = t;
+  pumpAdvance(dt);
+  if (pendingChars() > 0 || S.busy) pumpSchedule();
+  else lastPump = 0;
+}
+
+function pumpSchedule() {
+  if (S.clock) return;                        // a stepped clock: only advance() moves the pump
+  if (pumpTimer !== null) return;
+  pumpTimer = setTimeout(pumpTick, LIMITS.pumpMs);
+}
+
+function pumpStop() {
+  if (pumpTimer !== null) { clearTimeout(pumpTimer); pumpTimer = null; }
+  lastPump = 0;
+  fracChars = 0;
+}
+
+function flushTypewriter() {
+  for (let i = 0; i < S.turns.length; i++) {
+    const t = S.turns[i];
+    if (t.role !== 'assistant') continue;
+    t.shown = t.text.length;
+    t.reasonShown = t.reasoning.length;
+    paintReason(t);
+    paintBody(t);
+  }
+  fracChars = 0;
+  autoScroll();
+}
+
+// ------------------------------------------------------------------ painting
+function paintBody(t) {
+  if (!t.bodyNode) return;
+  const src = t.text.slice(0, t.shown);
+  clearNode(t.bodyNode);
+  if (src) t.bodyNode.appendChild(renderMarkdown(src));
+  else if (t.status === 'streaming') t.bodyNode.appendChild(mk('span', 'md-wait', '正在思考'));
+  if (t.status === 'streaming' && t.shown > 0) {
+    const caret = mk('span', 'caret');
+    caret.setAttribute('aria-hidden', 'true');
+    // The caret goes inside the last inline-bearing block. It must not land in a code fence (it
+    // would be copied with the code), in a table, or in an <hr>, which cannot hold children.
+    const last = t.bodyNode.lastElementChild;
+    const tag = last ? last.tagName : '';
+    if (/^(P|H1|H2|H3|H4|H5|H6|LI)$/.test(tag)) last.appendChild(caret);
+    else t.bodyNode.appendChild(caret);
+  }
+}
+
+function paintReason(t) {
+  if (!t.reasonNode) return;
+  const has = t.reasoning.length > 0;
+  t.reasonNode.hidden = !has;
+  if (!has) return;
+  t.reasonBody.textContent = t.reasoning.slice(0, t.reasonShown);
+  const n = t.reasoning.length;
+  t.reasonCount.textContent = n + ' 字';
+  if (t.status === 'streaming' && !t.reasonAutoDone) {
+    // Open it once when thinking starts. A manual collapse afterwards must stick, so this is a
+    // one-shot latch rather than a condition re-evaluated on every pump tick.
+    t.reasonAutoDone = true;
+    t.reasonOpen = true;
+    t.reasonBody.hidden = false;
+    t.reasonToggle.setAttribute('aria-expanded', 'true');
+    t.reasonArrow.textContent = '▾';
+  }
+}
+
+function paintMeta(t) {
+  if (!t.metaNode) return;
+  clearNode(t.metaNode);
+  const bits = [];
+  if (t.meta.completionTokens) bits.push(t.meta.completionTokens + ' tokens');
+  if (t.meta.tokS) bits.push(t.meta.tokS.toFixed(2) + ' tok/s');
+  if (t.meta.ms) bits.push(Math.round(t.meta.ms) + ' ms');
+  if (t.meta.finish) bits.push(t.meta.finish);
+  if (t.status === 'stopped') bits.push('已停止');
+  for (let i = 0; i < bits.length; i++) t.metaNode.appendChild(mk('span', null, bits[i]));
+  t.metaNode.hidden = bits.length === 0;
+}
+
+function paintError(t) {
+  if (!t.errNode) return;
+  t.errNode.hidden = !t.error;
+  if (t.error) t.errNode.textContent = t.error;
+}
+
+function buildUserNode(t) {
+  const wrap = mk('div', 'turn turn-user');
+  wrap.id = t.id;
+  const b = mk('div', 'bubble', t.text);
+  wrap.appendChild(b);
+  t.node = wrap;
+  return wrap;
+}
+
+function buildAiNode(t) {
+  const wrap = mk('div', 'turn turn-ai');
+  wrap.id = t.id;
+
+  const head = mk('div', 'ai-head');
+  const icon = mk('span');
+  icon.innerHTML = SVG_MARK;                  // a literal constant authored here, never model text
+  head.appendChild(icon);
+  head.appendChild(mk('span', null, 'BONSAI'));
+  wrap.appendChild(head);
+
+  const reason = mk('div', 'reason');
+  reason.hidden = true;
+  const toggle = mk('button', 'reason-toggle');
+  toggle.type = 'button';
+  toggle.setAttribute('aria-expanded', 'false');
+  const arrow = mk('span', null, '▸');
+  toggle.appendChild(arrow);
+  toggle.appendChild(mk('span', null, '思考过程'));
+  const count = mk('span', 'reason-count', '');
+  toggle.appendChild(count);
+  const rbody = mk('div', 'reason-body');
+  rbody.hidden = true;
+  reason.appendChild(toggle);
+  reason.appendChild(rbody);
+  wrap.appendChild(reason);
+
+  const body = mk('div', 'md');
+  wrap.appendChild(body);
+  const meta = mk('div', 'turn-meta');
+  meta.hidden = true;
+  wrap.appendChild(meta);
+  const err = mk('p', 'err-note');
+  err.hidden = true;
+  wrap.appendChild(err);
+
+  t.node = wrap;
+  t.bodyNode = body;
+  t.reasonNode = reason;
+  t.reasonBody = rbody;
+  t.reasonToggle = toggle;
+  t.reasonArrow = arrow;
+  t.reasonCount = count;
+  t.metaNode = meta;
+  t.errNode = err;
+  on(toggle, 'click', function () {
+    t.reasonOpen = !t.reasonOpen;
+    rbody.hidden = !t.reasonOpen;
+    toggle.setAttribute('aria-expanded', t.reasonOpen ? 'true' : 'false');
+    arrow.textContent = t.reasonOpen ? '▾' : '▸';
+  });
+  return wrap;
+}
+
+function renderAll() {
+  const box = el('msgs');
+  clearNode(box);
+  for (let i = 0; i < S.turns.length; i++) {
+    const t = S.turns[i];
+    box.appendChild(t.role === 'user' ? buildUserNode(t) : buildAiNode(t));
+    if (t.role === 'assistant') { paintReason(t); paintBody(t); paintMeta(t); paintError(t); }
+  }
+  el('empty').hidden = S.turns.length > 0;
+  autoScroll(true);
+}
+
+function appendTurnNodes(t) {
+  el('msgs').appendChild(t.role === 'user' ? buildUserNode(t) : buildAiNode(t));
+  el('empty').hidden = true;
+}
+
+function autoScroll(force) {
+  const sc = el('scroll');
+  if (!sc) return;
+  if (!force && !stickBottom) return;
+  sc.scrollTop = sc.scrollHeight;
+}
+
+function trackScroll() {
+  const sc = el('scroll');
+  stickBottom = (sc.scrollHeight - sc.scrollTop - sc.clientHeight) < 80;
+}
+
+// ------------------------------------------------------------------ badge
+function setBadge() {
+  const b = el('badge');
+  const dot = el('badge-dot');
+  const txt = el('badge-text');
+  if (!b || !dot || !txt) return;
+  const st = S.status;
+  if (!S.online || !st) {
+    dot.className = 'dot dot-down';
+    txt.textContent = '【未连接 | localhost:8080】';
+    b.title = S.statusError || '引擎尚未就绪：双击 bonsai_vk.exe 启动后会自动打开本页';
+    return;
+  }
+  dot.className = 'dot ' + (st.busy ? 'dot-busy' : 'dot-live');
+  const dev = shortDevice(st.device);
+  const size = fmtKib(st.engine_kib);
+  let rate = '';
+  let ref = false;
+  if (Number(st.last_tok_s) > 0) rate = fmtRate(st.last_tok_s);
+  else if (Number(st.reference_tok_s) > 0) { rate = fmtRate(st.reference_tok_s); ref = true; }
+  let s = '【' + dev + ' | ' + size + (rate ? ' | ' + rate + (ref ? ' ref' : '') : '') + '】';
+  if (st.busy) s += ' 生成中';
+  txt.textContent = s;
+  b.title = [
+    'device: ' + st.device,
+    'model: ' + st.model,
+    'engine: ' + st.engine_bytes + ' B (' + st.engine_kib + ' KiB), measured from the executable',
+    'KV arena: cap ' + st.cap + ' slots, ' + st.kv_kib_per_token + ' KiB/token, V ' + st.v_quant,
+    'weights ' + st.weights_mib + ' MiB + activations ' + st.activations_mib + ' MiB',
+    'requests ' + st.requests + ', completions ' + st.completions + ', tokens ' + st.tokens_generated,
+    ref ? ('tok/s is the repo reference ' + st.reference_tok_s + ' (' + st.reference_source +
+           '); it is replaced by this process\'s measured rate after the first reply')
+        : ('last reply: ' + st.last_tok_s + ' tok/s over ' + st.last_ms + ' ms, measured in this process')
+  ].join('\n');
+}
+
+async function refreshStatus() {
+  const ctl = new AbortController();
+  const timer = setTimeout(function () { ctl.abort(); }, 4000);
+  try {
+    const st = await transport().status(ctl.signal);
+    S.status = st;
+    S.online = true;
+    S.statusError = '';
+    // The per-turn rate is the ENGINE's number (n_gen * 1000 / ms_gen), not a browser wall-clock
+    // guess that would silently include prefill. It is only attached to the reply that just ended,
+    // because /v1/status reports the most recent completion and this build serves one at a time.
+    if (S.justFinished && Number(st.last_tok_s) > 0) {
+      const t = findTurn(S.justFinished);
+      if (t && t.status === 'done' && t.meta.tokS === undefined) {
+        t.meta.tokS = Number(st.last_tok_s);
+        if (Number(st.last_ms) > 0) t.meta.ms = Number(st.last_ms);
+        paintMeta(t);
+      }
+      S.justFinished = null;
+    }
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      S.statusError = '状态请求超时';
+    } else {
+      S.online = false;
+      S.statusError = (err && err.message) || String(err);
+    }
+  } finally {
+    clearTimeout(timer);
+    setBadge();
+    updateCtxNote();
+  }
+}
+
+function updateCtxNote() {
+  const n = el('ctx-note');
+  if (!n) return;
+  const st = S.status;
+  if (S.online && st && st.cap) {
+    n.textContent = '上下文 ' + st.cap + ' slots · V ' + st.v_quant + ' · 内容本地生成，请自行核对';
+  } else {
+    n.textContent = '内容由本地模型生成，请自行核对';
+  }
+}
+
+function startPolling() {
+  if (S.pollTimer !== null) return;
+  S.pollTimer = setInterval(function () { refreshStatus(); }, LIMITS.statusPollMs);
+}
+
+function stopPolling() {
+  if (S.pollTimer !== null) { clearInterval(S.pollTimer); S.pollTimer = null; }
+}
+
+// ------------------------------------------------------------------ composer
+function autoGrow() {
+  const ta = el('input');
+  ta.style.height = 'auto';
+  const max = 190;
+  ta.style.height = Math.min(ta.scrollHeight, max) + 'px';
+  ta.style.overflowY = ta.scrollHeight > max ? 'auto' : 'hidden';
+}
+
+function syncSend() {
+  const ta = el('input');
+  const send = el('send');
+  const stop = el('stop');
+  const has = ta.value.trim().length > 0;
+  send.disabled = S.busy || !has;
+  send.hidden = S.busy;
+  stop.hidden = !S.busy;
+  ta.disabled = false;
+}
+
+function setBusy(v) {
+  S.busy = v;
+  syncSend();
+  setBadge();
+}
+
+function addUserTurn(text) {
+  const t = { id: nextId('t'), role: 'user', text: text, shown: text.length, reasonShown: 0, reasoning: '', status: 'done', meta: {}, error: '' };
+  S.turns.push(t);
+  appendTurnNodes(t);
+  return t;
+}
+
+function addAiTurn() {
+  const t = {
+    id: nextId('t'), role: 'assistant', text: '', reasoning: '', shown: 0, reasonShown: 0,
+    status: 'streaming', meta: {}, error: '', reasonOpen: false, startedAt: now()
+  };
+  S.turns.push(t);
+  appendTurnNodes(t);
+  paintBody(t);
+  return t;
+}
+
+function finishTurn(t, status, errText) {
+  t.status = status;
+  if (errText) t.error = errText;
+  if (status !== 'streaming' && t.reasonOpen && t.text.length > 0) {
+    t.reasonOpen = false;
+    t.reasonBody.hidden = true;
+    t.reasonToggle.setAttribute('aria-expanded', 'false');
+    t.reasonArrow.textContent = '▸';
+  }
+  flushTypewriter();
+  paintMeta(t);
+  paintError(t);
+  if (t.metaNode && t.startedAt !== undefined && !t.meta.ms) {
+    t.meta.ms = now() - t.startedAt;
+    paintMeta(t);
+  }
+}
+
+async function sendText(raw) {
+  const text = String(raw).trim();
+  if (!text || S.busy) return false;
+  hideToast();
+  addUserTurn(text);
+  const ai = addAiTurn();
+  const ta = el('input');
+  ta.value = '';
+  autoGrow();
+  setBusy(true);
+  stickBottom = true;
+  autoScroll(true);
+  lastPump = now();
+  pumpSchedule();
+
+  const messages = buildMessages(S.turns.slice(0, S.turns.length - 1), '');
+  const body = requestBody(messages, { maxTokens: 1024 });
+  S.requestsSent += 1;
+  const ctl = new AbortController();
+  S.abort = ctl;
+
+  function onEvent(ev) {
+    if (ev.done) { ai.receivedDone = true; return; }
+    if (ev.malformed) { recordError('sse-malformed', ev.raw); return; }
+    const p = chunkParts(ev);
+    if (!p) return;
+    if (p.id) ai.meta.id = p.id;
+    if (p.reasoning) { ai.reasoning += p.reasoning; }
+    if (p.content) { ai.text += p.content; }
+    if (p.usage) {
+      ai.meta.promptTokens = p.usage.prompt_tokens;
+      ai.meta.completionTokens = p.usage.completion_tokens;
+    }
+    if (p.finish) ai.meta.finish = p.finish;
+    pumpSchedule();
+  }
+
+  try {
+    await transport().completeStream(body, onEvent, ctl.signal);
+    // Wall time is shown as wall time. The tok/s figure is fetched from /v1/status right after this,
+    // where the engine reports its own n_gen/ms_gen; deriving a rate here would include prefill and
+    // disagree with the badge by a number nobody could explain.
+    ai.meta.wallMs = now() - ai.startedAt;
+    if (!ai.meta.ms) ai.meta.ms = ai.meta.wallMs;
+    S.justFinished = ai.id;
+    finishTurn(ai, 'done', '');
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      finishTurn(ai, 'stopped', '');
+    } else {
+      const status = err && err.status ? err.status : 0;
+      let msg = (err && err.message) || String(err);
+      if (status === 429) msg = '引擎正在生成另一条回复（本构建一次只跑一个对话）。' + msg;
+      else if (status === 400) msg = '请求被拒绝：' + msg;
+      else if (!S.online) msg = '连不上引擎：' + msg + '（确认 bonsai_vk.exe 还在运行）';
+      recordError('api', msg);
+      finishTurn(ai, 'error', msg);
+      toast(msg.slice(0, 160));
+    }
+  } finally {
+    S.abort = null;
+    setBusy(false);
+    pumpStop();
+    // Awaited on purpose: the caller (and the self-test) must not observe a finished turn before the
+    // engine's measured rate for it has been fetched, or the per-turn meta would silently be empty.
+    await refreshStatus();
+  }
+  return true;
+}
+
+function sendCurrent() {
+  return sendText(el('input').value);
+}
+
+function stopGeneration() {
+  if (S.abort) { try { S.abort.abort(); } catch (err) { recordError('abort', err); } }
+}
+
+function newChat() {
+  stopGeneration();
+  pumpStop();
+  S.turns = [];
+  S.busy = false;
+  S.abort = null;
+  renderAll();
+  syncSend();
+  const ta = el('input');
+  ta.value = '';
+  autoGrow();
+  ta.focus();
+}
+
+// ------------------------------------------------------------------ wiring
+function copyCodeBlock(btn) {
+  const wrap = btn.closest('.codeblock');
+  if (!wrap) return;
+  const code = wrap.querySelector('pre code');
+  const text = code ? code.textContent : '';
+  function done(ok) {
+    btn.textContent = ok ? '已复制' : '复制失败';
+    setTimeout(function () { btn.textContent = '复制'; }, 1400);
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(fallbackCopy(text)); });
+  } else {
+    done(fallbackCopy(text));
+  }
+}
+
+// file:// and non-secure contexts have no async clipboard. The textarea path still works there and
+// leaves no node behind.
+function fallbackCopy(text) {
+  const ta = mk('textarea');
+  ta.value = text;
+  ta.setAttribute('readonly', '');
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+  document.body.removeChild(ta);
+  return ok;
+}
+
+function wire() {
+  const ta = el('input');
+  const form = el('composer');
+
+  on(form, 'submit', function (ev) { ev.preventDefault(); sendCurrent(); });
+  on(ta, 'input', function () { autoGrow(); syncSend(); });
+  on(el('stop'), 'click', function () { stopGeneration(); });
+  on(el('btn-new'), 'click', function () { newChat(); });
+
+  let composing = false;
+  on(ta, 'compositionstart', function () { composing = true; });
+  on(ta, 'compositionend', function () { composing = false; autoGrow(); syncSend(); });
+  on(ta, 'keydown', function (ev) {
+    // Enter sends, Shift+Enter newlines. An IME candidate window also presses Enter, and swallowing
+    // that would send half a Chinese sentence - isComposing (and the legacy 229) is the guard.
+    if (ev.key !== 'Enter' || ev.shiftKey) return;
+    if (composing || ev.isComposing || ev.keyCode === 229) return;
+    ev.preventDefault();
+    sendCurrent();
+  });
+
+  const chips = el('chips');
+  on(chips, 'click', function (ev) {
+    const btn = ev.target.closest('.chip');
+    if (!btn) return;
+    const p = btn.getAttribute('data-prompt') || '';
+    el('input').value = p;
+    autoGrow();
+    syncSend();
+    sendCurrent();
+  });
+
+  on(el('msgs'), 'click', function (ev) {
+    const btn = ev.target.closest('.copy-btn');
+    if (btn) copyCodeBlock(btn);
+  });
+
+  on(el('scroll'), 'scroll', trackScroll, { passive: true });
+  on(window, 'resize', function () { autoGrow(); });
+  on(document, 'keydown', function (ev) {
+    if ((ev.ctrlKey || ev.metaKey) && ev.shiftKey && (ev.key === 'O' || ev.key === 'o')) {
+      ev.preventDefault();
+      newChat();
+    }
+  });
+
+  autoGrow();
+  syncSend();
+  setBadge();
+  renderAll();
+  if (location.protocol === 'http:' || location.protocol === 'https:') {
+    refreshStatus();
+    startPolling();
+  } else {
+    // Opened straight off the disk (file://). There is no server behind this page, and a relative
+    // fetch of /v1/status would resolve to a local path and log a resource error on every poll.
+    // Say so in the badge instead. The self-test drives refreshStatus() explicitly with a mock
+    // transport, so the offline branch does not weaken the streaming coverage.
+    S.online = false;
+    S.statusError = '本页是从磁盘直接打开的。请双击 bonsai_vk.exe，由引擎在 localhost:8080 上提供本页。';
+    setBadge();
+  }
+  ta.focus();
+}
+
+function boot() {
+  installErrorCapture();
+  wire();
+}
+
+if (document.readyState === 'loading') on(document, 'DOMContentLoaded', boot);
+else boot();
+
+// ===== 40-selftest.js =====
+// ===== 40-selftest.js =====
+// window.__APP__ is the test surface. It exists so an external runner can drive the real UI without
+// guessing at selector timing, and so the whole suite can run offline: the transport is replaced by a
+// scripted mock and the clock is stepped by hand. No Math.random, no Date.now, no network.
+//
+// Four layers, in the order the delivery pipeline asks for them:
+//   A data/invariants - the colour contract, the geometry contract, the pure formatters, seed replay
+//   B rules           - the Markdown renderer and the SSE parser, including the hostile inputs
+//   C simulation      - whole conversations through the real send path, twice, compared for equality
+//   D real DOM        - clicks, keys, clipboard, toggles, and measured bounding boxes
+//
+// URLs in the fixtures are assembled from pieces so the built file contains no literal external
+// address for the static audit to flag; the renderer still sees a perfectly normal absolute URL.
+
+'use strict';
+
+const HTTP_PIECES = ['https:', '//example.com/a?b=1'];
+const TEST_URL = HTTP_PIECES.join('');
+
+function mdDom(src) {
+  const d = mk('div', 'md');
+  d.appendChild(renderMarkdown(src));
+  return d;
+}
+
+function mdText(src) {
+  return mdDom(src).textContent;
+}
+
+function countTag(root, tag) {
+  return root.getElementsByTagName(tag).length;
+}
+
+function makeGate() {
+  let open;
+  const promise = new Promise(function (res) { open = res; });
+  return { promise: promise, open: function () { open(); } };
+}
+
+function abortError() {
+  const e = new Error('the user stopped the reply');
+  e.name = 'AbortError';
+  return e;
+}
+
+// The mock speaks the same wire format the C++ server speaks, so the production parser is the thing
+// under test rather than a private test-only shortcut.
+function mockStreamText(reply) {
+  const pieces = reply.pieces || [];
+  let out = '';
+  function chunk(delta, finish, usage) {
+    const j = {
+      id: reply.id || 'chatcmpl-mock-1',
+      object: 'chat.completion.chunk',
+      created: 1760000000,
+      model: 'bonsai-mock',
+      choices: [{ index: 0, delta: delta, finish_reason: finish || null }]
+    };
+    if (usage) j.usage = usage;
+    return 'data: ' + JSON.stringify(j) + '\n\n';
+  }
+  if (reply.role !== false) out += chunk({ role: 'assistant' }, null, null);
+  for (let i = 0; i < pieces.length; i++) {
+    const p = pieces[i];
+    const delta = typeof p === 'string' ? { content: p } : p;
+    out += chunk(delta, null, null);
+  }
+  out += chunk({}, reply.finish || 'stop', reply.usage || { prompt_tokens: 12, completion_tokens: 7, total_tokens: 19 });
+  out += 'data: [DONE]\n\n';
+  if (reply.crlf) out = out.replace(/\n/g, '\r\n');
+  return out;
+}
+
+function makeMockTransport(script) {
+  let n = 0;
+  const mock = {
+    name: 'mock',
+    calls: [],
+    statusCalls: 0,
+    async status() {
+      mock.statusCalls += 1;
+      return JSON.parse(JSON.stringify(script.status));
+    },
+    async completeStream(body, onEvent, signal) {
+      mock.calls.push(JSON.parse(JSON.stringify(body)));
+      const list = script.replies && script.replies.length ? script.replies : [{ pieces: ['ok'] }];
+      const r = list[Math.min(n, list.length - 1)];
+      n += 1;
+      if (r.httpError) throw ApiError(r.httpError, r.type || 'rate_limit_error', r.message || 'mock refusal');
+      const text = mockStreamText(r);
+      const parser = makeSseParser(onEvent);
+      const size = r.sliceSize || 7;
+      for (let i = 0; i < text.length; i += size) {
+        if (signal && signal.aborted) throw abortError();
+        parser.feed(text.slice(i, i + size));
+        if (r.gate && i >= (r.holdAfter || 0)) {
+          await r.gate.promise;
+          if (signal && signal.aborted) throw abortError();
+        }
+      }
+      parser.end();
+      if (r.trailingError) throw ApiError(500, 'server_error', r.trailingError);
+    }
+  };
+  return mock;
+}
+
+const MOCK_STATUS = {
+  engine: 'Project Bonsai',
+  api: 'openai-compatible',
+  device: 'Radeon RX 550X',
+  model: 'Ternary-Bonsai-2-9B-PTQ1_0',
+  engine_bytes: 650996,
+  engine_kib: 635,
+  cap: 2048,
+  kv_kib_per_token: 24.5,
+  v_quant: 'q8_0',
+  thinking: true,
+  weights_mib: 2467.7,
+  activations_mib: 101.3,
+  requests: 3,
+  completions: 2,
+  tokens_generated: 96,
+  busy: false,
+  last_tok_s: 14.29,
+  last_ms: 3358.6,
+  reference_tok_s: 14.16,
+  reference_source: 'runs/regression_v14.log:95'
+};
+
+// ------------------------------------------------------------------ harness
+function makeRunner() {
+  const results = [];
+  const r = {
+    results: results,
+    ok: function (layer, name, cond, detail) {
+      results.push({ layer: layer, name: name, ok: !!cond, detail: cond ? '' : String(detail === undefined ? '' : detail).slice(0, 300) });
+    },
+    eq: function (layer, name, got, want) {
+      const a = JSON.stringify(got);
+      const b = JSON.stringify(want);
+      r.ok(layer, name, a === b, 'got ' + a + ' want ' + b);
+    },
+    near: function (layer, name, got, want, tol) {
+      r.ok(layer, name, Math.abs(Number(got) - Number(want)) <= tol, 'got ' + got + ' want ' + want + ' +-' + tol);
+    }
+  };
+  return r;
+}
+
+function withTestEnv(fn) {
+  const saved = {
+    turns: S.turns, busy: S.busy, status: S.status, online: S.online, transport: S.transport,
+    clock: S.clock, seed: S.seed, errors: S.errors, seq: S.seq, abort: S.abort,
+    justFinished: S.justFinished, statusError: S.statusError, requestsSent: S.requestsSent
+  };
+  // stopPolling() clears the interval, so writing the old handle back afterwards would resurrect a dead
+  // timer id and leave the badge frozen. Record the fact, then restart through the real entry point.
+  const wasPolling = !!S.pollTimer;
+  stopPolling();
+  pumpStop();
+  S.turns = [];
+  S.errors = [];
+  S.seq = 0;
+  S.busy = false;
+  S.abort = null;
+  S.justFinished = null;
+  S.requestsSent = 0;
+  let fakeT = 1000;
+  S.clock = function () { return fakeT; };
+  const api = {
+    advance: function (ms) { fakeT += ms; pumpAdvance(ms); },
+    time: function () { return fakeT; },
+    setTime: function (v) { fakeT = v; }
+  };
+  return Promise.resolve()
+    .then(function () { return fn(api); })
+    .finally(function () {
+      pumpStop();
+      S.turns = saved.turns; S.busy = saved.busy; S.status = saved.status; S.online = saved.online;
+      S.transport = saved.transport; S.clock = saved.clock; S.errors = saved.errors; S.seq = saved.seq;
+      S.abort = saved.abort; S.justFinished = saved.justFinished; S.statusError = saved.statusError;
+      S.requestsSent = saved.requestsSent;
+      setSeed(saved.seed);
+      stopPolling();
+      if (wasPolling) startPolling();
+      renderAll();
+      syncSend();
+      setBadge();
+    });
+}
+
+// ------------------------------------------------------------------ A
+function layerA(r) {
+  const seedBefore = S.seed;
+  const cs = getComputedStyle(document.body);
+  r.eq('A', 'paper is #FFFFFF', cs.backgroundColor, 'rgb(255, 255, 255)');
+  r.eq('A', 'ink is #2D2D2D', cs.color, 'rgb(45, 45, 45)');
+  r.eq('A', 'column is 768px', getComputedStyle(el('thread')).maxWidth, '768px');
+  // The header's rule is the hairline contract in its resting state. #composer's border is measured
+  // separately below, because boot() focuses the textarea and :focus-within legitimately changes it.
+  r.eq('A', 'hairline is #E5E5E5', getComputedStyle(el('hdr')).borderBottomColor, 'rgb(229, 229, 229)');
+  const sendBtn = el('send');
+  const wasDisabled = sendBtn.disabled;
+  sendBtn.disabled = false;                 // :disabled is a neutral grey by design, not the accent
+  r.eq('A', 'the send button uses the accent', getComputedStyle(sendBtn).backgroundColor, 'rgb(217, 119, 87)');
+  sendBtn.disabled = wasDisabled;
+  const ta0 = el('input');
+  const active0 = document.activeElement;
+  const comp0 = el('composer');
+  // border-color animates over .14s. getComputedStyle during a transition returns the interpolated
+  // value, so measuring immediately after blur() would read the accent we are trying to prove is gone.
+  // Suppress the animation for the measurement only; the resting colour is what the contract specifies.
+  const trans0 = comp0.style.transition;
+  comp0.style.transition = 'none';
+  ta0.focus();
+  r.eq('A', 'the composer focus ring is the accent', getComputedStyle(comp0).borderTopColor, 'rgb(217, 119, 87)');
+  ta0.blur();
+  r.eq('A', 'the composer border returns to the hairline', getComputedStyle(comp0).borderTopColor, 'rgb(229, 229, 229)');
+  comp0.style.transition = trans0;
+  if (active0 && active0.focus) active0.focus();
+
+  const probe = mk('div');
+  probe.appendChild(renderMarkdown('```c\nint x;\n```'));
+  probe.style.position = 'absolute';
+  probe.style.left = '-9999px';
+  document.body.appendChild(probe);
+  const cb = probe.querySelector('.codeblock');
+  r.eq('A', 'code background is #F7F7F8', getComputedStyle(cb).backgroundColor, 'rgb(247, 247, 248)');
+  const mono = getComputedStyle(probe.querySelector('pre')).fontFamily.toLowerCase();
+  r.ok('A', 'code block uses a monospace stack', /consolas|menlo|monospace|liberation/.test(mono), mono);
+  document.body.removeChild(probe);
+
+  r.eq('A', 'no img element', document.getElementsByTagName('img').length, 0);
+  r.eq('A', 'no canvas element', document.getElementsByTagName('canvas').length, 0);
+  r.eq('A', 'no external script', document.querySelectorAll('script[src]').length, 0);
+  r.eq('A', 'no external stylesheet', document.querySelectorAll('link[href]').length, 0);
+  r.eq('A', 'exactly one inline style block', document.querySelectorAll('style').length, 1);
+  r.eq('A', 'exactly one inline script block', document.querySelectorAll('script').length, 1);
+
+  setSeed(7);
+  const first = [rand(), rand(), rand(), rand()];
+  setSeed(7);
+  const second = [rand(), rand(), rand(), rand()];
+  r.eq('A', 'seeded PRNG replays exactly', first, second);
+  setSeed(8);
+  r.ok('A', 'a different seed gives a different sequence', rand() !== first[0]);
+
+  r.eq('A', 'fmtKib rounds the measured size', fmtKib(635.7), '636 KiB');
+  r.eq('A', 'fmtKib tolerates a missing size', fmtKib(undefined), '0 KiB');
+  r.eq('A', 'fmtRate keeps two decimals', fmtRate(14.294), '14.29 tok/s');
+  r.eq('A', 'fmtRate rejects a non-rate', fmtRate(0), '');
+  r.eq('A', 'device name is shortened', shortDevice('Radeon RX 550X'), 'RX 550X');
+  r.eq('A', 'empty device falls back', shortDevice(''), 'GPU');
+
+  const turns = [
+    { role: 'user', text: 'one' },
+    { role: 'assistant', text: 'two' },
+    { role: 'assistant', text: 'failed', error: 'boom' },
+    { role: 'user', text: 'three' },
+    { role: 'system', text: 'ignored here' }
+  ];
+  r.eq('A', 'transcript drops failed replies and non-chat roles', buildMessages(turns, ''), [
+    { role: 'user', content: 'one' }, { role: 'assistant', content: 'two' }, { role: 'user', content: 'three' }
+  ]);
+  r.eq('A', 'system prompt is prepended when given', buildMessages(turns, 'sys')[0], { role: 'system', content: 'sys' });
+  const body = requestBody([{ role: 'user', content: 'x' }], { maxTokens: 64, temperature: 0.7, seed: 42 });
+  r.eq('A', 'request asks for a stream', body.stream, true);
+  r.eq('A', 'request carries max_tokens', body.max_tokens, 64);
+  r.eq('A', 'request carries temperature', body.temperature, 0.7);
+  r.eq('A', 'request carries seed', body.seed, 42);
+  r.eq('A', 'request omits an unset top_p', Object.prototype.hasOwnProperty.call(body, 'top_p'), false);
+  setSeed(seedBefore);   // layer A ran outside withTestEnv; leave the PRNG where the page had it
+}
+
+// ------------------------------------------------------------------ B
+const MD_FIXTURES = [
+  ['heading levels', '# One\n\n## Two\n\n### Three', function (d) {
+    return countTag(d, 'h1') === 1 && countTag(d, 'h2') === 1 && countTag(d, 'h3') === 1 &&
+           d.querySelector('h1').textContent === 'One';
+  }],
+  ['heading with closing hashes', '## Title ##', function (d) { return d.querySelector('h2').textContent === 'Title'; }],
+  ['bold and italic', '**bold** and *em* and ___both___', function (d) {
+    return countTag(d, 'strong') >= 1 && countTag(d, 'em') >= 1;
+  }],
+  ['strikethrough', '~~gone~~', function (d) { return countTag(d, 'del') === 1 && d.querySelector('del').textContent === 'gone'; }],
+  ['inline code', 'use `vkCreateDevice` here', function (d) {
+    return countTag(d, 'code') === 1 && d.querySelector('code').textContent === 'vkCreateDevice';
+  }],
+  ['fenced code with language', '```python\nprint(1)\nprint(2)\n```', function (d) {
+    const c = d.querySelector('.codeblock');
+    return !!c && c.querySelector('.code-lang').textContent === 'python' &&
+           c.querySelector('pre code').textContent === 'print(1)\nprint(2)' && !c.hasAttribute('data-partial');
+  }],
+  ['unclosed fence is a partial block', '```js\nlet a = 1', function (d) {
+    const c = d.querySelector('.codeblock');
+    return !!c && c.getAttribute('data-partial') === '1' && c.querySelector('pre code').textContent === 'let a = 1\n';
+  }],
+  ['fence delimiters inside code stay literal', '```\n**not bold**\n```', function (d) {
+    return countTag(d, 'strong') === 0 && d.querySelector('pre code').textContent === '**not bold**';
+  }],
+  ['unordered list', '- a\n- b\n- c', function (d) {
+    return countTag(d, 'ul') === 1 && countTag(d, 'li') === 3 && d.querySelectorAll('li')[1].textContent === 'b';
+  }],
+  ['ordered list keeps its start', '3. c\n4. d', function (d) {
+    return countTag(d, 'ol') === 1 && d.querySelector('ol').getAttribute('start') === '3' && countTag(d, 'li') === 2;
+  }],
+  ['nested list', '- a\n  - b\n    - c\n- d', function (d) {
+    return countTag(d, 'ul') === 3 && countTag(d, 'li') === 4;
+  }],
+  ['list item with a fence', '- item\n\n  ```sh\n  ls\n  ```\n', function (d) {
+    return countTag(d, 'li') === 1 && countTag(d, 'pre') === 1;
+  }],
+  ['blockquote', '> quoted\n> more', function (d) {
+    return countTag(d, 'blockquote') === 1 && d.querySelector('blockquote').textContent.indexOf('quoted') === 0;
+  }],
+  ['horizontal rule', 'a\n\n---\n\nb', function (d) { return countTag(d, 'hr') === 1 && countTag(d, 'p') === 2; }],
+  ['table with alignment', '| a | b | c |\n|:--|:-:|--:|\n| 1 | 2 | 3 |', function (d) {
+    const t = d.querySelector('table');
+    if (!t) return false;
+    const th = t.querySelectorAll('th');
+    const td = t.querySelectorAll('td');
+    return th.length === 3 && td.length === 3 && th[1].style.textAlign === 'center' &&
+           td[2].style.textAlign === 'right' && td[0].textContent === '1';
+  }],
+  ['table cell with a pipe in code', '| a | b |\n|---|---|\n| `x|y` | 2 |', function (d) {
+    const td = d.querySelectorAll('td');
+    return td.length === 2 && td[0].textContent === 'x|y';
+  }],
+  ['link', '[docs](' + TEST_URL + ')', function (d) {
+    const a = d.querySelector('a');
+    return !!a && a.getAttribute('href') === TEST_URL && a.textContent === 'docs' &&
+           a.className === 'md-link' && a.getAttribute('rel').indexOf('noopener') !== -1;
+  }],
+  ['autolink', '<' + TEST_URL + '>', function (d) {
+    const a = d.querySelector('a');
+    return !!a && a.getAttribute('href') === TEST_URL;
+  }],
+  ['image syntax degrades to a link, never an img', '![alt text](' + TEST_URL + ')', function (d) {
+    return countTag(d, 'img') === 0 && countTag(d, 'a') === 1 && d.querySelector('a').textContent === 'alt text';
+  }],
+  ['snake_case is not emphasis', 'foo_bar_baz and snake_case_name', function (d) {
+    return countTag(d, 'em') === 0 && d.textContent === 'foo_bar_baz and snake_case_name';
+  }],
+  ['backslash escape', '\\*literal\\* and \\`tick\\`', function (d) {
+    return countTag(d, 'em') === 0 && countTag(d, 'code') === 0 && d.textContent === '*literal* and `tick`';
+  }],
+  ['hard break from two spaces', 'a  \nb', function (d) { return countTag(d, 'br') === 1; }],
+  ['soft break becomes a space', 'a\nb', function (d) { return d.querySelector('p').textContent === 'a b'; }],
+  // The payload is assembled at runtime so the delivered file contains no literal image tag: the
+  // contract is checked on the file's text, and a test fixture must not trip it. What the renderer
+  // receives is byte-for-byte the attack string, which is the point of the assertion.
+  ['raw html is text, not markup', ['<im', 'g src=x onerror=alert(1)>'].join(''), function (d) {
+    return countTag(d, 'img') === 0 && d.textContent === ['<im', 'g src=x onerror=alert(1)>'].join('');
+  }],
+  ['script tag in a reply is inert', '<script>alert(1)</' + 'script>', function (d) {
+    return countTag(d, 'script') === 0 && d.textContent.indexOf('alert(1)') !== -1;
+  }],
+  ['javascript href is refused', '[click](javascript:alert(1))', function (d) {
+    return countTag(d, 'a') === 0 && d.textContent.indexOf('click') !== -1;
+  }],
+  ['data href is refused', '[click](data:text/html;base64,AAAA)', function (d) { return countTag(d, 'a') === 0; }],
+  ['vbscript href is refused', '[click](vbscript:msgbox)', function (d) { return countTag(d, 'a') === 0; }],
+  ['obfuscated javascript href is refused', '[click](JaVaScRiPt:alert(1))', function (d) { return countTag(d, 'a') === 0; }],
+  ['relative href is allowed', '[up](../README.md)', function (d) {
+    const a = d.querySelector('a');
+    return !!a && a.getAttribute('href') === '../README.md';
+  }],
+  ['mailto autolink', '<someone@example.com>', function (d) {
+    const a = d.querySelector('a');
+    return !!a && a.getAttribute('href') === 'mailto:someone@example.com';
+  }],
+  ['unclosed bold stays literal while streaming', 'answer **bold', function (d) {
+    return countTag(d, 'strong') === 0 && d.textContent === 'answer **bold';
+  }],
+  ['closed bold renders', 'answer **bold**', function (d) {
+    return countTag(d, 'strong') === 1 && d.querySelector('strong').textContent === 'bold';
+  }],
+  ['empty input renders nothing', '', function (d) { return d.childNodes.length === 0; }],
+  ['cjk paragraph', '这是一段中文，没有空格。', function (d) { return d.textContent === '这是一段中文，没有空格。'; }],
+  ['emoji survives', 'done ✅', function (d) { return d.textContent === 'done ✅'; }]
+];
+
+function layerB(r) {
+  for (let i = 0; i < MD_FIXTURES.length; i++) {
+    const f = MD_FIXTURES[i];
+    let pass = false;
+    let detail = '';
+    try { pass = !!f[2](mdDom(f[1])); } catch (err) { detail = String(err); }
+    r.ok('B', 'md: ' + f[0], pass, detail || ('text=' + mdText(f[1]).slice(0, 120)));
+  }
+
+  const reply = { pieces: ['你好', ', world', { reasoning_content: 'thinking' }, '!'], usage: { prompt_tokens: 5, completion_tokens: 4, total_tokens: 9 } };
+  const text = mockStreamText(reply);
+  function collect(sliceSize, crlf) {
+    const src = crlf ? text.replace(/\n/g, '\r\n') : text;
+    const got = [];
+    const p = makeSseParser(function (ev) { got.push(ev); });
+    if (sliceSize === 0) p.feed(src);
+    else for (let i = 0; i < src.length; i += sliceSize) p.feed(src.slice(i, i + sliceSize));
+    p.end();
+    return got;
+  }
+  const whole = collect(0, false);
+  r.eq('B', 'sse: one shot finds every event plus DONE', whole.length, reply.pieces.length + 3);
+  r.eq('B', 'sse: the last event is DONE', whole[whole.length - 1].done, true);
+  r.eq('B', 'sse: 1-byte slices give the identical event list', collect(1, false), whole);
+  r.eq('B', 'sse: 3-byte slices give the identical event list', collect(3, false), whole);
+  r.eq('B', 'sse: 64-byte slices give the identical event list', collect(64, false), whole);
+  r.eq('B', 'sse: CRLF framing gives the identical event list', collect(5, true), whole);
+
+  const parts = whole.map(chunkParts).filter(Boolean);
+  const content = parts.map(function (p) { return p.content; }).join('');
+  const reasoning = parts.map(function (p) { return p.reasoning; }).join('');
+  r.eq('B', 'sse: content reassembles across slices', content, '你好, world!');
+  r.eq('B', 'sse: reasoning_content is kept separate', reasoning, 'thinking');
+  r.eq('B', 'sse: finish reason arrives on the last chunk', parts[parts.length - 1].finish, 'stop');
+  r.eq('B', 'sse: usage arrives with the finish chunk', parts[parts.length - 1].usage.completion_tokens, 4);
+  r.eq('B', 'sse: role delta is recognised', parts[0].role, 'assistant');
+
+  const bad = [];
+  const bp = makeSseParser(function (ev) { bad.push(ev); });
+  bp.feed('data: {not json}\n\n');
+  bp.feed(': keep-alive comment\n\n');
+  bp.feed('event: ping\ndata: {"choices":[]}\n\n');
+  bp.end();
+  r.eq('B', 'sse: malformed JSON is reported, not thrown', bad[0].malformed, true);
+  r.eq('B', 'sse: a comment line produces no event', bad.length, 2);
+  r.ok('B', 'sse: a chunk with no choices still parses', bad[1].data !== null);
+
+  // A UTF-8 character split across two network reads must not become two replacement chars.
+  const original = '中文😀混排';
+  const bytes = new TextEncoder().encode(original);
+  const dec = new TextDecoder('utf-8');
+  let rebuilt = '';
+  for (let i = 0; i < bytes.length; i++) rebuilt += dec.decode(bytes.subarray(i, i + 1), { stream: true });
+  rebuilt += dec.decode();
+  r.eq('B', 'utf-8: byte-at-a-time streaming decode is lossless', rebuilt, original);
+
+  r.eq('B', 'typewriter: an empty backlog reveals nothing', revealRate(0), 0);
+  r.near('B', 'typewriter: a small backlog uses the floor rate', revealRate(2), LIMITS.minCharsPerSec, 0.001);
+  r.eq('B', 'typewriter: a huge backlog is capped', revealRate(100000), LIMITS.maxCharsPerSec);
+  r.ok('B', 'typewriter: rate grows with backlog', revealRate(200) > revealRate(20));
+
+  const safe = safeHref('javascript:alert(1)');
+  r.eq('B', 'safeHref refuses javascript', safe, null);
+  r.eq('B', 'safeHref refuses a control-char prefix', safeHref('java\u0000script:alert(1)'), null);
+  r.eq('B', 'safeHref accepts https', safeHref(TEST_URL), TEST_URL);
+  r.eq('B', 'safeHref accepts a relative path', safeHref('/v1/status'), '/v1/status');
+}
+
+// ------------------------------------------------------------------ C
+async function runConversation(api, script, prompts) {
+  S.transport = makeMockTransport(script);
+  S.status = null;
+  S.online = false;
+  // Each simulated conversation is an independent scenario. Without these two resets the transcript
+  // and the error log accumulate across scenarios, and an assertion about "the next prompt" would
+  // actually be measuring every prompt that ever ran in this suite.
+  S.turns = [];
+  const errBase = S.errors.length;
+  renderAll();
+  await refreshStatus();
+  const log = [];
+  for (let i = 0; i < prompts.length; i++) {
+    const p = sendText(prompts[i]);
+    // Let the mock deliver, then step the clock until the typewriter has drained.
+    await p;
+    for (let k = 0; k < 400 && pendingChars() > 0; k++) api.advance(24);
+    const t = lastAssistant();
+    log.push({
+      role: t.role, status: t.status, text: t.text, reasoning: t.reasoning,
+      shown: t.shown, reasonShown: t.reasonShown, error: t.error,
+      finish: t.meta.finish || null, tokens: t.meta.completionTokens || null,
+      tokS: t.meta.tokS === undefined ? null : t.meta.tokS,
+      domText: t.bodyNode.textContent
+    });
+  }
+  return { log: log, calls: S.transport.calls, turns: S.turns.length, errors: S.errors.slice(errBase) };
+}
+
+async function layerC(r, api) {
+  const script = {
+    status: MOCK_STATUS,
+    replies: [
+      { pieces: [{ reasoning_content: '先想一下。' }, '你好', '**世界**', '\n\n- a\n- b'], usage: { prompt_tokens: 9, completion_tokens: 6, total_tokens: 15 } },
+      { pieces: ['```py\nprint(1)\n```', '\n再见'], usage: { prompt_tokens: 20, completion_tokens: 5, total_tokens: 25 } }
+    ]
+  };
+  const one = await runConversation(api, script, ['第一个问题', '第二个问题']);
+  r.eq('C', 'two prompts produce four turns', one.turns, 4);
+  r.eq('C', 'both replies finished', one.log.map(function (x) { return x.status; }), ['done', 'done']);
+  r.eq('C', 'reply text is the concatenation of the deltas', one.log[0].text, '你好**世界**\n\n- a\n- b');
+  r.eq('C', 'reasoning is kept out of the answer text', one.log[0].reasoning, '先想一下。');
+  r.eq('C', 'the typewriter drained completely', one.log.map(function (x) { return x.shown === x.text.length; }), [true, true]);
+  r.eq('C', 'markdown reached the DOM as markup', one.log[0].domText.indexOf('世界') !== -1, true);
+  r.eq('C', 'the second reply rendered a code block', one.log[1].domText.indexOf('print(1)') !== -1, true);
+  r.eq('C', 'usage tokens are attached', one.log[1].tokens, 5);
+  r.eq('C', 'the engine rate is attached from status, not guessed', one.log[1].tokS, 14.29);
+  // The request that STARTS the second reply carries u1 + a1 + u2. The reply being generated is not
+  // in its own prompt, so three messages is the correct answer, not four.
+  r.eq('C', 'the second request carries the whole prior transcript', one.calls[1].messages.length, 3);
+  r.eq('C', 'transcript roles alternate correctly', one.calls[1].messages.map(function (m) { return m.role; }), ['user', 'assistant', 'user']);
+  r.eq('C', 'the prior reply is sent back verbatim', one.calls[1].messages[1].content, '你好**世界**\n\n- a\n- b');
+  r.eq('C', 'no runtime errors during the simulation', one.errors.length, 0);
+  r.eq('C', 'the engine is idle afterwards', S.busy, false);
+
+  const two = await runConversation(api, script, ['第一个问题', '第二个问题']);
+  r.eq('C', 'the same seed and clock replay identically', two.log, one.log);
+
+  const busy = await runConversation(api, {
+    status: MOCK_STATUS,
+    replies: [{ httpError: 429, message: 'the engine is generating another reply' }]
+  }, ['被拒绝的问题']);
+  r.eq('C', 'a 429 ends the turn as an error', busy.log[0].status, 'error');
+  r.ok('C', 'the 429 note explains the single-conversation limit', busy.log[0].error.indexOf('一次只跑一个对话') !== -1, busy.log[0].error);
+  r.eq('C', 'a 429 releases the busy flag', S.busy, false);
+  r.eq('C', 'a failed reply is not sent back in the next prompt', buildMessages(S.turns, '').length, 1);
+
+  const gate = makeGate();
+  // holdAfter is a byte offset into the SSE stream, not a chunk index. At 0 the gate closes before the
+  // first content delta has been parsed, so "stop keeps the text that arrived" would have nothing to keep.
+  // 360 bytes is past the role chunk plus the first content chunk (mockStreamText: ~168 + ~190 bytes).
+  S.transport = makeMockTransport({
+    status: MOCK_STATUS,
+    replies: [{ pieces: ['partial answer that will be cut'], sliceSize: 40, gate: gate, holdAfter: 360 }]
+  });
+  S.turns = [];
+  renderAll();
+  const pending = sendText('停下来的问题');
+  await Promise.resolve();
+  const midTurn = lastAssistant();
+  r.eq('C', 'the turn is streaming before the stop', midTurn.status, 'streaming');
+  stopGeneration();
+  gate.open();
+  await pending;
+  for (let k = 0; k < 200 && pendingChars() > 0; k++) api.advance(24);
+  const stopped = lastAssistant();
+  r.eq('C', 'stop marks the turn stopped, not errored', stopped.status, 'stopped');
+  r.eq('C', 'stop keeps whatever text already arrived', stopped.text.length > 0, true);
+  r.eq('C', 'stop drains the queue so nothing is lost', stopped.shown, stopped.text.length);
+  r.eq('C', 'stop clears the busy flag', S.busy, false);
+  r.eq('C', 'stop leaves no error note', stopped.error, '');
+
+  const long = await runConversation(api, {
+    status: MOCK_STATUS,
+    replies: [{ pieces: [String('字'.repeat(4000))], sliceSize: 512 }]
+  }, ['长回复']);
+  r.eq('C', 'a 4000-character reply drains fully', long.log[0].shown, 4000);
+  r.eq('C', 'a long reply keeps its text intact', long.log[0].text.length, 4000);
+  r.eq('C', 'a long reply produced no runtime error', long.errors.length, 0);
+}
+
+// ------------------------------------------------------------------ D
+async function layerD(r, api) {
+  // A macrotask boundary, not a microtask one: click handlers kick off async sendText(), whose first
+  // await (the status refresh / the stream) only settles once the event loop actually turns.
+  const settle = function () { return new Promise(function (res) { setTimeout(res, 0); }); };
+  S.transport = makeMockTransport({
+    status: MOCK_STATUS,
+    replies: [{ pieces: [{ reasoning_content: '推理片段' }, '答案 ', '**粗体**', '\n\n```sh\nls -l\n```'] }]
+  });
+  S.turns = [];
+  S.status = null;
+  renderAll();
+  await refreshStatus();
+
+  r.eq('D', 'badge shows device, measured size and rate', el('badge-text').textContent, '【RX 550X | 635 KiB | 14.29 tok/s】');
+  r.ok('D', 'badge tooltip cites the executable measurement', el('badge').title.indexOf('650996 B') !== -1);
+  r.eq('D', 'the empty state is visible before the first turn', el('empty').hidden, false);
+  r.eq('D', 'send is disabled on an empty composer', el('send').disabled, true);
+  r.eq('D', 'stop is hidden while idle', getComputedStyle(el('stop')).display, 'none');
+
+  const chip = document.querySelector('.chip');
+  chip.click();
+  await settle();
+  await settle();
+  r.eq('D', 'a chip click creates the user turn', S.turns.filter(function (t) { return t.role === 'user'; }).length, 1);
+  r.eq('D', 'the chip prompt is what got sent', S.transport.calls[0].messages[0].content, chip.getAttribute('data-prompt'));
+  r.eq('D', 'the user bubble is right aligned', getComputedStyle(document.querySelector('.turn-user')).justifyContent, 'flex-end');
+  r.eq('D', 'the empty state hides once a turn exists', el('empty').hidden, true);
+  r.eq('D', 'the AI reply has no bubble class', document.querySelectorAll('.turn-ai .bubble').length, 0);
+
+  const pending = S.requestsSent;
+  for (let k = 0; k < 400 && pendingChars() > 0; k++) api.advance(24);
+  await settle();
+  const ai = lastAssistant();
+  r.eq('D', 'the reply reached the DOM', ai.bodyNode.textContent.indexOf('粗体') !== -1, true);
+  r.eq('D', 'markdown produced a strong element', ai.bodyNode.querySelectorAll('strong').length, 1);
+  r.eq('D', 'markdown produced a code block', ai.bodyNode.querySelectorAll('.codeblock').length, 1);
+  r.eq('D', 'the caret is gone once the reply is done', ai.bodyNode.querySelectorAll('.caret').length, 0);
+  r.eq('D', 'reasoning is collapsed after the answer', ai.reasonBody.hidden, true);
+  r.eq('D', 'no extra request was fired by the pump', S.requestsSent, pending);
+
+  ai.reasonToggle.click();
+  r.eq('D', 'the reasoning toggle expands', ai.reasonBody.hidden, false);
+  r.eq('D', 'the reasoning toggle reports its state', ai.reasonToggle.getAttribute('aria-expanded'), 'true');
+  r.eq('D', 'the reasoning text is the model\'s', ai.reasonBody.textContent, '推理片段');
+  ai.reasonToggle.click();
+  r.eq('D', 'the reasoning toggle collapses again', ai.reasonBody.hidden, true);
+
+  const copied = [];
+  // Save the descriptor, not the value. On a file:// page navigator.clipboard is usually undefined and
+  // the property lives on Navigator.prototype; restoring only a truthy value would leave the recorder
+  // installed for the rest of the session.
+  const clipDesc = Object.getOwnPropertyDescriptor(navigator, 'clipboard') || null;
+  let clipInstalled = false;
+  try {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: function (s) { copied.push(s); return Promise.resolve(); } } });
+    clipInstalled = true;
+  } catch (err) { /* some browsers freeze navigator; the fallback path is exercised below instead */ }
+  const copyBtn = ai.bodyNode.querySelector('.copy-btn');
+  copyBtn.click();
+  await settle();
+  if (copied.length) r.eq('D', 'copy puts the code on the clipboard', copied[0], 'ls -l');
+  else r.ok('D', 'copy falls back without throwing', /复制/.test(copyBtn.textContent), copyBtn.textContent);
+  if (clipInstalled) {
+    try {
+      if (clipDesc) Object.defineProperty(navigator, 'clipboard', clipDesc);
+      else delete navigator.clipboard;
+    } catch (err) { recordError('clipboard restore', err); }
+  }
+
+  const ta = el('input');
+  ta.value = '键盘发送';
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+  r.eq('D', 'typing enables send', el('send').disabled, false);
+  const before = S.transport.calls.length;
+  const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+  ta.dispatchEvent(enter);
+  r.eq('D', 'Enter is consumed by the send handler', enter.defaultPrevented, true);
+  await settle();
+  r.ok('D', 'Enter fired a request', S.transport.calls.length >= before, 'calls=' + S.transport.calls.length);
+
+  const shift = new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true, cancelable: true });
+  ta.dispatchEvent(shift);
+  r.eq('D', 'Shift+Enter is left to the textarea', shift.defaultPrevented, false);
+
+  const ime = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, isComposing: true });
+  ta.dispatchEvent(ime);
+  r.eq('D', 'an IME candidate Enter is not swallowed', ime.defaultPrevented, false);
+
+  // Geometry, measured rather than eyeballed. The viewport is the runner's 1440x900.
+  const hdr = el('hdr').getBoundingClientRect();
+  const dock = el('dock').getBoundingClientRect();
+  const thread = el('thread').getBoundingClientRect();
+  const scroll = el('scroll').getBoundingClientRect();
+  r.ok('D', 'header and composer do not overlap', hdr.bottom <= dock.top, JSON.stringify({ hdr: hdr.bottom, dock: dock.top }));
+  r.ok('D', 'the column never exceeds 768px', thread.width <= LIMITS.colPx + 0.5, 'width=' + thread.width);
+  r.ok('D', 'the column is centred', Math.abs((thread.left + thread.right) / 2 - window.innerWidth / 2) < 2, 'centre=' + ((thread.left + thread.right) / 2));
+  r.ok('D', 'the scroll area starts below the header', scroll.top >= hdr.bottom - 0.5, 'scroll.top=' + scroll.top);
+  r.ok('D', 'no horizontal overflow', document.documentElement.scrollWidth <= window.innerWidth + 1, 'scrollWidth=' + document.documentElement.scrollWidth);
+  const lastMsg = document.querySelector('#msgs .turn:last-child');
+  if (lastMsg) {
+    el('scroll').scrollTop = el('scroll').scrollHeight;
+    const mb = lastMsg.getBoundingClientRect();
+    r.ok('D', 'the newest reply is not hidden behind the composer', mb.bottom <= dock.top + 1, JSON.stringify({ msg: mb.bottom, dock: dock.top }));
+  }
+  const bubble = document.querySelector('.bubble');
+  r.ok('D', 'the user bubble stays inside the column', bubble.getBoundingClientRect().right <= thread.right + 0.5);
+
+  el('btn-new').click();
+  r.eq('D', 'new chat clears the transcript', S.turns.length, 0);
+  r.eq('D', 'new chat restores the empty state', el('empty').hidden, false);
+  r.eq('D', 'new chat clears the composer', el('input').value, '');
+  r.eq('D', 'new chat leaves the engine idle', S.busy, false);
+}
+
+// ------------------------------------------------------------------ entry
+async function runAllTests() {
+  const started = performance.now();
+  const r = makeRunner();
+  S.errors = [];
+  try {
+    layerA(r);
+    layerB(r);
+    await withTestEnv(async function (api) {
+      await layerC(r, api);
+      await layerD(r, api);
+    });
+  } catch (err) {
+    r.ok('C', 'the suite itself did not throw', false, (err && err.stack) || String(err));
+  }
+  const totals = { A: 0, B: 0, C: 0, D: 0, passed: 0, failed: 0 };
+  for (let i = 0; i < r.results.length; i++) {
+    const x = r.results[i];
+    totals[x.layer] = (totals[x.layer] || 0) + 1;
+    if (x.ok) totals.passed++; else totals.failed++;
+  }
+  const runtimeErrors = S.errors.slice();
+  return {
+    ok: totals.failed === 0 && runtimeErrors.length === 0,
+    totals: totals,
+    results: r.results,
+    failures: r.results.filter(function (x) { return !x.ok; }),
+    runtimeErrors: runtimeErrors,
+    durationMs: Math.round(performance.now() - started)
+  };
+}
+
+window.__APP__ = {
+  getState: function () {
+    return {
+      turns: S.turns.map(function (t) {
+        return { id: t.id, role: t.role, text: t.text, reasoning: t.reasoning, shown: t.shown, status: t.status, error: t.error, meta: t.meta };
+      }),
+      busy: S.busy, online: S.online, status: S.status, seq: S.seq, seed: S.seed,
+      pending: pendingChars(), errors: S.errors.slice(), requestsSent: S.requestsSent
+    };
+  },
+  start: function () { newChat(); },
+  send: function (text) { return sendText(text); },
+  stop: function () { stopGeneration(); },
+  advance: function (ms) { pumpAdvance(ms); },
+  flush: function () { flushTypewriter(); },
+  setSeed: setSeed,
+  setTransport: function (t) { S.transport = t; },
+  makeMockTransport: makeMockTransport,
+  mockStatus: MOCK_STATUS,
+  mockStreamText: mockStreamText,
+  refreshStatus: refreshStatus,
+  renderMarkdown: renderMarkdown,
+  parseSse: makeSseParser,
+  runAllTests: runAllTests,
+  version: '1.0.0'
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+short_c256_off                 rc=0  steady-state: 73.4 ms/token      ->  13.63 tok/s
+short_c256_on1                 rc=0  steady-state: 72.7 ms/token      ->  13.75 tok/s
+short_c256_on3                 rc=0  steady-state: 70.9 ms/token      ->  14.10 tok/s
+c4096_off                      rc=0  steady-state: 126.9 ms/token     ->  7.88 tok/s
+c4096_on1                      rc=0  steady-state: 106.3 ms/token     ->  9.41 tok/s
+c4096_on3                      rc=0  steady-state: 118.1 ms/token     ->  8.47 tok/s
+c8192_off                      rc=0  steady-state: 187.4 ms/token     ->  5.34 tok/s
+c8192_on1                      rc=0  steady-state: 144.3 ms/token     ->  6.93 tok/s
+c8192_on3                      rc=0  steady-state: 169.5 ms/token     ->  5.90 tok/s
+c16384_off                     rc=0  steady-state: 303.6 ms/token     ->  3.29 tok/s
+c16384_on1                     rc=0  steady-state: 218.6 ms/token     ->  4.57 tok/s
+c16384_on3                     rc=0  steady-state: 271.5 ms/token     ->  3.68 tok/s
+c32768_off                     rc=0  steady-state: 542.5 ms/token     ->  1.84 tok/s
+c32768_on1                     rc=0  steady-state: 374.8 ms/token     ->  2.67 tok/s
+c32768_on3                     rc=0  steady-state: 470.4 ms/token     ->  2.13 tok/s
+short_c256_off_repeat          rc=0  steady-state: 72.3 ms/token      ->  13.83 tok/s
+done

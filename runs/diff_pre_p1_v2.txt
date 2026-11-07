@@ -1,0 +1,1130 @@
+--- bonsai_forward.h.bak_pre_profile	2026-11-04 12:21:47.322610200 +0800
++++ bonsai_forward.h	2026-11-04 21:35:51.201358000 +0800
+@@ -39,6 +39,13 @@
+ #include <vector>
+ 
+ #include "bonsai_tok.h"
++#include "bonsai_chat.h"    // the model's own chat template, transcribed (see that file's header)
++#include "f16_rne_host.h"   // the host fp16 RNE packer (f32_to_f16_bits / pack2 / word_lo / word_hi):
++                            // the same source of truth align_attn.exe validated over 4096 floats, so
++                            // the P16 self-check cannot pass by disagreeing with the kernel's packer.
++#include "kv_guard.h"       // P1's block-level KV capacity math + P2's WDDM spill watcher (PDH
++                            // "GPU Process Memory(pid_<pid>_*)\Shared Usage"). Header-only, no Vulkan
++                            // types in the watcher, so it is testable without a device.
+ 
+ static inline uint32_t f2u(float v) { uint32_t u; memcpy(&u, &v, 4); return u; }
+ 
+@@ -57,11 +64,25 @@
+     uint32_t Q16 = 0, QF = 0, KF = 0, SCORE = 0, PROB = 0, P16 = 0, MASK = 0, POS = 0;
+     uint32_t PGATE = 0, GOUT = 0, SIGNS = 0, QKWN = 0;
+     uint32_t QD = 0, GD = 0;                // attn_q de-interleaved: contiguous q, contiguous gate
++    uint32_t DUMMY = 0;                     // 16 floats: the window a binding points at when its
++                                            // shader branch never executes (VS in fp16-V mode, KF in
++                                            // no-debug-stream mode). A descriptor still has to name a
++                                            // real, aligned, non-empty range.
+     uint32_t KV = 0, ST = 0, CH = 0;
+     uint64_t kv_layer = 0, st_layer = 0, ch_layer = 0;
++    // The three sub-arenas of one attention layer's KV region, in uint words (= the arena's float
++    // units). K is ALWAYS fp16 and is always the first sub-arena at +0, so the QK kernels and the
++    // BONSAI_QCHECK audit that read KC are unaffected by the V representation.
++    uint64_t kv_k = 0, kv_vd = 0, kv_vs = 0;   // K fp16 | V data (fp16 halves or q8_0 words) | V scales
++    // Set when a take() would need more than uint32_t can hold. The offsets and `total` are uint32_t
++    // float-indices, so a cap large enough to overflow them would otherwise wrap silently and hand the
++    // kernels overlapping windows: an under-allocated arena and an overflowing one fail the SAME way,
++    // which is why the sizes are checked here instead of being assumed safe.
++    bool overflow = false;
+ 
+     uint32_t take(uint64_t n) {
+         const uint32_t a = (uint32_t)((total + align - 1u) / align * align);
++        if (n > uint64_t(UINT32_MAX) || uint64_t(a) + n > uint64_t(UINT32_MAX)) overflow = true;
+         total = a + (uint32_t)n;
+         return a;
+     }
+@@ -95,10 +116,28 @@
+     enum P {
+         P_SETPOS, P_EMBD, P_RMS, P_MUL, P_MULB, P_SIGNS, P_HAT, P_ADD, P_ADDF, P_SWIGLU, P_PERM,
+         P_SIGMOID, P_SOFTPLUS, P_L2, P_CONV, P_GDN, P_XSUM, P_REDUCE, P_GEMV, P_GEMV32, P_DEINT,
+-        P_NORMROPE, P_QK, P_PV, P_N
++        P_NORMROPE, P_QK, P_QKW, P_PV, P_N
+     };
+     Pipe p[P_N];
+-    Pipe arope[8], aqk[8], apv[8];
++    Pipe arope[8], aqk[8], aqkw[8], apv[8];
++    // cap <= 256 dispatches the narrow (lane == key position) kernel that the layer-3 alignment was
++    // measured with; anything wider dispatches attn_qk_softmax_wide.comp, whose lanes stride over the
++    // row. Both are bound to the same 7 windows in the same order, and the wide one must reproduce
++    // the narrow one BITWISE at cap = 256 - that cross-check is the gate for this whole branch.
++    uint32_t wide = 0;                      // 1 = use aqkw[] instead of aqk[]
++    uint32_t qk_force = 0;                  // 0 auto, 1 force narrow, 2 force wide (A/B cross-check)
++    uint32_t qcheck = 0;                    // BONSAI_QCHECK=1: audit the QK kernels after the prompt
++    static const uint32_t kMaxNarrow = 256u, kMaxWide = 2048u;   // kMaxWide == the shader's MAXCAP
++
++    // Chat template. The literals are never written into this source: they are taken from the model's
++    // own vocab by id, so the file stays free of control-token text and the ids stay the single truth.
++    uint32_t chat = 1;                      // 1 = wrap the prompt in the model's chat template
++                                            // (BONSAI_CHAT=0 reproduces the bare-prompt behaviour of
++                                            //  every log before this change, incl. runs/ignition_v2.log)
++    uint32_t thinking = 1;                  // the template's own default is "undefined = true", so the
++                                            //  engine mirrors it; BONSAI_THINKING=0 renders the empty
++                                            //  think block and the model answers without reasoning
++    std::string system_text;                // empty = no system block at all
+     int  aidx[32] = {};                     // block -> its index among the attention blocks
+     uint32_t n_attn = 0, n_gdn = 0;
+     float  rms_eps = 1e-6f;                 // copied from the plan at init: every norm reads it
+@@ -111,6 +150,29 @@
+     float    l2_eps   = 1e-12f;
+     uint32_t round_probs = 1;               // PV reads the fp16 probability operand (ggml's cast)
+     uint32_t cap = 256u;                    // KV slots per attention layer = the official test run
++    uint32_t cap_autofit = 0;               // BONSAI_CAP_AUTOFIT=1: take the OOM branch's own advice
++                                            // instead of exiting (P2's "fall back to a shorter
++                                            // context length", applied where it is still safe)
++
++    // ---- P1: the V representation. K is fp16 in both modes and its code path is character-identical.
++    uint32_t v_q8 = 1;                      // BONSAI_KV_V_QUANT: q8_0 (default) | none
++    uint32_t rope_oracle = 0;               // BONSAI_ROPE_ORACLE=1: bind the frozen attn_norm_rope.comp
++                                            // (11 bindings, no VS) instead of rope2. Diagnostic only,
++                                            // and it forces emit_kf because the oracle always writes kf.
++    uint32_t emit_kf = 0;                   // BONSAI_KV_DEBUG_STREAM=1 restores the cap*nkv*hd fp32
++                                            // post-rope K stream. attn_norm_rope.comp's own header
++                                            // says of QF/KF "No engine buffer is involved ... nothing
++                                            // reads them back", and grep finds R.KF only at the
++                                            // allocation, the binding and the region dump - yet it is
++                                            // 4.0 KiB of the measured 36.16 KiB per-slot cost (11% of
++                                            // the arena) and it grows with context. Gated, default off.
++    KvGeom    kvgeom;                       // the layout-derived byte math (kv_guard.h)
++    KvGuard   kvguard;                      // block-level refuse / evict hook
++    SpillWatch spill;                       // PDH Shared Usage watcher
++    DxgiBudget dxi;                         // auxiliary commit-budget reading (NOT a spill judge)
++    uint32_t kv_blk_slots = 64;             // positions per KV block = the hook's granularity
++    uint32_t spill_every = 32;              // sample every N decode tokens
++    double   spill_last = -1.0;             // last Shared Usage in MiB, negative = no counter
+ 
+     int      stop_at_block = -1;            // -1 = whole network; 0..31 cuts the graph for alignment
+     bool     cut_before_ffn = false;        // ladder only: run the attention/GDN branch, stop, read
+@@ -180,6 +242,11 @@
+ // A forced value only applies where it divides the block count, because the kernel's contract is
+ // that each split owns a whole number of 128-wide blocks.
+ static uint32_t g_split_force = 0;
++// Two generation-shape knobs that are properties of the LOOP, not of the model, so they live beside
++// the split forcing rather than in Fwd: BONSAI_STOP_NL=n ends the run n newlines into the answer
++// (what "用一句话解释" actually means, and the only way a base model's answer has a floor under its
++// length), BONSAI_STRIP_THINK=1 prints only the text after the think-close marker.
++static uint32_t g_stop_nl = 0, g_strip_think = 0;
+ static uint32_t splits_for(uint32_t M, uint32_t nblk) {
+     if (g_split_force && nblk % g_split_force == 0u) return g_split_force;
+     return pick_splits(M, nblk);
+@@ -362,13 +429,18 @@
+       dsp(f, f.p[Fwd::P_SETPOS], cb, pc, 4, 1); }
+ 
+     // QK-norm + RoPE + the fp16 pack + the K/V cache insert, in one kernel (the dump's own order:
+-    // RMS_NORM -> *norm weight -> ROPE -> SET_ROWS).
+-    { uint32_t pc[8] = {1u, uint32_t(pl.n_head), uint32_t(pl.n_head_kv), uint32_t(pl.head_dim),
+-                        uint32_t(pl.n_rot), f.cap, f2u(f.rms_eps), f2u(pl.rope_base)};
+-      dsp(f, f.arope[li], cb, pc, 8, uint32_t(pl.n_head + pl.n_head_kv)); }
++    // RMS_NORM -> *norm weight -> ROPE -> SET_ROWS). Words 8/9 are the P1 switches; the validated
++    // oracle kernel (attn_norm_rope.comp) stops at word 7, so this is the only push difference.
++    { uint32_t pc[12] = {1u, uint32_t(pl.n_head), uint32_t(pl.n_head_kv), uint32_t(pl.head_dim),
++                        uint32_t(pl.n_rot), f.cap, f2u(f.rms_eps), f2u(pl.rope_base),
++                        f.v_q8, f.emit_kf, 0u, 0u};
++      dsp(f, f.arope[li], cb, pc, 10, uint32_t(pl.n_head + pl.n_head_kv)); }
++    // The narrow kernel's lane IS the key position, so it can only cover 256 of them. Past that the
++    // row goes to the strided kernel, which is contractually obliged to be bitwise identical at any
++    // cap it shares with the narrow one (BONSAI_QKERNEL=both prints the comparison).
+     { uint32_t pc[8] = {1u, uint32_t(pl.n_head), uint32_t(pl.n_head_kv), uint32_t(pl.head_dim),
+                         f.cap, f.round_probs, f2u(1.0f / sqrtf(float(pl.head_dim))), 0u};
+-      dsp(f, f.aqk[li], cb, pc, 8, uint32_t(pl.n_head)); }
++      dsp(f, f.wide ? f.aqkw[li] : f.aqk[li], cb, pc, 8, uint32_t(pl.n_head)); }
+     { uint32_t pc[8] = {1u, uint32_t(pl.n_head), uint32_t(pl.n_head_kv), uint32_t(pl.head_dim),
+                         f.cap, f.round_probs, 0u, 0u};
+       dsp(f, f.apv[li], cb, pc, 8, uint32_t(pl.n_head)); }
+@@ -397,8 +469,8 @@
+ static uint32_t g_prof = 0;                 // 1 = instrument, 0 = zero added cost
+ static double pf[6] = {};                   // record, submit, fence-wait, query-reset, readback, gpu
+ static uint64_t pf_n = 0;                   // tokens in the current bucket
+-static uint32_t pf_slot = 0;                // rotating timestamp-query pair, 200..498
+ static double pf_samp = 0.0, pf_print = 0.0;   // the two phases that live outside fwd_token
++static double pf_qry = 0.0, pf_copy = 0.0;     // T_memory split: the query read vs the 0.95 MB assign
+ static void prof_note(double rec, double sub, double wai, double rst, double rb, double gpu) {
+     pf[0] += rec; pf[1] += sub; pf[2] += wai; pf[3] += rst; pf[4] += rb; pf[5] += gpu; ++pf_n;
+ }
+@@ -409,11 +481,18 @@
+     const uint32_t s4 = f.r.SIGNS / 4u;                       // signs.4096 in ivec4 units
+     const auto p_t0 = std::chrono::steady_clock::now();
+     VkCommandBuffer cb = begin_cmd(e.c, e.cpool);
+-    const uint32_t q0 = 200u + (pf_slot % 150u) * 2u, q1 = q0 + 1u;
+-    pf_slot++;
++    // The timestamp pair is 0/1, reset per token. This instrument was dead code for the whole project
++    // (g_prof had no setter - see §4.3 of HANDOVER.md), and the first run after wiring the setter
++    // SIGSEGVed inside amdvlk64.dll on the first vkCmdResetQueryPool. The cause was not the driver and
++    // not the query index: the forward path creates its pool as Engine::qp (bonsai_weights.h:316),
++    // while the instrument referenced Context::qp, which stays VK_NULL_HANDLE here. A null handle into
++    // a record command is exactly the failure mode bonsai_vk.cpp:362-365 already documents. All five
++    // timestamp calls now use e.qp.
++    const uint32_t q0 = 0u, q1 = 1u;
+     if (g_prof) {   // reset inside the buffer, so the reset itself is on the device timeline
+-        vkCmdResetQueryPool(cb, e.c.qp, q0, 2);
+-        vkCmdWriteTimestamp(cb, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, e.c.qp, q0);
++        vkCmdResetQueryPool(cb, e.qp, q0, 1);
++        vkCmdResetQueryPool(cb, e.qp, q1, 1);
++        vkCmdWriteTimestamp(cb, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, e.qp, q0);
+     }
+ 
+     // embedding: GET_ROWS then H THEN signs (the inverse sandwich), then RES = input_embed
+@@ -449,7 +528,7 @@
+         vkCmdCopyBuffer(cb, f.buf, e.host_buf, 1, &cp);
+         f.n_dispatch++;
+     }
+-    if (g_prof) vkCmdWriteTimestamp(cb, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, e.c.qp, q1);
++    if (g_prof) vkCmdWriteTimestamp(cb, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, e.qp, q1);
+     VK_CHECK(vkEndCommandBuffer(cb));
+     const auto p_t1 = std::chrono::steady_clock::now();
+ 
+@@ -473,16 +552,20 @@
+     const auto p_t2 = std::chrono::steady_clock::now();
+     f.ms_wait = std::chrono::duration<double, std::milli>(p_t2 - p_t1).count();
+     double ms_gpu = 0.0;
++    const auto q_t0 = std::chrono::steady_clock::now();
+     if (g_prof) {
+         uint64_t ts[2];
+-        VK_CHECK(vkGetQueryPoolResults(e.c.dev, e.c.qp, q0, 2, sizeof(ts), ts, 8,
++        VK_CHECK(vkGetQueryPoolResults(e.c.dev, e.qp, q0, 2, sizeof(ts), ts, 8,
+                                        VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT));
+         ms_gpu = double(ts[1] - ts[0]) * e.c.limits.timestampPeriod / 1e6;
+     }
++    const auto q_t1 = std::chrono::steady_clock::now();
+     const float *hp = (const float *)e.host_ptr;      // the mapped staging buffer, typed once
+     logits.assign(hp, hp + size_t(pl.vocab));
+     if (g_prof) {
+         const auto p_t3 = std::chrono::steady_clock::now();
++        pf_qry  += std::chrono::duration<double, std::milli>(q_t1 - q_t0).count();
++        pf_copy += std::chrono::duration<double, std::milli>(p_t3 - q_t1).count();
+         prof_note(std::chrono::duration<double, std::milli>(p_t1 - p_t0).count(),
+                   ms_sub, ms_wai, ms_rst,
+                   std::chrono::duration<double, std::milli>(p_t3 - p_t2).count(), ms_gpu);
+@@ -1036,6 +1119,106 @@
+     submit_wait_sig(e.c, e.c.queue, cb, f.fence, VK_NULL_HANDLE, VK_NULL_HANDLE);
+ }
+ 
++// Take one KV block out of what the model can attend to. MASK is the additive score mask the two QK
++// kernels already read - measured semantics, -INF = dead, applied over the live prefix i < nfill in
++// both of them - so masking the farthest block is exactly "those keys never existed" for the softmax.
++// It is NOT a memory reclaim: the arena is indexed by absolute position, so the bytes stay allocated
++// (kv_guard.h's header states the limit and what true reclaim would need). Two invariants keep this
++// numerically safe rather than NaN-producing: the block that holds the current position is never
++// touched (a fully-masked live prefix would make max = -INF and exp(v - max) = NaN), and mx starts at
++// -INF in the kernel, so a masked key can never become the maximum.
++static void kv_mask_block(Fwd &f, uint32_t lo, uint32_t hi) {
++    if (hi > f.cap) hi = f.cap;
++    if (lo >= hi) return;
++    const uint64_t nb = uint64_t(f.cap) * 4ull;
++    act_rd(f, uint64_t(f.r.MASK) * 4ull, nb);                  // read-modify-write the whole row
++    float *m = (float *)f.e->host_ptr;
++    for (uint32_t i = lo; i < hi; ++i) m[i] = -INFINITY;
++    act_store(f, uint64_t(f.r.MASK) * 4ull, m, nb);
++}
++
++// ---------------------------------------------------------------- the KV fidelity dump (BONSAI_KVCHECK)
++// The measurement that says what compressing V costs, together with the check that says the two runs
++// were comparable at all. BONSAI_KVCHECK=<file> dumps, for one attention layer, every live position of
++// the K arena (fp16 in BOTH modes) and the V arena (fp16 words in none mode, q8_0 data+scale decoded
++// back to float in q8 mode), all with the host bit-math of f16_rne_host.h - the same packer the
++// shaders use, so the dump cannot disagree with the arena by rounding differently.
++//
++// Why position 0 is the clean number: block 3 is the FIRST attention layer, so its V at position 0 is
++// written from activations that no cache read has influenced yet - identical inputs in both runs. The
++// K row is the in-run proof of that claim (both modes store it as the same fp16 words, so a K
++// mismatch would mean the dumps are not comparable and the V difference is not a quantisation
++// measurement). Positions >= 1 mix in the drift the compressed cache itself causes downstream, which
++// is the number that actually reaches the model, so they are dumped too and tools/kv_compare.py
++// reports the two bands separately.
++static void kv_dump(Fwd &f, uint32_t nfill, uint32_t li, const char *path, uint32_t max_pos) {
++    Engine &e = *f.e;
++    const Regions &R = f.r;
++    // one fp16 half of an arena word, by parity - the branch-free form of "low half / high half",
++    // which the dump needs for both the V scales and the K/V values.
++    auto word_of = [](uint32_t w, uint32_t hi) { return hi ? word_hi(w) : word_lo(w); };
++    // one q8_0 byte, sign-extended without relying on the implementation-defined uint->int8_t narrow:
++    // the byte is 0..255, and 128..255 are exactly the negatives, subtract 256.
++    auto byte_of = [](uint32_t w, uint32_t sh) {
++        const uint32_t b = (w >> sh) & 0xFFu;
++        return float(int(b) - (b >= 128u ? 256 : 0));
++    };
++    const uint32_t nkv = uint32_t(e.plan.n_head_kv), hd = uint32_t(e.plan.head_dim);
++    const uint32_t kk = uint32_t(R.kv_k), kvd = uint32_t(R.kv_vd), kvs = uint32_t(R.kv_vs);
++    const uint32_t npos = nfill < max_pos ? nfill : max_pos;
++    const uint64_t layer_words = R.kv_layer;
++    const uint64_t need = uint64_t(kk + kvd + kvs) * nfill;      // one layer, live positions only
++    if (uint64_t(li) * layer_words + need > uint64_t(R.total)) {
++        printf("  kv check: layer %u's live arena does not fit the buffer, dump skipped\n", li);
++        return;
++    }
++    act_rd(f, uint64_t(R.KV + li * uint32_t(layer_words)) * 4ull, need * 4ull);
++    const uint32_t *aw = (const uint32_t *)e.host_ptr;           // arena words, element 0 = position 0
++    FILE *g = fopen(path, "wb");
++    if (!g) { printf("  kv check: cannot open %s\n", path); return; }
++    fprintf(g, "# layer %u  positions %u  nkv %u  hd %u  v_q8 %u  kk %u kvd %u kvs %u\n",
++            li, npos, nkv, hd, f.v_q8, kk, kvd, kvs);
++    const uint32_t hw = hd / 2u, qw = hd / 4u, nblk = hd / 32u, sw = nblk / 2u;
++    for (uint32_t p = 0u; p < npos; ++p) {
++        const uint32_t *kb = aw + p * (nkv * hw);
++        for (uint32_t h = 0u; h < nkv; ++h)
++            for (uint32_t d = 0u; d < hw; ++d) {
++                const uint32_t w = kb[h * hw + d];
++                fprintf(g, "K %u %u %u %.9g\n", p, h, 2u * d, double(word_lo(w)));
++                fprintf(g, "K %u %u %u %.9g\n", p, h, 2u * d + 1u, double(word_hi(w)));
++            }
++        if (!f.v_q8) {
++            const uint32_t *vb = aw + kk + p * (nkv * hw);
++            for (uint32_t h = 0u; h < nkv; ++h)
++                for (uint32_t d = 0u; d < hw; ++d) {
++                    const uint32_t w = vb[h * hw + d];
++                    fprintf(g, "V %u %u %u %.9g\n", p, h, 2u * d, double(word_lo(w)));
++                    fprintf(g, "V %u %u %u %.9g\n", p, h, 2u * d + 1u, double(word_hi(w)));
++                }
++        } else {
++            const uint32_t *vd = aw + kk + p * (nkv * qw);
++            const uint32_t *vs = aw + kk + kvd + p * (nkv * sw);
++            for (uint32_t h = 0u; h < nkv; ++h) {
++                for (uint32_t b = 0u; b < nblk; ++b) {
++                    const uint32_t w = vs[h * sw + (b >> 1u)];
++                    const float dsc = word_of(w, b & 1u);
++                    fprintf(g, "S %u %u %u %.9g\n", p, h, b, double(dsc));
++                }
++                for (uint32_t d = 0u; d < hd; ++d) {
++                    const uint32_t w = vd[h * qw + (d >> 2u)];
++                    // the q8_0 reconstruction the kernel does: float(stored fp16 d) * sign-extended byte
++                    const float dsc = word_of(vs[h * sw + ((d / 32u) >> 1u)], (d / 32u) & 1u);
++                    fprintf(g, "V %u %u %u %.9g\n", p, h, d,
++                            double(dsc * byte_of(w, (d & 3u) * 8u)));
++                }
++            }
++        }
++    }
++    fclose(g);
++    printf("  kv check: layer %u, %u positions, V = %s -> %s\n", li, npos,
++           f.v_q8 ? "q8_0 reconstructed" : "fp16", path);
++}
++
+ static bool fwd_init(Engine &e, Fwd &f) {
+     f.e = &e;
+     const ModelPlan &pl = e.plan;
+@@ -1052,7 +1235,10 @@
+     // kernels). Querying it is the rule; 64 is what this driver answers.
+     uint32_t af = msa / 4u; if (af < 4u) af = 4u;
+     af = (af + 15u) / 16u * 16u;
+-    Regions &R = f.r; R.align = af;
++    // R = Regions() makes the tally idempotent, which is what lets the BONSAI_CAP_AUTOFIT fallback
++    // below re-enter fwd_init with a smaller cap and get an EXACT second reading (alignment padding
++    // of the cap-proportional regions is re-derived, not estimated).
++    Regions &R = f.r; R = Regions(); R.align = af;
+ 
+     const uint32_t nh = uint32_t(pl.n_head), nkv = uint32_t(pl.n_head_kv), hd = uint32_t(pl.head_dim);
+     const uint32_t cap = f.cap;
+@@ -1080,12 +1266,34 @@
+     R.QD = R.take(nh * hd);         R.GD = R.take(nh * hd);   // attn_q's interleave split apart
+     R.SCORE = R.take(nh * cap);     R.PROB = R.take(nh * cap);
+     R.P16 = R.take(nh * cap / 2u);  R.PGATE = R.take(nh * hd); R.GOUT = R.take(nh * hd);
+-    R.MASK = R.take(cap);  R.POS = R.take(cap);   R.KF = R.take(uint64_t(cap) * nkv * hd);
++    R.MASK = R.take(cap);  R.POS = R.take(cap);
++    R.DUMMY = R.take(16);                    // the window a binding gets when its branch is off
++    R.KF = R.take(f.emit_kf ? uint64_t(cap) * nkv * hd : 16ull);
+     R.QKWN = R.take(uint64_t(f.n_attn) * 2u * hd);
+     R.SIGNS = R.take(16384);
+-    // one K arena + one V arena per attention layer, fp16 packed into uint words
+-    R.kv_layer = uint64_t(cap) * nkv * hd;                      // (hd/2 uints) x 2 arenas
+-    R.KV = R.take(uint64_t(f.n_attn) * R.kv_layer);
++    // One K arena + one V arena (+ the V scale array in q8_0 mode) per attention layer. The sizes are
++    // DERIVED from the layout the two kernels write (KvGeom::compute), not typed in, and rejected
++    // before allocation if a divisibility rule the shaders depend on stops holding.
++    f.kvgeom.nkv = nkv; f.kvgeom.hd = hd; f.kvgeom.n_attn = f.n_attn; f.kvgeom.v_q8 = f.v_q8;
++    std::string gwhy;
++    if (!f.kvgeom.check(gwhy)) { fprintf(stderr, "KV geometry rejected: %s\n", gwhy.c_str()); return false; }
++    f.kvgeom.compute(); f.kvgeom.report();
++    // Every sub-arena start has to be a multiple of R.align FLOATS, because each one becomes a
++    // VkDescriptorBufferInfo offset inside the single big VkBuffer. On this driver R.align is 16 and
++    // all three sizes already satisfy it (512/512/0 words in fp16 mode, 512/256/16 in q8_0 mode), so
++    // the rounding is a no-op here; it is written out because a driver that answers 256 would
++    // otherwise scribble over the scale array with no validation error at all.
++    R.kv_k  = (f.kvgeom.w_k  + R.align - 1u) / R.align * R.align;
++    R.kv_vd = (f.kvgeom.w_vd + R.align - 1u) / R.align * R.align;
++    R.kv_vs = (f.kvgeom.w_vs + R.align - 1u) / R.align * R.align;
++    R.kv_layer = R.kv_k + R.kv_vd + R.kv_vs;
++    // The arena is cap SLOTS x n_attn layers x the per-slot-per-layer footprint. Losing the `cap`
++    // factor here is not a size warning, it is a correctness bug with no validation error behind it:
++    // position 1 onward writes straight over the regions that follow (ST first), so a one-position
++    // run is bit-exact and every longer run drifts - which is exactly what this build did until the
++    // A/B against bonsai_vk_baseline_v1.exe caught it. The assert below is the same trap made
++    // unmissable: the KV span has to equal per_slot's KV term x cap.
++    R.KV = R.take(uint64_t(cap) * uint64_t(f.n_attn) * R.kv_layer);
+     R.st_layer = uint64_t(pl.state_size) * pl.state_size * uint64_t(pl.inner / pl.state_size);
+     R.ST = R.take(uint64_t(f.n_gdn) * R.st_layer);
+     // The conv history is (conv_kernel-1) taps x one channel per attn_qkv ROW, not per hidden dim:
+@@ -1097,18 +1305,179 @@
+     R.ch_layer = uint64_t(pl.conv_kernel - 1) * qkv0->M;
+     R.CH = R.take(uint64_t(f.n_gdn) * R.ch_layer);
+ 
++    // ---------------------------------------------------------------- ARENA INVARIANTS
++    // Measured from the region TABLE (start offsets of consecutively allocated regions), not from the
++    // expression that produced them, so each check is independent evidence that the bytes are there.
++    // KV is the only attention region whose span is cap-proportional, and ST/CH the two that must NOT
++    // be; if any of the three is wrong the run scribbles over another layer's state with no validation
++    // error and no warning - which is exactly the bug this block was written to make unmissable.
++    const uint64_t kv_span = uint64_t(R.ST) - uint64_t(R.KV);
++    const uint64_t st_span = uint64_t(R.CH) - uint64_t(R.ST);
++    const uint64_t ch_span = uint64_t(R.total) - uint64_t(R.CH);
++    const uint64_t kv_want = uint64_t(cap) * uint64_t(f.n_attn) * R.kv_layer;
++    const uint64_t st_want = uint64_t(f.n_gdn) * R.st_layer;
++    const uint64_t ch_want = uint64_t(f.n_gdn) * R.ch_layer;
++    // take() rounds the NEXT start up to R.align, so a region's measured span is its size rounded up
++    // to the alignment - unless it is the last region, whose end is `total` and therefore exact.
++    const uint64_t kv_room = (kv_want + R.align - 1u) / R.align * R.align;
++    const uint64_t st_room = (st_want + R.align - 1u) / R.align * R.align;
++    if (R.overflow || kv_span != kv_room || st_span != st_room || ch_span != ch_want) {
++        fprintf(stderr,
++            "  ARENA INVARIANT FAIL (nothing dispatched)\n"
++            "    index space overflowed uint32 float offsets : %s\n"
++            "    KV span %llu vs cap %u x %u layers x %llu = %llu\n"
++            "    ST span %llu vs %u GDN layers x %llu = %llu (must NOT contain cap)\n"
++            "    CH span %llu vs %u GDN layers x %llu = %llu (must NOT contain cap)\n",
++            R.overflow ? "YES" : "no",
++            (unsigned long long)kv_span, cap, f.n_attn, (unsigned long long)R.kv_layer,
++            (unsigned long long)kv_want,
++            (unsigned long long)st_span, f.n_gdn, (unsigned long long)R.st_layer,
++            (unsigned long long)st_want,
++            (unsigned long long)ch_span, f.n_gdn, (unsigned long long)R.ch_layer,
++            (unsigned long long)ch_want);
++        return false;
++    }
++    printf("  arena invariants | KV span %llu == cap %u x %u x %llu OK;"
++           " ST %llu / CH %llu are %u GDN layers x per-layer state, cap-free OK\n",
++           (unsigned long long)kv_span, cap, f.n_attn, (unsigned long long)R.kv_layer,
++           (unsigned long long)st_span, (unsigned long long)ch_span, f.n_gdn);
++
+     f.bytes = uint64_t(R.total) * 4ull;
+     printf("  activation arena: %u floats = %.3f MiB (state %.1f MiB + KV %.1f MiB + logits %.2f MiB)\n",
+            R.total, double(f.bytes) / 1048576.0,
+            double(R.st_layer * f.n_gdn * 4ull) / 1048576.0,
+-           double(R.kv_layer * f.n_attn * 4ull) / 1048576.0,
++           double(uint64_t(cap) * f.n_attn * R.kv_layer * 4ull) / 1048576.0,
+            double(pl.vocab) * 4.0 / 1048576.0);
+ 
++    // ---------------------------------------------------------------- MEMORY BUDGET (the OOM fallback's whole point)
++    // A wall of bare "did not fit" is useless to a first-time user: on a 4 GB card the honest answer
++    // is always "which of the four numbers is the one that overflowed". So split the ask into the
++    // part that does not depend on cap and the part that does, both READ BACK from the tally above -
++    // per_slot is the symbolic sum of the cap-proportional regions, and fixed is the measured total
++    // MINUS that, which makes the two add back to f.bytes by construction rather than by luck.
++    const uint64_t per_slot = uint64_t(nh) * 2u + nh / 2u + 2u     // SCORE PROB P16 MASK POS
++                            + (f.emit_kf ? uint64_t(nkv) * hd : 0u)  // KF, the gated debug stream
++                            + uint64_t(f.n_attn) * R.kv_layer;    // KV: K + V (+ V scales) per layer
++    // THE P0 AUDIT ANSWER, in one line: this sum is the ENTIRE cap-proportional part of the arena.
++    // Nothing in it belongs to a GDN layer, so the 24 recurrent layers cannot grow with the context.
++    printf("    P0 check | cap-proportional regions = SCORE+PROB+P16+MASK+POS (%u floats)"
++           " + KF %s (%u) + KV %u layers x %llu = %llu floats/slot;"
++           " GDN terms in it: %u (ST = %llu floats total, independent of cap)\n",
++           uint32_t(nh) * 2u + nh / 2u + 2u, f.emit_kf ? "on" : "off",
++           f.emit_kf ? uint32_t(nkv) * hd : 0u, f.n_attn,
++           (unsigned long long)R.kv_layer, (unsigned long long)per_slot,
++           0u, (unsigned long long)(R.st_layer * f.n_gdn));
++    const uint64_t fixed_f = uint64_t(R.total) - per_slot * uint64_t(cap);
++    const uint64_t heap = device_local_heap(e.c);
++    const double M = 1048576.0;
++    // BONSAI_HEAP_LIMIT_MIB is a TEST KNOB, not a user feature: on this card no legal cap can overflow
++    // (cap 2048 needs 124 MiB and the heap leaves ~1.3 GiB), so without it the fallback below has
++    // never been executed on real hardware. Clamping the budget makes the refuse path deterministic and
++    // therefore assertable; the printed table says when it was in effect.
++    uint64_t heap_budget = heap;
++    if (const char *v = getenv("BONSAI_HEAP_LIMIT_MIB")) {
++        heap_budget = std::min(heap, uint64_t(atoll(v)) * 1048576ull);
++        printf("  [TEST KNOB] BONSAI_HEAP_LIMIT_MIB=%s -> budget clamped to %.1f MiB"
++               " (driver reports %.1f MiB)\n", v, heap_budget / M, heap / M);
++    }
++    const uint64_t weights = e.arena.size;
++    const long long room = int64_t(heap_budget) - int64_t(weights) - int64_t(f.bytes);
++    printf("  memory budget | device-local heap %.1f MiB, weights %.1f MiB already committed\n",
++           heap_budget / M, weights / M);
++    printf("    activations at cap %u : %.1f MiB = cap-independent %.1f MiB"
++           " + %u slots x %.2f KiB/slot (%s arena %.2f KiB + fp32 side %.2f KiB%s)\n",
++           cap, double(f.bytes) / M, double(fixed_f) * 4.0 / M, cap, per_slot * 4.0 / 1024.0,
++           f.v_q8 ? "q8_0-V + fp16-K" : "fp16 K/V",
++           double(uint64_t(f.n_attn) * R.kv_layer) * 4.0 / 1024.0,
++           double(uint64_t(nh) * 2u + nh / 2u + 2u) * 4.0 / 1024.0,
++           f.emit_kf ? ", + KF" : "");
++    if (room >= 0)
++        printf("    headroom after this allocation: %.1f MiB (= %.0f more slots of cap,"
++               " but the widest VALIDATED attention row is %u)\n",
++               room / M, room / (per_slot * 4.0), Fwd::kMaxWide);
++    else {
++        const long long avail = int64_t(heap_budget) - int64_t(weights) - int64_t(fixed_f) * 4;
++        if (avail <= 0) {
++            fprintf(stderr,
++                "  OOM FALLBACK - no cap fits at all, and NOTHING WAS DISPATCHED.\n"
++                "    device-local heap        : %.1f MiB\n"
++                "    weights already resident : %.1f MiB\n"
++                "    cap-INDEPENDENT activity : %.1f MiB (recurrent state + logits + split-K scratch"
++                " + the fixed regions)\n"
++                "    this model therefore needs at least %.1f MiB of device-local memory;"
++                " it cannot run in %.1f MiB.\n"
++                "    options: free the GPU (other processes hold device-local memory too),"
++                " or run the CPU fallback, or use a smaller checkpoint.\n",
++                heap_budget / M, weights / M, double(fixed_f) * 4.0 / M,
++                (double(weights) + double(fixed_f) * 4.0) / M, heap_budget / M);
++            return false;
++        }
++        // the cap has to be EVEN (P16 packs key pairs) and is capped by what the QK kernel validated.
++        long long fit_cap = avail / int64_t(per_slot * 4);
++        if (fit_cap & 1) --fit_cap;
++        const long long use_cap = fit_cap > int64_t(Fwd::kMaxWide) ? int64_t(Fwd::kMaxWide) : fit_cap;
++        fprintf(stderr,
++            "  OOM FALLBACK - this cap does not fit, and NOTHING WAS DISPATCHED (no half-built state).\n"
++            "    short by          : %.1f MiB\n"
++            "    heap - weights    : %.1f MiB available for activations + KV\n"
++            "    cap-independent   : %.1f MiB (state, logits, scratch, fixed regions)\n"
++            "    left for the KV   : %.1f MiB, at %.2f KiB per slot -> %lld slots\n"
++            "    widest VALIDATED attention row (attn_qk_softmax_wide MAXCAP) : %u slots\n"
++            "    so the usable cap here is %lld; rerun with BONSAI_CAP=%lld (even, or lower),\n"
++            "    or set BONSAI_CAP_AUTOFIT=1 to take that fallback automatically.\n",
++            -double(room) / M, (double(heap_budget) - double(weights)) / M,
++            double(fixed_f) * 4.0 / M, double(avail) / M, per_slot * 4.0 / 1024.0, fit_cap,
++            Fwd::kMaxWide, use_cap, use_cap);
++        // P2's third defence, at the one moment it can be taken without corrupting anything: BEFORE the
++        // arena exists. "Fall back to a shorter context length" is only honest here - after allocation
++        // the bytes are already committed, so the runtime equivalent is refuse/evict (see kv_guard.h).
++        if (f.cap_autofit && use_cap >= 2) {
++            fprintf(stderr, "    BONSAI_CAP_AUTOFIT=1 -> re-initialising at cap %lld.\n", use_cap);
++            f.cap = uint32_t(use_cap);
++            // f.wide was chosen by the caller from the OLD cap, and choosing the wrong row kernel is a
++            // correctness bug, not a performance one: the narrow kernel's lane IS the key position.
++            f.wide = (f.qk_force == 2u) || (f.qk_force == 0u && f.cap > Fwd::kMaxNarrow);
++            if (f.qk_force == 1u && f.cap > Fwd::kMaxNarrow) return false;
++            return fwd_init(e, f);
++        }
++        return false;
++    }
++
++    // ---------------------------------------------------------------- P2: the block hook + the spill watch
++    // Both are set up BEFORE the arena is created so that a counter failure or a geometry complaint is
++    // visible in the same log as the budget, and so that the watch's first sample is taken with the
++    // weights already resident (that is the state a spill would start from).
++    const uint64_t kv_bytes = uint64_t(R.kv_layer) * f.n_attn * 4ull;
++    if (f.kv_blk_slots < 1u) f.kv_blk_slots = 1u;
++    f.kvguard.blk_slots = f.kv_blk_slots;
++    f.kvguard.init(f.kvgeom, cap, kv_bytes + uint64_t(room > 0 ? room : 0),
++                   int(f.kvguard.allow_evict));      // allow_evict was set by BONSAI_KV_EVICT
++    f.kvguard.g_spill_soft = f.spill.soft_mib;
++    f.kvguard.g_spill_hard = f.spill.hard_mib;
++    if (cap % f.kvguard.blk_slots)
++        printf("  note: cap %u is not a multiple of the %u-position KV block; the last partial block"
++               " is never evictable (it holds the live tail)\n", cap, f.kvguard.blk_slots);
++    f.kvguard.report();
++    f.spill.open(uint32_t(GetCurrentProcessId()));
++    f.dxi.open();
++    f.dxi.report();
++    if (!f.spill.counter_ok)
++        printf("  [spill] PDH counter unavailable (%s) - the watch is inert and no decision will be"
++               " made on it; the block hook still enforces the arena ceiling\n",
++               f.spill.err.c_str());
++
+     Arena ar; ar.init(e.c);
+     const uint64_t U = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                        VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+     uint64_t off = ar.reserve(U, f.bytes, "act");
+-    if (!ar.commit()) { fprintf(stderr, "act arena did not fit in the 4 GB wall\n"); return false; }
++    if (!ar.commit()) {
++        fprintf(stderr, "act arena did not fit: the driver refused %.1f MiB although the heap it"
++                        " reports still leaves %.1f MiB free after the weights - the driver keeps a"
++                        " reservation inside that heap, so the real ceiling for this cap is LOWER than"
++                        " the budget table above. Lower BONSAI_CAP (each slot costs %.2f KiB) and rerun.\n",
++                double(f.bytes) / M, room / M, per_slot * 4.0 / 1024.0);
++        return false;
++    }
+     Buf ab = ar.create_at(U, f.bytes, off, "act");
+     f.buf = ab.buf;
+     // The arena's own VkDeviceMemory handle is what has to stay alive for the buffer's lifetime.
+@@ -1189,6 +1558,7 @@
+         {"deint_qg",       "deint",    {A, A, A}},
+         {"attn_norm_rope", "normrope", {A}},   // replaced per layer below
+         {"attn_qk_softmax","qk",       {A}},
++        {"attn_qk_softmax_wide","qkw", {A}},   // same 7 windows, lanes stride over the row
+         {"attn_pv",        "pv",       {A}},
+     };
+     // The three attention kernels are only ever dispatched through the per-layer sets below, so the
+@@ -1197,35 +1567,69 @@
+     for (int i = 0; i < Fwd::P_NORMROPE; ++i)
+         f.p[i] = mk_pipe(e.c, f.dpool, spec[i].spv, spec[i].name, spec[i].wins);
+ 
+-    // 8 layers x 3 attention descriptor sets. The pipelines are shared; only the windows move.
++    // 8 layers x 4 attention descriptor sets. The pipelines are shared; only the windows move.
++    // In none mode the three V windows are BYTE-IDENTICAL to the ones the validated kernels were
++    // measured with (kv_k == kv_vd == kwh, kv_vs == 0), which is what makes the A/B against
++    // bonsai_vk_baseline_v1.exe a test of the switch and not of the plumbing.
+     const uint32_t kwh = cap * nkv * hd / 2u;
++    const uint32_t kk = uint32_t(R.kv_k), kvd = uint32_t(R.kv_vd), kvs = uint32_t(R.kv_vs);
++    const uint32_t kv0 = R.KV;                    // layer li's arena starts at kv0 + li * kv_layer
+     const uint32_t gate_off = R.GD;         // deint_qg's contiguous gate window, head-major
++    const char *rope_spv = f.rope_oracle ? "attn_norm_rope" : "attn_norm_rope2";
++    const char *pv_spv   = f.v_q8 ? "attn_pv_q8v" : "attn_pv";
++    uint32_t n_sets = 0, n_desc = 0;
+     auto mk_attn = [&](int li) {
++        const uint32_t a = kv0 + uint32_t(li) * uint32_t(R.kv_layer);
+         std::vector<Win> r = {
+             w_act(f, R.QD, nh * hd), w_act(f, R.K, nkv * hd), w_act(f, R.V, nkv * hd),
+             w_act(f, R.QKWN + uint32_t(li) * 2u * hd, hd), w_act(f, R.QKWN + uint32_t(li) * 2u * hd + hd, hd),
+             w_act(f, R.POS, cap),
+-            w_act(f, R.KV + uint32_t(li) * uint32_t(R.kv_layer), kwh),
+-            w_act(f, R.KV + uint32_t(li) * uint32_t(R.kv_layer) + kwh, kwh),
+-            w_act(f, R.Q16, nh * hd / 2u), w_act(f, R.QF, nh * hd), w_act(f, R.KF, cap * nkv * hd) };
++            w_act(f, a, kk),                                   // KC - fp16 in BOTH modes
++            w_act(f, a + kk, f.v_q8 ? kvd : kwh),              // VC - fp16 V arena | q8_0 data
++            w_act(f, f.v_q8 ? a + kk + kvd : R.DUMMY, f.v_q8 ? kvs : 16u),   // VS - scale words
++            w_act(f, R.Q16, nh * hd / 2u), w_act(f, R.QF, nh * hd),
++            w_act(f, f.emit_kf ? R.KF : R.DUMMY, f.emit_kf ? cap * nkv * hd : 16u) };
++        // BONSAI_ROPE_ORACLE=1: the byte-frozen attn_norm_rope.comp has ELEVEN bindings - it has no VS
++        // slot, and its Q16/QF/KF sit one lower. Dropping the VS window is the whole re-plumbing, and
++        // it is the bisect tool: if none + oracle reproduces the pre-P1 binary bit for bit, the
++        // difference lives in rope2 and nowhere else; if it still differs, the plumbing (region layout)
++        // is what moved. The oracle always writes kf, so emit_kf is forced on with it.
++        if (f.rope_oracle) r.erase(r.begin() + 8);
+         std::vector<Win> q = {
+             w_act(f, R.Q16, nh * hd / 2u),
+-            w_act(f, R.KV + uint32_t(li) * uint32_t(R.kv_layer), kwh),
++            w_act(f, a, kk),                                   // the same KC window
+             w_act(f, R.MASK, cap), w_act(f, R.POS, cap),
+             w_act(f, R.SCORE, nh * cap), w_act(f, R.PROB, nh * cap), w_act(f, R.P16, nh * cap / 2u) };
+         std::vector<Win> v = {
+-            w_act(f, R.PROB, nh * cap), w_act(f, R.P16, nh * cap / 2u),
+-            w_act(f, R.KV + uint32_t(li) * uint32_t(R.kv_layer) + kwh, kwh),
+-            w_act(f, R.POS, cap), w_act(f, gate_off, nh * hd),
+-            w_act(f, R.PGATE, nh * hd), w_act(f, R.GOUT, nh * hd) };
+-        f.arope[li] = mk_pipe(e.c, f.dpool, "attn_norm_rope",  "normrope", r);
++            w_act(f, R.PROB, nh * cap), w_act(f, R.P16, nh * cap / 2u) };
++        if (f.v_q8) {   // the fused-unpack kernel reads the data array and the scale array separately
++            v.push_back(w_act(f, a + kk, kvd));
++            v.push_back(w_act(f, a + kk + kvd, kvs));
++        } else {
++            v.push_back(w_act(f, a + kk, kwh));                // the fp16 V arena, as before
++        }
++        v.push_back(w_act(f, R.POS, cap));
++        v.push_back(w_act(f, gate_off, nh * hd));
++        v.push_back(w_act(f, R.PGATE, nh * hd));
++        v.push_back(w_act(f, R.GOUT, nh * hd));
++        f.arope[li] = mk_pipe(e.c, f.dpool, rope_spv, "normrope", r);
+         f.aqk[li]   = mk_pipe(e.c, f.dpool, "attn_qk_softmax", "qk",       q);
+-        f.apv[li]   = mk_pipe(e.c, f.dpool, "attn_pv",         "pv",       v);
++        // Identical windows, identical order - the only difference is the SPIR-V module, so a
++        // dispatch-level A/B of narrow vs wide cannot be confounded by a binding mistake.
++        f.aqkw[li]  = mk_pipe(e.c, f.dpool, "attn_qk_softmax_wide", "qkw", q);
++        f.apv[li]   = mk_pipe(e.c, f.dpool, pv_spv,    "pv",       v);
++        n_sets += 4; n_desc += uint32_t(r.size() + q.size() + q.size() + v.size());
+     };
+     int li = 0;
+     for (int b = 0; b < pl.n_layer; ++b) if (pl.is_attn_layer(b)) { f.aidx[b] = li; mk_attn(li); ++li; }
+-    printf("  pipelines: %d elementwise/GEMV + %u layers x 3 attention descriptor sets\n",
+-           Fwd::P_NORMROPE, f.n_attn);
++    // 21 elementwise/GEMV sets + n_attn x 4 attention sets = 21 + 32 = 53 of the 96 allocated.
++    // The descriptor total is counted, not asserted: the pool was sized by hand at 512 and the q8_0
++    // mode adds one binding to the rope set and one to the pv set per layer.
++    printf("  pipelines: %d elementwise/GEMV + %u layers x 4 attention descriptor sets"
++           " (%u of 96 sets, %u of 512 descriptors) | V = %s, K = fp16 | norm+rope+pack = %s\n",
++           Fwd::P_NORMROPE, f.n_attn, Fwd::P_NORMROPE + n_sets, 56u + n_desc,
++           f.v_q8 ? "q8_0 (attn_pv_q8v)" : "fp16 (attn_pv, the validated kernel)",
++           f.rope_oracle ? "attn_norm_rope (FROZEN oracle)" : "attn_norm_rope2");
+ 
+     // The region table is printed because "RES is zero" has exactly two causes - nothing was
+     // written, or two regions are the same bytes - and only the offsets can tell them apart.
+@@ -1243,12 +1647,17 @@
+         {"QD", R.QD, nh * hd}, {"GD", R.GD, nh * hd}, {"SCORE", R.SCORE, nh * cap},
+         {"PROB", R.PROB, nh * cap}, {"P16", R.P16, nh * cap / 2u}, {"PGATE", R.PGATE, nh * hd},
+         {"GOUT", R.GOUT, nh * hd}, {"MASK", R.MASK, cap}, {"POS", R.POS, cap},
+-        {"KF", R.KF, cap * nkv * hd},
++        {"KF", R.KF, f.emit_kf ? cap * nkv * hd : 16u}, {"DUMMY", R.DUMMY, 16},
+         {"QKWN", R.QKWN, f.n_attn * 2u * hd}, {"SIGNS", R.SIGNS, 16384},
+         {"KV", R.KV, uint32_t(R.kv_layer)}, {"ST", R.ST, uint32_t(R.st_layer)},
+         {"CH", R.CH, uint32_t(R.ch_layer)},
+     };
+     for (const auto &x : tbl) printf("  %-8s off %9u  size %9u\n", x.n, x.off, x.sz);
++    // The KV row above is ONE layer's sub-arena; break it into the pieces the kernels index, because
++    // "how big is the arena" is the P0/P1 question and the answer has to be readable per mode.
++    printf("  KV split  K(fp16) %-6llu  V %s  %-6llu  V-scales %-6llu   x%u layers, x%u slots\n",
++           (unsigned long long)R.kv_k, f.v_q8 ? "(q8_0 data)" : "(fp16)  ",
++           (unsigned long long)R.kv_vd, (unsigned long long)R.kv_vs, f.n_attn, cap);
+ 
+     // The signs are read back from the DEVICE and summed as int32: the host-side 60/-94 only proves
+     // the metadata parsed, not that the upload landed where the shader looks.
+@@ -1262,6 +1671,201 @@
+     return true;
+ }
+ 
++// ------------------------------------------------------------------ the QK kernel audit (BONSAI_QCHECK)
++// The wide kernel exists so a row can be longer than 256 keys. Two things can go wrong when a lane
++// stops BEING a key position and starts STRIDING over them, and they fail differently:
++//
++//   WIDE#1  a wrong key slot (kc indexed with the wrong k) -> the SCORE itself is wrong.
++//   WIDE#2  a pack that stopped covering the row (256 lanes can only write 512 probability slots)
++//           -> SCORE/PROB stay perfect and P16 silently keeps the PREVIOUS token's bytes above 512.
++//           With round_probs=1 PV reads P16, so the symptom is "long contexts drift", with no NaN,
++//           no error and no warning. HANDOVER.md §7.1 calls this the one change that is easiest to miss.
++//
++// So the audit is four checks, not one. A is a bitwise A/B on identical inputs; B/C/D/E are invariants
++// of the wide kernel's own output that hold at ANY cap and specifically cover the ranges A cannot.
++static void qk_dispatch(Fwd &f, int li, bool wide) {
++    Engine &e = *f.e;
++    const ModelPlan &pl = e.plan;
++    VkCommandBuffer cb = begin_cmd(e.c, e.cpool);
++    { uint32_t pc[8] = {1u, uint32_t(pl.n_head), uint32_t(pl.n_head_kv), uint32_t(pl.head_dim),
++                        f.cap, f.round_probs, f2u(1.0f / sqrtf(float(pl.head_dim))), 0u};
++      dsp(f, wide ? f.aqkw[li] : f.aqk[li], cb, pc, 8, uint32_t(pl.n_head)); }
++    VK_CHECK(vkEndCommandBuffer(cb));
++    submit_wait_sig(e.c, e.c.queue, cb, f.fence, VK_NULL_HANDLE, VK_NULL_HANDLE);
++}
++
++static void qk_audit(Fwd &f, uint32_t nfill) {
++    Engine &e = *f.e;
++    const ModelPlan &pl = e.plan;
++    const uint32_t nh = uint32_t(pl.n_head), nkv = uint32_t(pl.n_head_kv), hd = uint32_t(pl.head_dim);
++    const uint32_t cap = f.cap, hw = hd / 2u;
++    const uint64_t kwh = uint64_t(cap) * nkv * hw;              // one layer's K arena, in uint words
++    const uint64_t nsc = uint64_t(nh) * cap;                    // SCORE / PROB element count
++    const uint64_t np16 = uint64_t(nh) * cap / 2u;              // P16 word count
++    const uint64_t dsc = f.n_dispatch, dbar = f.n_barrier;      // keep the per-token op count honest
++    printf("\n=== QK kernel audit (BONSAI_QCHECK, %u live keys in the row, cap %u, %s) ===\n",
++           nfill, cap, f.wide ? "WIDE" : "NARROW");
++
++    std::vector<float>  s1, p1, pr1;
++    std::vector<uint32_t> x1;
++    int li_hi = int(f.n_attn) - 1;
++
++    // ---- A. bitwise narrow-vs-wide on IDENTICAL inputs. Only meaningful where the narrow kernel is
++    // a valid program at all (cap <= its lane count); it validates the dot expression, the ascending
++    // d, lane 0's serial max/exp/sum order and the RNE pack, because any deviation shows up as a bit.
++    if (cap <= Fwd::kMaxNarrow) {
++        for (const int li : {0, li_hi}) {
++            qk_dispatch(f, li, false);
++            act_rd(f, uint64_t(f.r.SCORE) * 4ull, nsc * 4ull);
++            s1.assign((const float *)e.host_ptr, (const float *)e.host_ptr + nsc);
++            act_rd(f, uint64_t(f.r.PROB) * 4ull, nsc * 4ull);
++            p1.assign((const float *)e.host_ptr, (const float *)e.host_ptr + nsc);
++            act_rd(f, uint64_t(f.r.P16) * 4ull, np16 * 4ull);
++            x1.assign((const uint32_t *)e.host_ptr, (const uint32_t *)e.host_ptr + np16);
++            // Each readback lands in the SAME host staging buffer (e.host_ptr), so a pointer taken
++            // before the next act_rd is a pointer to the NEXT region by the time it is used. That
++            // aliasing cost a false "NOT BITWISE" here on the first run: s2/p2 were both really the
++            // P16 bytes. Copy every readback out, exactly like stages B/C/D/E below do.
++            qk_dispatch(f, li, true);
++            act_rd(f, uint64_t(f.r.SCORE) * 4ull, nsc * 4ull);
++            std::vector<float> s2((const float *)e.host_ptr, (const float *)e.host_ptr + nsc);
++            act_rd(f, uint64_t(f.r.PROB) * 4ull, nsc * 4ull);
++            std::vector<float> p2((const float *)e.host_ptr, (const float *)e.host_ptr + nsc);
++            act_rd(f, uint64_t(f.r.P16) * 4ull, np16 * 4ull);
++            std::vector<uint32_t> x2((const uint32_t *)e.host_ptr, (const uint32_t *)e.host_ptr + np16);
++            // The count alone cannot be read as either pass or fail: 1 ulp and 1000 ulp both count as
++            // "a bit-diff", and they mean completely different things (one is the driver contracting
++            // a multiply-add, the other is a wrong number). So the diff is measured in fp32 ulp -
++            // the monotone-integer map, so it is an ORDER distance and not a subtraction of bits.
++            // +0.0 and -0.0 are the same number, so they are 0 ulp apart even though their bits differ.
++            auto ulp_dist = [](float a, float b) -> long {
++                if (a == 0.0f && b == 0.0f) return 0;
++                int32_t ia, ib; memcpy(&ia, &a, 4); memcpy(&ib, &b, 4);
++                if (ia < 0) ia = INT32_MIN - ia;
++                if (ib < 0) ib = INT32_MIN - ib;
++                return labs(long(ia) - long(ib));
++            };
++            uint64_t bs = 0, bp = 0, bx = 0; unsigned us = 0, up = 0;
++            double rel_s = 0.0, rel_p = 0.0;
++            uint64_t fi_s = 0, fi_p = 0;                    // first differing index, for the dump
++            for (uint64_t i = 0; i < nsc; ++i) {
++                if (memcmp(&s1[i], &s2[i], 4)) { ++bs; if (!fi_s) fi_s = i + 1;
++                                                 const long u = ulp_dist(s1[i], s2[i]);
++                                                 if (unsigned(u) > us) us = unsigned(u);
++                                                 if (s1[i] != 0.0f && fabs(double(s2[i] - s1[i]) / double(s1[i])) > rel_s)
++                                                     rel_s = fabs(double(s2[i] - s1[i]) / double(s1[i])); }
++                if (memcmp(&p1[i], &p2[i], 4)) { ++bp; if (!fi_p) fi_p = i + 1;
++                                                 const long u = ulp_dist(p1[i], p2[i]);
++                                                 if (unsigned(u) > up) up = unsigned(u);
++                                                 if (p1[i] != 0.0f && fabs(double(p2[i] - p1[i]) / double(p1[i])) > rel_p)
++                                                     rel_p = fabs(double(p2[i] - p1[i]) / double(p1[i])); }
++            }
++            for (uint64_t i = 0; i < np16; ++i) if (x1[i] != x2[i]) ++bx;
++            printf("  A layer %d (cap<=256): SCORE %llu/%llu bit-diff, PROB %llu, P16 %llu  -> %s\n",
++                   li, (unsigned long long)bs, (unsigned long long)nsc, (unsigned long long)bp,
++                   (unsigned long long)bx, (bs || bp || bx) ? "NOT BITWISE" : "bitwise identical");
++            printf("      size of the diff: SCORE <= %u fp32 ulp (rel %.3e), PROB <= %u ulp (rel %.3e)"
++                   "  [first diff: SCORE idx %llu, PROB idx %llu]\n",
++                   us, rel_s, up, rel_p,
++                   (unsigned long long)(fi_s ? fi_s - 1 : 0), (unsigned long long)(fi_p ? fi_p - 1 : 0));
++            auto fbits = [](float x) { uint32_t b; memcpy(&b, &x, 4); return b; };
++            if (fi_s) printf("      SCORE@%llu: narrow %.9g (0x%08X)  wide %.9g (0x%08X)\n",
++                             (unsigned long long)(fi_s - 1), s1[fi_s - 1], fbits(s1[fi_s - 1]),
++                             s2[fi_s - 1], fbits(s2[fi_s - 1]));
++            if (fi_p) printf("      PROB @%llu: narrow %.9g (0x%08X)  wide %.9g (0x%08X)\n",
++                             (unsigned long long)(fi_p - 1), p1[fi_p - 1], fbits(p1[fi_p - 1]),
++                             p2[fi_p - 1], fbits(p2[fi_p - 1]));
++            printf("      P16 (the operand PV reads when round_probs=1): %s\n",
++                   bx ? "DIFFERS" : "bitwise identical - the token stream cannot differ between kernels");
++        }
++    } else {
++        printf("  A skipped: the narrow kernel cannot address cap %u rows (its lane IS the position)\n",
++               cap);
++    }
++
++    // ---- B/C/D/E run on the wide kernel's own output for the LAST attention layer, which is the
++    // state the next token would actually consume.
++    qk_dispatch(f, li_hi, true);
++    act_rd(f, uint64_t(f.r.SCORE) * 4ull, nsc * 4ull);
++    std::vector<float> sc((const float *)e.host_ptr, (const float *)e.host_ptr + nsc);
++    act_rd(f, uint64_t(f.r.PROB) * 4ull, nsc * 4ull);
++    std::vector<float> pb((const float *)e.host_ptr, (const float *)e.host_ptr + nsc);
++    act_rd(f, uint64_t(f.r.P16) * 4ull, np16 * 4ull);
++    std::vector<uint32_t> p16((const uint32_t *)e.host_ptr, (const uint32_t *)e.host_ptr + np16);
++    act_rd(f, uint64_t(f.r.Q16) * 4ull, uint64_t(nh) * hw * 4ull);
++    std::vector<uint32_t> q16((const uint32_t *)e.host_ptr, (const uint32_t *)e.host_ptr + nh * hw);
++    act_rd(f, uint64_t(f.r.KV + uint32_t(li_hi) * uint32_t(f.r.kv_layer)) * 4ull, kwh * 4ull);
++    std::vector<uint32_t> kc((const uint32_t *)e.host_ptr, (const uint32_t *)e.host_ptr + kwh);
++
++    // B. the pack invariant, over EVERY pair - including the ones above 512 that a non-strided
++    // packer would never touch. This is the direct test for WIDE#2.
++    uint64_t bad = 0, first = ~0ull, stale = 0;
++    for (uint64_t i = 0; i < np16; ++i) {
++        const uint64_t e2 = i / (cap / 2u), w = i % (cap / 2u);
++        const uint32_t want = pack2(pb[e2 * cap + 2u * w], pb[e2 * cap + 2u * w + 1u]);
++        if (want != p16[i]) { ++bad; if (first == ~0ull) first = i; }
++        if (i >= 512u && p16[i] == 0u && pb[e2 * cap + 2u * w] != 0.0f) ++stale;
++    }
++    printf("  B P16 == pack2(PROB) for %llu pairs: %llu mismatches%s  -> %s\n",
++           (unsigned long long)np16, (unsigned long long)bad,
++           bad ? "" : " (covers indices above 512, the strided-pack range)",
++           bad ? "PACK BUG" : "ok");
++    if (bad) printf("      first mismatch at word %llu\n", (unsigned long long)first);
++    (void)stale;
++
++    // C. dead slots are EXACTLY +0.0 bit-for-bit (exp(-inf-max) semantics, §8.3).
++    uint64_t nz = 0;
++    for (uint64_t r = 0; r < nh; ++r)
++        for (uint32_t i = nfill; i < cap; ++i) {
++            uint32_t bits; memcpy(&bits, &pb[r * cap + i], 4);
++            if (bits != 0u) ++nz;                       // catches -0.0 (0x80000000) too
++        }
++    printf("  C dead slots [%u,%u) x %u heads are bitwise +0.0: %llu violations -> %s\n",
++           nfill, cap, nh, (unsigned long long)nz, nz ? "NOT EXACT ZERO" : "ok");
++
++    // D. each live row sums to 1 within fp32 serial-summation noise.
++    double worst = 0.0;
++    for (uint64_t r = 0; r < nh; ++r) {
++        float s = 0.0;
++        for (uint32_t i = 0; i < nfill; ++i) s = s + pb[r * cap + i];
++        if (fabs(double(s) - 1.0) > worst) worst = fabs(double(s) - 1.0);
++    }
++    printf("  D live-row sums: worst |sum-1| = %.3e over %u heads x %u keys -> %s\n",
++           worst, nh, nfill, worst < 1e-4 ? "ok" : "SUSPECT");
++
++    // E. index audit in double: recompute 32 sampled keys straight from the readback fp16 arena and
++    // compare with the device's SCORE. This is NOT a bit check (double adds in another order); it is
++    // a "did lane j read key j" check, and it deliberately samples past 256 so the strided loop
++    // iterations are covered, including the last live key and the last live pair of the pack.
++    const uint32_t nsm = 32u;
++    double worst_err = 0.0; uint32_t worst_k = 0;
++    uint64_t checked = 0;
++    for (uint64_t r = 0; r < nh; ++r) {
++        const uint32_t h = uint32_t(r), kv = h / (nh / nkv);
++        for (uint32_t s = 0u; s < nsm; ++s) {
++            uint32_t k = uint32_t(uint64_t(s) * nfill / nsm);          // spread over the live range
++            if (k >= nfill) k = nfill - 1u;
++            const uint32_t k1 = (k * nkv + kv) * hw, q1 = h * hw;
++            double acc = 0.0;
++            for (uint32_t d = 0u; d < hw; ++d)
++                acc += double(word_lo(q16[q1 + d])) * double(word_lo(kc[k1 + d])) +
++                       double(word_hi(q16[q1 + d])) * double(word_hi(kc[k1 + d]));
++            const double err = fabs(acc - double(sc[r * cap + k]));
++            if (err > worst_err) { worst_err = err; worst_k = k; }
++            ++checked;
++        }
++    }
++    printf("  E index audit: %llu keys recomputed in double, worst |dot-SCORE| = %.3e at key %u -> %s\n",
++           (unsigned long long)checked, worst_err, worst_k,
++           worst_err < 1e-3 ? "keys line up" : "WRONG KEY SLOT");
++    printf("      reach: %u live keys = %u NTILE tile(s) of dot products, %u packed pairs = %u tile(s)"
++           " of packs%s\n", nfill, (nfill + 255u) / 256u, uint32_t(np16 / nh),
++           (uint32_t(np16 / nh) + 255u) / 256u,
++           np16 > 512ull ? "  <- past 512: the range a non-strided pack would drop"
++                         : "  (does not yet pass 512 packed pairs)");
++    f.n_dispatch = dsc; f.n_barrier = dbar;                 // the audit is not part of a token
++}
++
+ // ------------------------------------------------------------------ the sampler
+ // Greedy by default: on a distilled model argmax is the reading an auditor can reproduce from the
+ // logits alone. temperature/top-k/top-p are there because a base model left greedy runs into loops,
+@@ -1332,7 +1936,68 @@
+     if (const char *v = getenv("BONSAI_TOPP"))  sp.top_p = float(atof(v));
+     sp.eos = tok.eos;
+ 
+-    std::vector<int> ids = tok.encode(prompt, true, false);
++    std::vector<int> ids;
++    // BONSAI_CHAT=1 wraps the prompt in the model's own template. The rendered string is what gets
++    // tokenized - never a hand-written id sequence - because encode() is the path that was aligned to
++    // the reference tokenizer, and render_ids() below is the independent second path: the two must be
++    // IDENTICAL, and BONSAI_CHAT_DUMP writes the rendered prompt + its ids so they can be handed to
++    // the oracle's llama-tokenize. That last cross-check (HANDOVER §7.1 step D4) is still OPEN.
++    if (f.chat) {
++        if (!chat::ids_are_singles(tok)) {
++            fprintf(stderr, "chat: a control id does not round-trip as a SINGLE token in our vocab - "
++                            "refusing to render (the model would see prose, not a delimiter)\n");
++            return 6;
++        }
++        const bool thinking = f.thinking != 0u;
++        const std::string rendered = chat::render(tok, f.system_text, prompt, thinking);
++        ids = tok.encode(rendered, true, false);
++        const std::vector<int> assembled = chat::render_ids(tok, f.system_text, prompt, thinking);
++        size_t d = 0;
++        while (d < ids.size() && d < assembled.size() && ids[d] == assembled[d]) ++d;
++        printf("  chat template: thinking=%s system=%s user=%zu chars -> %d tokens, "
++               "id paths (encode vs assembled) %s\n",
++               thinking ? "on " : "off", f.system_text.empty() ? "(none)" : "given",
++               strlen(prompt), int(ids.size()),
++               (d == ids.size() && d == assembled.size()) ? "IDENTICAL" : "DIVERGE");
++        if (d != ids.size() || d != assembled.size())
++            printf("    first divergence at %zu: encode=%d assembled=%d\n", d,
++                   d < ids.size() ? ids[d] : -1, d < assembled.size() ? assembled[d] : -1);
++        if (const char *v = getenv("BONSAI_CHAT_DUMP")) {   // "<user_file> <ids_file>"
++            const char *sp_ = strchr(v, ' ');
++            const std::string uf = sp_ ? std::string(v, size_t(sp_ - v)) : std::string(v);
++            const std::string ifn = sp_ ? std::string(sp_ + 1) : std::string();
++            if (FILE *g = fopen(uf.c_str(), "wb")) { fputs(prompt, g); fclose(g); }
++            if (FILE *g = fopen(ifn.c_str(), "wb")) {
++                for (size_t i = 0; i < ids.size(); ++i) fprintf(g, "%s%d", i ? "," : "", ids[i]);
++                fprintf(g, "\n"); fclose(g);
++            }
++            printf("    chat dump: user -> %s, ids -> %s\n", uf.c_str(), ifn.c_str());
++        }
++    } else {
++        ids = tok.encode(prompt, true, false);
++    }
++    // CONTEXT-FIT GUARD. The K/V arena holds EXACTLY cap positions (R.kv_layer uint words per layer,
++    // and the norm_rope kernel indexes it by `position`), and nothing above this line checked the
++    // prompt length: a prompt longer than cap wrote past its own region into whichever region the arena
++    // laid out next - silent corruption, no validation error, no crash. The decode loop already stopped
++    // at cap (line "context cap reached"); the prefill loop never did. Refuse before dispatching.
++    {
++        const size_t need = ids.size();
++        if (need > size_t(f.cap)) {
++            fprintf(stderr,
++                    "context overflow: the prompt renders to %zu tokens but the KV arena has %u slots"
++                    " (cap). Positions %u..%zu would be written past the end of the K/V regions.\n"
++                    "  nothing was dispatched. Fix: shorten the prompt/system text, or raise"
++                    " BONSAI_CAP to >= %zu (the widest validated row is %u; each 256 slots of cap"
++                    " costs %.2f MiB of device-local memory for the K/V arenas with V = %s).\n",
++                    need, f.cap, f.cap, need - 1, need, Fwd::kMaxWide,
++                    double(256ull * f.kvgeom.bytes_slot) / 1048576.0, f.v_q8 ? "q8_0" : "fp16");
++            return 7;
++        }
++        if (need + size_t(n_max) > size_t(f.cap))
++            printf("  note: prompt %zu tokens + %d requested = %zu > cap %u; generation stops early"
++                   " at [context cap reached].\n", need, n_max, need + size_t(n_max), f.cap);
++    }
+     printf("  prompt %d tokens:", int(ids.size()));
+     for (int t : ids) printf(" %d", t);
+     printf("\n  sampler: temp=%.2f top_k=%d top_p=%.2f eos=%d cap=%u\n",
+@@ -1352,6 +2017,17 @@
+     }
+     printf("  prefill %.1f ms for %zu prompt tokens (%.2f tok/s)\n", ms_prefill, ids.size(),
+            ids.size() * 1000.0 / (ms_prefill > 0 ? ms_prefill : 1.0));
++    // The row is now as wide as the prompt is long, which is exactly the state the QK audit needs:
++    // nothing else in the run touches SCORE/PROB/P16 between here and the first sampled logit.
++    if (f.qcheck && f.stop_at_block < 0) qk_audit(f, uint32_t(pos));
++    // BONSAI_KVCHECK=<file> [BONSAI_KVCHECK_POS=<n>, default 64] [BONSAI_KVCHECK_LAYER=<li>, default 0]
++    if (const char *kf_ = getenv("BONSAI_KVCHECK")) {
++        uint32_t mp = 64u, kl = 0u;
++        if (const char *v = getenv("BONSAI_KVCHECK_POS"))  mp = uint32_t(atoi(v));
++        if (const char *v = getenv("BONSAI_KVCHECK_LAYER")) kl = uint32_t(atoi(v));
++        if (kl < f.n_attn) kv_dump(f, uint32_t(pos), kl, kf_, mp);
++        else printf("  kv check: layer index %u out of range (n_attn %u)\n", kl, f.n_attn);
++    }
+ 
+     // ---------------------------------------------------------------- the tail, against the same dump
+     // runs/dbg_full_real.log does not stop at block 0: the 1-token decode graph it evaluated ends in
+@@ -1427,10 +2103,13 @@
+ 
+     std::vector<int> gen;
+     double ms_first = 0.0;
++    int nl_seen = 0;                       // newline budget, BONSAI_STOP_NL (0 = off)
++    size_t answer_start = 0;               // first id of the post-think body when BONSAI_STRIP_THINK=1
++    bool in_think = f.chat && f.thinking;  // thinking off => the wrapper is already closed in the prompt
+     // The ledger's denominator has to be the wall clock of the whole loop, because pick(), the
+     // per-token printf and the detokenize run OUTSIDE fwd_token and were never counted in ms_gen.
+     for (int i = 0; i < 6; ++i) pf[i] = 0.0;
+-    pf_n = 0; pf_samp = pf_print = 0.0;
++    pf_n = 0; pf_samp = pf_print = pf_qry = pf_copy = 0.0;
+     const auto loop_t0 = std::chrono::steady_clock::now();
+     for (int i = 0; i < n_max; ++i) {
+         const auto s0 = std::chrono::steady_clock::now();
+@@ -1439,6 +2118,59 @@
+         pf_samp += std::chrono::duration<double, std::milli>(s1 - s0).count();
+         if (pos >= int(f.cap)) { printf("  [context cap %u reached]\n", f.cap); break; }
+         if (next == sp.eos) { printf("  [eos]\n"); break; }
++        // The think-close marker is a SECTION delimiter while thinking is on - the answer follows it -
++        // and a wrapper we already closed in the prompt when thinking is off, where meeting it again
++        // means the model is reopening a reasoning block instead of answering. Stop only in the second
++        // case; stopping in the first would cut the answer off before it starts.
++        if (next == chat::kThinkClose) {
++            if (in_think) { in_think = false; answer_start = gen.size(); }
++            else { printf("  [think-close while not thinking]\n"); break; }
++        }
++        if (g_stop_nl && !in_think &&
++            (next == 198 || next == 620) && ++nl_seen >= int(g_stop_nl)) {
++            gen.push_back(next);
++            printf("  [stop: %u newlines (BONSAI_STOP_NL)]\n", g_stop_nl);
++            break;
++        }
++        // ---- P2: the spill watch and the KV block hook, at the decode boundary BEFORE this token's
++        // KV write (that is the only moment a refusal can still leave the cache whole, and it is why
++        // this runs ahead of gen.push_back: a refused token was never fed to the model). Sampled
++        // every BONSAI_SPILL_EVERY tokens and again at every KV block boundary; the counter read
++        // itself is microseconds against a 71 ms token, and the eviction path additionally costs one
++        // read-modify-write of the cap-wide mask, which is why it is not on the timing path unless a
++        // threshold has actually been crossed.
++        {
++            const bool periodic = f.spill_every && (i % int(f.spill_every)) == 0;
++            const bool blk_b    = f.kvguard.blk_slots &&
++                                  (uint32_t(pos) % f.kvguard.blk_slots) == 0u;
++            if (f.spill.counter_ok && (periodic || blk_b)) {
++                f.spill.sample(uint32_t(pos));
++                f.spill_last = f.spill.last_shared;
++            }
++            std::string why;
++            const KvAction act = f.kvguard.decide(uint32_t(pos), f.spill_last, why);
++            if (act == KV_EVICT) {
++                const uint32_t bs = f.kvguard.blk_slots;
++                const uint32_t lo = f.kvguard.live_low, hi = lo + bs;
++                if (lo < uint32_t(pos) && hi <= uint32_t(pos)) {
++                    kv_mask_block(f, lo, hi);
++                    f.kvguard.live_low = hi; ++f.kvguard.n_evict;
++                    printf("  [kv block evicted] positions %u..%u masked to -INF (%s);"
++                           " arena bytes stay allocated - see kv_guard.h\n",
++                           lo, hi - 1u, why.c_str());
++                }
++            } else if (act == KV_REFUSE) {
++                ++f.kvguard.n_refuse; f.kvguard.bytes_at_refuse = uint64_t(pos) * f.kvgeom.bytes_slot;
++                printf("  [KV REFUSED at position %u] %s\n"
++                       "    shared usage %.2f MiB (soft %.0f / hard %.0f), KV written so far %.2f MiB\n"
++                       "    the run stops here with the cache consistent; the shorter-context advice is\n"
++                       "    the init-time BONSAI_CAP_AUTOFIT=1 path, and BONSAI_KV_EVICT=1 turns on the\n"
++                       "    farthest-block mask instead of stopping.\n",
++                       pos, why.c_str(), f.spill_last, f.kvguard.g_spill_soft,
++                       f.kvguard.g_spill_hard, double(f.kvguard.bytes_at_refuse) / 1048576.0);
++                break;
++            }
++        }
+         gen.push_back(next);
+         auto t0 = std::chrono::steady_clock::now();
+         fwd_token(f, uint32_t(next), uint32_t(pos), logits);
+@@ -1476,6 +2208,12 @@
+         printf("  %-52s %8.3f ms/token  %6.2f%% (device timestamps)\n",
+                "T_gpu    the CB's own span, first to last timestamp", pf[5] / n,
+                100.0 * (pf[5] / n) / (ms_wall / n));
++        printf("  %-52s %8.3f ms/token\n", "  of which vkGetQueryPoolResults", pf_qry / n);
++        printf("  %-52s %8.3f ms/token\n",
++               "  of which logits.assign (248320 floats = 0.946 MiB)", pf_copy / n);
++        printf("  %-52s %8.3f ms/token  %6.2f%% of the wall\n",
++               "bubble   wall - T_gpu (host phases + launch latency)",
++               ms_wall / n - pf[5] / n, 100.0 * (ms_wall / n - pf[5] / n) / (ms_wall / n));
+         printf("  sum of the host-visible phases: %.3f ms; wall per token %.3f ms (%.2f tok/s)\n",
+                (pf[0] + pf[1] + pf[2] + pf[3] + pf[4] + pf_samp + pf_print) / n, ms_wall / n,
+                n * 1000.0 / ms_wall);
+@@ -1491,7 +2229,23 @@
+            ms_first, n ? ms_gen / n : 0.0);
+     printf("  dispatches %llu, barriers %llu per command buffer (one submit per token)\n",
+            (unsigned long long)f.n_dispatch, (unsigned long long)f.n_barrier);
+-    printf("\n=== text ===\n%s\n", detok_sp(tok.decode_ids(gen)).c_str());
++    // ---- P1/P2 close-out: what the V representation cost, and what the watch saw.
++    printf("  KV at the end: %u live positions of cap %u (%.2f MiB of arena,"
++           " %.2f KiB/token, V = %s), blocks evicted %u, refused %u\n",
++           uint32_t(pos), f.cap, double(uint64_t(pos) * f.kvgeom.bytes_slot) / 1048576.0,
++           double(f.kvgeom.bytes_slot) / 1024.0, f.v_q8 ? "q8_0" : "fp16",
++           f.kvguard.n_evict, f.kvguard.n_refuse);
++    // One last sample after the final token: a curve whose right end is the state the run actually
++    // finished in is what a spill looks like. A run that spills on the way out but not on the way in
++    // would otherwise be reported as clean.
++    if (f.spill.counter_ok) { f.spill.sample(uint32_t(pos)); f.spill_last = f.spill.last_shared; }
++    f.spill.print_summary();
++    f.spill.close(); f.dxi.close();
++    printf("\n=== text ===\n%s\n", detok_sp(tok.decode_ids(
++             std::vector<int>(gen.begin() + (g_strip_think ? answer_start : 0), gen.end()))).c_str());
++    if (g_strip_think && answer_start)
++        printf("  (%zu reasoning tokens before the think-close were not printed; "
++               "BONSAI_STRIP_THINK=0 shows them)\n", answer_start);
+     return 0;
+ }
+ 
+@@ -1517,7 +2271,72 @@
+     if (const char *v = getenv("BONSAI_L2_MODE"))  f.l2_mode   = uint32_t(atoi(v));
+     if (const char *v = getenv("BONSAI_CAP"))     f.cap = uint32_t(atoi(v));
+     if (const char *v = getenv("BONSAI_SPLIT"))  g_split_force = uint32_t(atoi(v));
+-    if (f.cap > 256u) { fprintf(stderr, "the validated attention kernels are built for cap <= 256\n"); return 4; }
++    // The time-slice instrument in fwd_token was written long before this line existed: g_prof had
++    // no setter anywhere, so the whole ledger was dead code. One line, and it costs nothing when 0.
++    if (const char *v = getenv("BONSAI_PROFILE"))   g_prof     = uint32_t(atoi(v));
++    if (const char *v = getenv("BONSAI_CHAT"))       f.chat       = uint32_t(atoi(v));
++    if (const char *v = getenv("BONSAI_THINKING"))   f.thinking   = uint32_t(atoi(v));
++    if (const char *v = getenv("BONSAI_QCHECK"))     f.qcheck     = uint32_t(atoi(v));
++    if (const char *v = getenv("BONSAI_QKERNEL"))    f.qk_force   = uint32_t(atoi(v));
++    if (const char *v = getenv("BONSAI_STOP_NL"))     g_stop_nl    = uint32_t(atoi(v));
++    if (const char *v = getenv("BONSAI_STRIP_THINK")) g_strip_think = uint32_t(atoi(v));
++    if (const char *v = getenv("BONSAI_SYSTEM"))     f.system_text = v;
++    // ---- P1: the V representation. Default q8_0; "none" keeps the fp16 arena and is the regression
++    // control, so the switch is measurable instead of arguable.
++    if (const char *v = getenv("BONSAI_KV_V_QUANT")) {
++        std::string s = v;
++        if      (s == "q8_0" || s == "q8" || s == "1") f.v_q8 = 1;
++        else if (s == "none" || s == "fp16" || s == "0") f.v_q8 = 0;
++        else { fprintf(stderr, "BONSAI_KV_V_QUANT must be none|q8_0, got '%s'\n", s.c_str()); return 4; }
++    }
++    if (const char *v = getenv("BONSAI_KV_DEBUG_STREAM"))  f.emit_kf = uint32_t(atoi(v));
++    // The bisect switch: the frozen oracle kernel instead of the switchable twin. It writes kf
++    // unconditionally, so binding 10 has to be the real cap*nkv*hd region, not the 16-float dummy.
++    if (const char *v = getenv("BONSAI_ROPE_ORACLE")) {
++        f.rope_oracle = uint32_t(atoi(v));
++        if (f.rope_oracle && f.v_q8) {
++            fprintf(stderr, "BONSAI_ROPE_ORACLE=1 is the A/B against the pre-P1 binary and is only"
++                            " defined for BONSAI_KV_V_QUANT=none\n");
++            return 4;
++        }
++        if (f.rope_oracle) f.emit_kf = 1;
++    }
++    if (const char *v = getenv("BONSAI_CAP_AUTOFIT"))      f.cap_autofit = uint32_t(atoi(v));
++    // ---- P2: the spill watch and the block hook. The three thresholds are the spec's own band
++    // (32..64 MiB) and are env-overridable so the policy is assertable without spilling a 4 GB card.
++    if (const char *v = getenv("BONSAI_KV_EVICT"))       f.kvguard.allow_evict = atoi(v);
++    if (const char *v = getenv("BONSAI_KV_BLOCK_SLOTS")) f.kv_blk_slots = uint32_t(atoi(v));
++    if (const char *v = getenv("BONSAI_SPILL_EVERY"))    f.spill_every = uint32_t(atoi(v));
++    if (const char *v = getenv("BONSAI_SPILL_SOFT_MIB")) f.spill.soft_mib = atof(v);
++    if (const char *v = getenv("BONSAI_SPILL_HARD_MIB")) f.spill.hard_mib = atof(v);
++    if (const char *v = getenv("BONSAI_SPILL_MONO"))     f.spill.mono_need = uint32_t(atoi(v));
++    printf("  KV V representation: %s (BONSAI_KV_V_QUANT) | KF debug stream: %s"
++           " | KV block: %u positions | spill watch: every %u tokens, soft %.0f / hard %.0f MiB,"
++           " growth run >= %u\n",
++           f.v_q8 ? "q8_0 blocks (32 elements + 1 fp16 scale)" : "fp16 (unchanged arena)",
++           f.emit_kf ? "ON (cap*nkv*hd fp32)" : "off", f.kv_blk_slots, f.spill_every,
++           f.spill.soft_mib, f.spill.hard_mib, f.spill.mono_need);
++    // Which QK kernel owns the row. 0 = auto (narrow while it can, wide past it), 1 = force narrow,
++    // 2 = force wide - the forcing exists so the two can be compared on identical inputs.
++    if (f.cap < 2u || f.cap % 2u) {
++        fprintf(stderr, "cap must be an even number of slots (P16 packs pairs), got %u\n", f.cap);
++        return 4;
++    }
++    if (f.cap > Fwd::kMaxWide) {
++        fprintf(stderr, "cap %u exceeds the widest validated row (%u): attn_qk_softmax_wide's two "
++                        "shared arrays are float[%u] = %u KiB of the %u KiB this driver reports\n",
++                f.cap, Fwd::kMaxWide, Fwd::kMaxWide, Fwd::kMaxWide * 8u / 1024u,
++                e.c.limits.maxComputeSharedMemorySize / 1024u);
++        return 4;
++    }
++    f.wide = (f.qk_force == 2u) || (f.qk_force == 0u && f.cap > Fwd::kMaxNarrow);
++    if (f.qk_force == 1u && f.cap > Fwd::kMaxNarrow) {
++        fprintf(stderr, "narrow qk kernel cannot cover cap %u (its lane IS the key position)\n", f.cap);
++        return 4;
++    }
++    printf("  attention QK kernel: %s (cap %u; narrow covers <= %u, wide <= %u; force=%u)\n",
++           f.wide ? "WIDE  attn_qk_softmax_wide.comp" : "NARROW attn_qk_softmax.comp",
++           f.cap, Fwd::kMaxNarrow, Fwd::kMaxWide, f.qk_force);
+     if (!fwd_init(e, f)) return 4;
+     auto t2 = std::chrono::steady_clock::now();
+     printf("\n  weight load %.1f ms, forward bring-up %.1f ms\n",

@@ -1,0 +1,153 @@
+In file included from bonsai_vk.cpp:180:
+bonsai_forward.h: In function 'void fwd_token(Fwd&, uint32_t, uint32_t, std::vector<float>&)':
+bonsai_forward.h:412:42: warning: pointer of type 'void *' used in arithmetic [-Wpointer-arith]
+  412 |     logits.assign(e.host_ptr, e.host_ptr + size_t(pl.vocab));
+      |                               ~~~~~~~~~~~^~~~~~~~~~~~~~~~~~
+In file included from <toolchain>/mingw64/include/c++/16.2.0/bits/stl_algobase.h:64,
+                 from <toolchain>/mingw64/include/c++/16.2.0/algorithm:62,
+                 from bonsai_vk.cpp:28:
+<toolchain>/mingw64/include/c++/16.2.0/bits/stl_iterator_base_types.h: In instantiation of 'struct std::iterator_traits<void*>':
+<toolchain>/mingw64/include/c++/16.2.0/bits/stl_iterator_base_types.h:254:29:   required by substitution of 'template<class _InIter> using std::_RequireInputIter = std::__enable_if_t<((bool)std::is_convertible<typename std::iterator_traits<_Iterator>::iterator_category, std::input_iterator_tag>::value)> [with _InIter = void*]'
+  254 |                                    input_iterator_tag>::value>;
+      |                                                         ^~~~~
+<toolchain>/mingw64/include/c++/16.2.0/bits/stl_vector.h:882:9:   required by substitution of 'template<class _InputIterator, class> void std::vector<float>::assign(_InputIterator, _InputIterator) [with _InputIterator = void*; <template-parameter-1-2> = <missing>]'
+  882 |                typename = std::_RequireInputIter<_InputIterator>>
+      |                ^~~~~~~~
+bonsai_forward.h:412:18:   required from here
+  412 |     logits.assign(e.host_ptr, e.host_ptr + size_t(pl.vocab));
+      |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+<toolchain>/mingw64/include/c++/16.2.0/bits/stl_iterator_base_types.h:218:43: error: forming reference to void
+  218 |       typedef _Tp&                        reference;
+      |                                           ^~~~~~~~~
+bonsai_forward.h: In member function 'int Sampler::pick(const float*, uint32_t)':
+bonsai_forward.h:677:31: warning: parentheses were disambiguated as a function declaration [-Wvexing-parse]
+  677 |         std::vector<double> pr(size_t(n));
+      |                               ^~~~~~~~~~~
+bonsai_forward.h:677:31: note: replace parentheses with braces to declare a variable
+  677 |         std::vector<double> pr(size_t(n));
+      |                               ^~~~~~~~~~~
+      |                               -
+      |                               {         -
+      |                                         }
+bonsai_forward.h:682:17: warning: pointer to a function used in arithmetic [-Wpointer-arith]
+  682 |             pr[i] = p; sum += p;
+      |                 ^
+bonsai_forward.h:682:19: error: assignment of read-only location '*(pr + ((sizetype)i))'
+  682 |             pr[i] = p; sum += p;
+      |             ~~~~~~^~~
+bonsai_forward.h:688:54: warning: pointer to a function used in arithmetic [-Wpointer-arith]
+  688 |             for (uint32_t i = 0; i < n; ++i) if (pr[i] > 0.0) idx.push_back(i);
+      |                                                      ^
+bonsai_forward.h:688:56: error: invalid operands of types 'std::vector<double>(size_t)' {aka 'std::vector<double>(long long unsigned int)'} and 'double' to binary 'operator>'
+  688 |             for (uint32_t i = 0; i < n; ++i) if (pr[i] > 0.0) idx.push_back(i);
+      |                                                  ~~~~~ ^ ~~~
+      |                                                      |   |
+      |                                                      |   double
+      |                                                      std::vector<double>(size_t) {aka std::vector<double>(long long unsigned int)}
+bonsai_forward.h: In lambda function:
+bonsai_forward.h:689:88: warning: pointer to a function used in arithmetic [-Wpointer-arith]
+  689 |             std::sort(idx.begin(), idx.end(), [&](uint32_t a, uint32_t b) { return pr[a] > pr[b]; });
+      |                                                                                        ^
+bonsai_forward.h:689:96: warning: pointer to a function used in arithmetic [-Wpointer-arith]
+  689 |             std::sort(idx.begin(), idx.end(), [&](uint32_t a, uint32_t b) { return pr[a] > pr[b]; });
+      |                                                                                                ^
+bonsai_forward.h: In member function 'int Sampler::pick(const float*, uint32_t)':
+bonsai_forward.h:691:69: warning: pointer to a function used in arithmetic [-Wpointer-arith]
+  691 |             for (size_t j = 0; j < idx.size(); ++j) { c += pr[idx[j]] / sum; if (c >= top_p) { keep = j + 1; break; } }
+      |                                                                     ^
+bonsai_forward.h:691:71: error: invalid operands of types 'std::vector<double>(size_t)' {aka 'std::vector<double>(long long unsigned int)'} and 'double' to binary 'operator/'
+  691 |             for (size_t j = 0; j < idx.size(); ++j) { c += pr[idx[j]] / sum; if (c >= top_p) { keep = j + 1; break; } }
+      |                                                            ~~~~~~~~~~ ^ ~~~
+      |                                                                     |   |
+      |                                                                     |   double
+      |                                                                     std::vector<double>(size_t) {aka std::vector<double>(long long unsigned int)}
+bonsai_forward.h:692:74: warning: pointer to a function used in arithmetic [-Wpointer-arith]
+  692 |             for (size_t j = keep; j < idx.size(); ++j) { sum -= pr[idx[j]]; pr[idx[j]] = 0.0; }
+      |                                                                          ^
+bonsai_forward.h:692:62: error: invalid operands of types 'double' and 'std::vector<double> (*)(size_t)' {aka 'std::vector<double> (*)(long long unsigned int)'} to binary 'operator-'
+  692 |             for (size_t j = keep; j < idx.size(); ++j) { sum -= pr[idx[j]]; pr[idx[j]] = 0.0; }
+      |                                                          ~~~~^~~~~~~~~~~~~
+bonsai_forward.h:692:62: note:   in evaluation of 'operator-=(double, class std::vector<double> (*)(size_t) {aka class std::vector<double> (*)(long long unsigned int)})'
+bonsai_forward.h:692:86: warning: pointer to a function used in arithmetic [-Wpointer-arith]
+  692 |             for (size_t j = keep; j < idx.size(); ++j) { sum -= pr[idx[j]]; pr[idx[j]] = 0.0; }
+      |                                                                                      ^
+bonsai_forward.h:692:88: error: assignment of read-only location '*(pr, (pr + ((sizetype)idx.std::vector<unsigned int>::operator[](j))))'
+  692 |             for (size_t j = keep; j < idx.size(); ++j) { sum -= pr[idx[j]]; pr[idx[j]] = 0.0; }
+      |                                                                             ~~~~~~~~~~~^~~~~
+bonsai_forward.h:696:53: warning: pointer to a function used in arithmetic [-Wpointer-arith]
+  696 |         for (uint32_t i = 0; i < n; ++i) { a += pr[i]; if (a >= u) return int(i); }
+      |                                                     ^
+bonsai_forward.h:696:46: error: invalid operands of types 'double' and 'std::vector<double> (*)(size_t)' {aka 'std::vector<double> (*)(long long unsigned int)'} to binary 'operator+'
+  696 |         for (uint32_t i = 0; i < n; ++i) { a += pr[i]; if (a >= u) return int(i); }
+      |                                            ~~^~~~~~~~
+bonsai_forward.h:696:46: note:   in evaluation of 'operator+=(double, class std::vector<double> (*)(size_t) {aka class std::vector<double> (*)(long long unsigned int)})'
+In file included from <toolchain>/mingw64/include/c++/16.2.0/bits/stl_algobase.h:65:
+<toolchain>/mingw64/include/c++/16.2.0/bits/stl_iterator_base_funcs.h: In instantiation of 'constexpr typename std::iterator_traits<_Iterator>::difference_type std::__distance(_RandomAccessIterator, _RandomAccessIterator, random_access_iterator_tag) [with _RandomAccessIterator = void*; typename iterator_traits<_Iterator>::difference_type = long long int]':
+<toolchain>/mingw64/include/c++/16.2.0/bits/stl_iterator_base_funcs.h:193:29:   required from 'constexpr typename std::iterator_traits<_Iterator>::difference_type std::distance(_InputIterator, _InputIterator) [with _InputIterator = void*; typename iterator_traits<_Iterator>::difference_type = long long int]'
+  193 |       return std::__distance(__first, __last,
+      |              ~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+  194 |                              std::__iterator_category(__first));
+      |                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+<toolchain>/mingw64/include/c++/16.2.0/bits/vector.tcc:327:39:   required from 'void std::vector<_Tp, _Alloc>::_M_assign_aux(_ForwardIterator, _ForwardIterator, std::forward_iterator_tag) [with _ForwardIterator = void*; _Tp = float; _Alloc = std::allocator<float>]'
+  327 |         const size_type __len = std::distance(__first, __last);
+      |                                 ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+<toolchain>/mingw64/include/c++/16.2.0/bits/stl_vector.h:886:17:   required from 'void std::vector<_Tp, _Alloc>::assign(_InputIterator, _InputIterator) [with _InputIterator = void*; <template-parameter-2-2> = void; _Tp = float; _Alloc = std::allocator<float>]'
+  886 |         { _M_assign_aux(__first, __last, std::__iterator_category(__first)); }
+      |           ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+bonsai_forward.h:412:18:   required from here
+  412 |     logits.assign(e.host_ptr, e.host_ptr + size_t(pl.vocab));
+      |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+<toolchain>/mingw64/include/c++/16.2.0/bits/stl_iterator_base_funcs.h:108:21: error: invalid use of 'void'
+  108 |       return __last - __first;
+      |              ~~~~~~~^~~~~~~~~
+In file included from <toolchain>/mingw64/include/c++/16.2.0/vector:67,
+                 from bonsai_vk.cpp:36:
+<toolchain>/mingw64/include/c++/16.2.0/bits/stl_uninitialized.h: In instantiation of '_ForwardIterator std::uninitialized_copy(_InputIterator, _InputIterator, _ForwardIterator) [with _InputIterator = void*; _ForwardIterator = float*]':
+<toolchain>/mingw64/include/c++/16.2.0/bits/stl_uninitialized.h:661:37:   required from '_ForwardIterator std::__uninitialized_copy_a(_InputIterator, _Sentinel, _ForwardIterator, allocator<_Tp>&) [with _InputIterator = void*; _Sentinel = void*; _ForwardIterator = float*; _Tp = float]'
+  661 |       return std::uninitialized_copy(__first, __last, __result);
+      |              ~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~
+<toolchain>/mingw64/include/c++/16.2.0/bits/vector.tcc:356:35:   required from 'void std::vector<_Tp, _Alloc>::_M_assign_aux(_ForwardIterator, _ForwardIterator, std::forward_iterator_tag) [with _ForwardIterator = void*; _Tp = float; _Alloc = std::allocator<float>]'
+  356 |               std::__uninitialized_copy_a(__mid, __last,
+      |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~
+  357 |                                           this->_M_impl._M_finish,
+      |                                           ~~~~~~~~~~~~~~~~~~~~~~~~
+  358 |                                           _M_get_Tp_allocator());
+      |                                           ~~~~~~~~~~~~~~~~~~~~~~
+<toolchain>/mingw64/include/c++/16.2.0/bits/stl_vector.h:886:17:   required from 'void std::vector<_Tp, _Alloc>::assign(_InputIterator, _InputIterator) [with _InputIterator = void*; <template-parameter-2-2> = void; _Tp = float; _Alloc = std::allocator<float>]'
+  886 |         { _M_assign_aux(__first, __last, std::__iterator_category(__first)); }
+      |           ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+bonsai_forward.h:412:18:   required from here
+  412 |     logits.assign(e.host_ptr, e.host_ptr + size_t(pl.vocab));
+      |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+<toolchain>/mingw64/include/c++/16.2.0/bits/stl_uninitialized.h:286:67: error: 'void*' is not a pointer-to-object type
+  286 |       if constexpr (!__is_trivially_constructible(_ValT, decltype(*__first)))
+      |                                                                   ^~~~~~~~
+<toolchain>/mingw64/include/c++/16.2.0/bits/stl_algobase.h: In instantiation of '_OutIter std::__copy_move_a2(_InIter, _Sent, _OutIter) [with bool _IsMove = false; _InIter = void*; _Sent = void*; _OutIter = float*]':
+<toolchain>/mingw64/include/c++/16.2.0/bits/stl_algobase.h:490:42:   required from '_OI std::__copy_move_a1(_II, _II, _OI) [with bool _IsMove = false; _II = void*; _OI = float*]'
+  490 |     { return std::__copy_move_a2<_IsMove>(__first, __last, __result); }
+      |              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~
+<toolchain>/mingw64/include/c++/16.2.0/bits/stl_algobase.h:499:31:   required from '_OI std::__copy_move_a(_II, _II, _OI) [with bool _IsMove = false; _II = void*; _OI = float*]'
+  499 |                 std::__copy_move_a1<_IsMove>(std::__niter_base(__first),
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  500 |                                              std::__niter_base(__last),
+      |                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~
+  501 |                                              std::__niter_base(__result)));
+      |                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+<toolchain>/mingw64/include/c++/16.2.0/bits/stl_algobase.h:640:7:   required from '_OI std::copy(_II, _II, _OI) [with _II = void*; _OI = float*]'
+  639 |       return std::__copy_move_a<__is_move_iterator<_II>::__value>
+      |              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  640 |              (std::__miter_base(__first), std::__miter_base(__last), __result);
+      |              ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+<toolchain>/mingw64/include/c++/16.2.0/bits/vector.tcc:347:29:   required from 'void std::vector<_Tp, _Alloc>::_M_assign_aux(_ForwardIterator, _ForwardIterator, std::forward_iterator_tag) [with _ForwardIterator = void*; _Tp = float; _Alloc = std::allocator<float>]'
+  347 |           _M_erase_at_end(std::copy(__first, __last, this->_M_impl._M_start));
+      |                           ~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+<toolchain>/mingw64/include/c++/16.2.0/bits/stl_vector.h:886:17:   required from 'void std::vector<_Tp, _Alloc>::assign(_InputIterator, _InputIterator) [with _InputIterator = void*; <template-parameter-2-2> = void; _Tp = float; _Alloc = std::allocator<float>]'
+  886 |         { _M_assign_aux(__first, __last, std::__iterator_category(__first)); }
+      |           ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+bonsai_forward.h:412:18:   required from here
+  412 |     logits.assign(e.host_ptr, e.host_ptr + size_t(pl.vocab));
+      |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+<toolchain>/mingw64/include/c++/16.2.0/bits/stl_algobase.h:413:26: error: 'void*' is not a pointer-to-object type
+  413 |       typedef __decltype(*__first) _InRef;
+      |                          ^~~~~~~~
+EXIT=1

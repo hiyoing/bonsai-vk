@@ -1,0 +1,26 @@
+layer-3 prefill: 24 rows (=6 head-groups x 4 tokens), kq sum=26466.509766, p sum=64.000008
+
+== assertion: every causally-masked slot is exactly 0 ==
+   violations: 0
+   exact-zero check on all printed masked slots: True
+
+== row normalisation as printed (each unmasked row carries total mass 1) ==
+   sum of all printed probabilities = 21.194400   (only the 0/1/2 columns can be non-zero, so this is a lower bound on the true row sums)
+
+== candidate scales: our softmax(kq) vs the official probabilities ==
+   1/sqrt(head_dim=256) scale=0.062500  max|err| = 4.94e-05  (30 comparisons)
+   0.05                 scale=0.050000  max|err| = 5.75e-02  (30 comparisons)
+   0.08                 scale=0.080000  max|err| = 6.89e-02  (30 comparisons)
+   1/sqrt(128)          scale=0.088388  max|err| = 9.85e-02  (30 comparisons)
+   1/sqrt(64)           scale=0.125000  max|err| = 2.13e-01  (30 comparisons)
+   1/8                  scale=0.125000  max|err| = 2.13e-01  (30 comparisons)
+   1.0                  scale=1.000000  max|err| = 5.23e-01  (30 comparisons)
+
+== free fit of the scale (bisection on the max-error over the same comparisons) ==
+   fitted scale = 0.062501  (max|err| 4.79e-05)   1/sqrt(256) = 0.062500  ->  delta 7.13e-07
+
+== worked example, head group 0, query token 2 ==
+   kq[0..2]  = [120.5268, 98.2563, 111.4694]
+   official p= [0.5506, 0.1369, 0.3126]
+   our p (1/sqrt(256)) = ['0.5506', '0.1369', '0.3126']
+   our p (1/sqrt(64)) = ['0.7225', '0.0447', '0.2329']

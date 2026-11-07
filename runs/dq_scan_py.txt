@@ -1,0 +1,46 @@
+[hdr] GGUF v3 n_tensors=427 n_kv=49
+[tsv] 202 PTQ1_0 tensors of 427   model=models/Ternary-Bonsai-2-9B-PTQ1_0.gguf
+[chk] filesize=1,997,486,976  data_start=11,039,616  tail=1,986,447,360  last tensor ends at +1,986,447,360  -> CONSISTENT
+
+==== PTQ1_0 block-scale census over the WHOLE checkpoint (python reader) ====
+  blocks 69,894,144   bytes 1,957,036,032 = 1.823 GiB   (file 1,997,486,976 B)
+  distinct scale bit patterns: 7,724 of 65536
+  +0 0   -0 0   subnormal 89 (negative 0)   negative finite 0   Inf 0 (-Inf 0)   NaN 0 (-NaN 0)
+  smallest nonzero |d|: 5.96046448e-08(0x0001)x32, 1.20401382e-05(0x00CA)x1, 1.22189522e-05(0x00CD)x1, 1.24573708e-05(0x00D1)x1, 1.25169754e-05(0x00D2)x2, 1.26361847e-05(0x00D4)x1
+  largest  nonzero |d|: 0.235839844(0x338C)x1, 0.238037109(0x339E)x1, 0.240844727(0x33B5)x1, 0.244262695(0x33D1)x1, 0.255859375(0x3418)x1, 0.267822266(0x3449)x1
+  exponent-field histogram (0 = zero/subnormal, 31 = Inf/NaN):
+      0            89
+      1             8
+      2            85
+      3           267
+      4         1,084
+      5         5,277
+      6        37,761
+      7       371,122
+      8    45,474,770
+      9    23,931,440
+     10        71,029
+     11         1,019
+     12           191
+     13             2
+  the 89 subnormal scales live in 202 tensor(s):
+           89  token_embd.weight
+            0  output.weight
+            0  blk.0.attn_gate.weight
+            0  blk.0.attn_qkv.weight
+            0  blk.0.ffn_down.weight
+            0  blk.0.ffn_gate.weight
+            0  blk.0.ffn_up.weight
+            0  blk.0.ssm_out.weight
+            0  blk.1.attn_gate.weight
+            0  blk.1.attn_qkv.weight
+            0  blk.1.ffn_down.weight
+            0  blk.1.ffn_gate.weight
+            0  blk.1.ffn_up.weight
+            0  blk.1.ssm_out.weight
+            0  blk.2.attn_gate.weight
+            0  blk.2.attn_qkv.weight
+            0  blk.2.ffn_down.weight
+            0  blk.2.ffn_gate.weight
+            0  blk.2.ffn_up.weight
+            0  blk.2.ssm_out.weight

@@ -1,0 +1,38 @@
+#version 450
+// xsum.comp - per-128-block sums of the (already rotated) activation vector.
+// This is what buys the "-1" of true ternary out of the inner loop: the GEMV needs
+// sum_{k in block} x[k] once per block per token, and it is row independent, so computing it
+// here (K/128 floats) costs the whole model ~nothing instead of one extra op per code.
+//
+// First real-machine run caught a bug here: every one of the 32 lanes wrote its own 4-element
+// partial into xsum[b], so the surviving value was one arbitrary vec4's sum (-0.22 instead of
+// 0.31 for block 0) and the GEMV was off by rel 5.7e-01. The workgroup now reduces.
+layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly buffer XVEC { vec4 xb[]; };
+layout(binding = 1) buffer       XSUM    { float xsum[]; };
+
+layout(push_constant) uniform PC { uint x_off; uint xsum_off; uint n_blk; uint _pad0, _pad1, _pad2, _pad3, _pad4; };
+// x_off is in VEC4 units, exactly like gemv_ternary.comp's x_off: the two kernels walk the same
+// activation arena with the same addressing, so the host sets both from one line. (It used to
+// divide by 4 here, which only looked right while every caller passed 0.)
+
+shared float sh[32];
+
+void main() {
+    const uint b = gl_WorkGroupID.x;
+    const uint lane = gl_LocalInvocationID.x;          // 32 lanes x vec4 = 128 codes
+    const bool live = b < n_blk;
+    float part = 0.0;
+    if (live) {
+        const vec4 v = xb[x_off + b * 32u + lane];
+        part = (v.x + v.y) + (v.z + v.w);
+    }
+    sh[lane] = part;
+    barrier();                                          // uniform control flow: no barrier after
+    for (uint s = 16u; s > 0u; s >>= 1u) {              // an early return, or the barrier is UB
+        if (lane < s) { sh[lane] += sh[lane + s]; }
+        barrier();
+    }
+    if (lane == 0u && live) { xsum[xsum_off + b] = sh[0]; }
+}

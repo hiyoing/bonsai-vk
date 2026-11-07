@@ -1,0 +1,9 @@
+// attn_qk_softmax_tile_q1024.comp - tiled stage-2 kernel, tile = 1024 keys.
+//
+//   LDS = sd[1024] (4096 B) + s_sum (4 B) = 4100 B.  The widest row the engine can ask for is bounded
+//   by the KV arena and the memory budget, NOT by this file - that is the point of tiling.
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "f16_rne.glslh"
+#define QTILE 1024u
+#include "attn_qk_softmax_tile.glslh"

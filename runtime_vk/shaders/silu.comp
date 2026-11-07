@@ -1,0 +1,44 @@
+#version 450
+// silu.comp - y = x / (1 + exp(-x)), elementwise, vectorised by 4.
+//
+// ggml op it replaces: UNARY(SILU), and specifically the fused position the dump shows after the
+// short conv: SSM_CONV -> ADD(bias) -> UNARY(SILU) (the fork's own fusion name for that chain is
+// SSM_CONV_BIAS_SILU, _ggml-vulkan.cpp line 14743), plus the GDN output gate and swiglu's inner
+// activation.
+//
+// The FORM is the one ggml uses and the one attn_vk.h already states for the attention gate:
+//     silu(x) = x / (1 + exp(-x))
+// NOT x * sigmoid(x) - algebraically identical, but the divide-vs-multiply difference is a real fp32
+// difference (up to 1 ulp on the reciprocal), and this project's rule is to mirror the reference's
+// operation sequence instead of its closed form.
+//
+// Work per element: 1 exp + 1 add + 1 divide + 1 load + 1 store. exp() is the driver's approximate
+// builtin; align_attn leg T measured it at ~1 fp32 ulp from libm on the argument sets attention
+// uses, so align_ops judges this kernel against a float reference by RELATIVE error and reports the
+// bit-exact fraction instead of demanding it. No fp16 anywhere: this card has shaderFloat16 = 0, and
+// the store is f32, so f16_rne.glslh is not needed here.
+//
+// DISPATCH: gl_WorkGroupCount.x == ceil(n_vec4 / 256). Requires n % 4 == 0 (4096 / 8192 / 12288).
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly buffer X { vec4 xb[]; };
+layout(binding = 1)       buffer Y { vec4 yb[]; };
+
+layout(push_constant) uniform PC {
+    uint x_off;    // in vec4 units
+    uint y_off;    // in vec4 units (may equal x_off: in-place)
+    uint n_vec4;   // n_elements / 4
+    uint _p0, _p1, _p2, _p3, _p4;   // pad to 32 B
+};
+
+void main() {
+    const uint i = gl_WorkGroupID.x * 256u + gl_LocalInvocationID.x;
+    if (i >= n_vec4) { return; }
+    const vec4 x = xb[x_off + i];
+    yb[y_off + i] = vec4(
+        x.x / (1.0 + exp(-x.x)),
+        x.y / (1.0 + exp(-x.y)),
+        x.z / (1.0 + exp(-x.z)),
+        x.w / (1.0 + exp(-x.w)));
+}

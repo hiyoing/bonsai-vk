@@ -1,0 +1,59 @@
+=== PDH path acceptance probe (watching pid 12540) ===
+
+  A) the star form WITH a leading backslash (the form Get-Counter always uses)
+  \GPU Process Memory(*)\Shared Usage                      ENGLISH  -> add: OK
+      collect: OK
+      20 instance(s) (looking for "pid_12540_"):
+        pid_11012_luid_0x00000000_0x0001108F_phys_0                            5.35 MiB  other pid
+        pid_8072_luid_0x00000000_0x0001108F_phys_0                             0.00 MiB  other pid
+        pid_2028_luid_0x00000000_0x0001108F_phys_0                             0.00 MiB  other pid
+        pid_7324_luid_0x00000000_0x0001108F_phys_0                             0.02 MiB  other pid
+        pid_14240_luid_0x00000000_0x0001108F_phys_0                            0.23 MiB  other pid
+        pid_13816_luid_0x00000000_0x0001108F_phys_0                           13.42 MiB  other pid
+        pid_3188_luid_0x00000000_0x0001108F_phys_0                             0.48 MiB  other pid
+        pid_12980_luid_0x00000000_0x0001108F_phys_0                            5.09 MiB  other pid
+        pid_11776_luid_0x00000000_0x0001108F_phys_0                            0.21 MiB  other pid
+        pid_5748_luid_0x00000000_0x00012652_phys_0                             0.00 MiB  other pid
+        pid_6724_luid_0x00000000_0x0001108F_phys_0                             0.02 MiB  other pid
+        pid_9768_luid_0x00000000_0x0001108F_phys_0                             0.00 MiB  other pid
+        pid_9576_luid_0x00000000_0x0001108F_phys_0                             0.00 MiB  other pid
+        pid_5748_luid_0x00000000_0x0001108F_phys_0                             0.27 MiB  other pid
+        ... 6 more
+      SUM OVER THIS PID: 0 instance(s), 0.00 MiB
+
+  B) the same two forms WITHOUT the leading backslash (what the engine passes today)
+  GPU Process Memory(*)\Shared Usage                       ENGLISH  -> add: BAD_COUNTERNAME (0xC0000BC0)
+  GPU Process Memory(pid_12540_*)\Shared Usage             ENGLISH  -> add: BAD_COUNTERNAME (0xC0000BC0)
+
+  C) the pid-scoped form WITH the backslash
+  \GPU Process Memory(pid_12540_*)\Shared Usage            ENGLISH  -> add: OK
+      collect: OK
+      array size probe: 0x800007D5 (bytes 0 items 0)
+
+  D) the LOCALISED API on the star path: the test for a driver that registered only a
+     zh-CN name, in which case PdhAddCounterA matches and PdhAddEnglishCounterA does not
+  \GPU Process Memory(*)\Shared Usage                      LOCALISED -> add: OK
+      collect: OK
+      20 instance(s) (looking for "pid_12540_"):
+        pid_11012_luid_0x00000000_0x0001108F_phys_0                            5.35 MiB  other pid
+        pid_8072_luid_0x00000000_0x0001108F_phys_0                             0.00 MiB  other pid
+        pid_2028_luid_0x00000000_0x0001108F_phys_0                             0.00 MiB  other pid
+        pid_7324_luid_0x00000000_0x0001108F_phys_0                             0.02 MiB  other pid
+        pid_14240_luid_0x00000000_0x0001108F_phys_0                            0.23 MiB  other pid
+        pid_13816_luid_0x00000000_0x0001108F_phys_0                           13.42 MiB  other pid
+        pid_3188_luid_0x00000000_0x0001108F_phys_0                             0.48 MiB  other pid
+        pid_12980_luid_0x00000000_0x0001108F_phys_0                            5.09 MiB  other pid
+        pid_11776_luid_0x00000000_0x0001108F_phys_0                            0.21 MiB  other pid
+        pid_5748_luid_0x00000000_0x00012652_phys_0                             0.00 MiB  other pid
+        pid_6724_luid_0x00000000_0x0001108F_phys_0                             0.02 MiB  other pid
+        pid_9768_luid_0x00000000_0x0001108F_phys_0                             0.00 MiB  other pid
+        pid_9576_luid_0x00000000_0x0001108F_phys_0                             0.00 MiB  other pid
+        pid_5748_luid_0x00000000_0x0001108F_phys_0                             0.27 MiB  other pid
+        ... 6 more
+      SUM OVER THIS PID: 0 instance(s), 0.00 MiB
+
+  E) object-only path, no instance part at all
+  \GPU Process Memory\Shared Usage                         ENGLISH  -> add: BAD_COUNTERNAME (0xC0000BC0)
+
+  F) PdhExpandWildCardPath("GPU Process Memory(*)\\Shared Usage")
+      first call: 0xC0000BC4, 0 characters

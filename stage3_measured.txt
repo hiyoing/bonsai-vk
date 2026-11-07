@@ -1,0 +1,110 @@
+### bonsai_vk measurements, 2026-11-01 07:04:18 - AMD driver 2.0.279, idle-ish card
+### A) timestamp calibration (RANDSCALE, 100 iters)
+correctness: max|err|=0.00001  max|ref|=72.2  rel=1.06e-07  (expect ~1e-6 rel in f32 over K=4096)
+M=12288 K=4096 splits=4 : 0.325 ms/token-op  154.8 Gop/s  38.7 GB/s (packed weights)
+  cross-check: wall 0.326 ms vs timestamps 0.325 ms = 99.7% of wall -> limits.timestampPeriod 40.0 ns is trustworthy here
+
+### B) BONSAI_SYNC=1
+== CPU/GPU overlap (BONSAI_SYNC) ==
+  host step (copy 12288 logits out of mapped memory + greedy argmax over 248320): 457.8 us/token  (picked token 13584)
+  shape                                          wall us/tok  gpu us/tok host us/tok   bubble us
+  batched NQ tokens / 1 submit (no host work)          290.7       285.5         0.0         5.2
+  serialized: 1 submit + fence /token                  449.8       289.1         0.0       160.7
+  serialized + readback + sample (status quo)          770.7       289.4       308.5       481.2
+  depth-2 pipeline (sample N-1 under GPU N)            445.5       289.9       308.5       155.6
+  recoverable by overlapping the host step: 325.2 us/token = 0.532% of the 61.1 ms/token projection cost (measured, BONSAI_SYNC runs one GEMV, not a whole token)
+  one submit+fence round trip: 160.7 us -> submitting every op separately (201 ops/token) would pay 32.3 ms/token = 52.9% of 61.1 ms; one submit per block (32) pays 5.1 ms = 8.4%; one submit per token costs 5.2 us = 0.009%
+
+### C) BONSAI_XFER=1
+== host<->device transfer (BONSAI_XFER) ==
+  memory types:
+    0 heap0  DEVICE_LOCAL   (3840 MiB heap)
+    1 heap1  HOST_VISIBLE HOST_COHERENT   (7868 MiB heap)
+    2 heap2  DEVICE_LOCAL HOST_VISIBLE HOST_COHERENT   (256 MiB heap)
+    3 heap1  HOST_VISIBLE HOST_COHERENT HOST_CACHED   (7868 MiB heap)
+    4 heap0  DEVICE_LOCAL   (3840 MiB heap)
+    5 heap1  HOST_VISIBLE HOST_COHERENT   (7868 MiB heap)
+    6 heap2  DEVICE_LOCAL HOST_VISIBLE HOST_COHERENT   (256 MiB heap)
+    7 heap1  HOST_VISIBLE HOST_COHERENT HOST_CACHED   (7868 MiB heap)
+  chosen: device-local=0  host uncached(WC)=1  host cached(WB)=3
+  bulk single-copy (host WB(cached) <-> device-local, one submit + waitIdle each):
+           size   H2D GB/s     H2D us     D2H GB/s     D2H us
+           4.0KB       0.05       83.9         0.05       83.3
+          64.0KB       0.67       97.8         0.65      100.8
+         256.0KB       1.87      140.0         1.84      142.3
+        1024.0KB       3.56      294.5         3.02      347.2
+       16384.0KB       4.93     3403.3         3.81     4405.9
+       65536.0KB       4.85    13827.8         3.89    17254.4
+      131072.0KB       4.92    27295.9         3.93    34150.3
+  write-combined host memory @16 MiB: H2D 4.56 GB/s (3677.4 us), D2H 4.69 GB/s (3576.7 us)
+  scattered copies (what KV/state paging actually looks like, host WB(cached)):
+         region       n       GB/s  us/submit    us/region
+           4.0KB     100       2.22      184.5         1.84
+           8.0KB     100       3.32      247.0         2.47
+          36.0KB     100       4.34      849.8         8.50
+          64.0KB     100       4.50     1457.2        14.57
+         512.0KB     100       4.84    10826.6       108.27
+  empty submit + waitIdle: 81.9 us  (this is the floor under every paging op)
+
+### ---- 2026-11-01 re-run after the command-buffer refactor -------------------------------
+###  bonsai_vk.cpp now records a command buffer per shape and BONSAI_OVERLAP takes every copy
+###  duration from the ENGINE timestamp pair (vkCmdWriteTimestamp at TRANSFER stage), not from
+###  fence-notice order - the fence version made a 32 KiB copy look like it took the whole 2.9 ms
+###  compute window.  Both directions are now on the table.
+### D) BONSAI_SYNC=1 (re-run)
+
+== CPU/GPU overlap (BONSAI_SYNC) ==
+  host step (copy 12288 logits out of mapped memory + greedy argmax over 248320): 472.4 us/token  (picked token 13584)
+  shape                                          wall us/tok  gpu us/tok host us/tok   bubble us
+  batched NQ tokens / 1 submit (no host work)          308.6       303.6         0.0         5.0
+  serialized: 1 submit + fence /token                  449.6       289.4         0.0       160.2
+  serialized + readback + sample (status quo)          767.6       289.4       309.9       478.1
+  depth-2 pipeline (sample N-1 under GPU N)            438.4       289.4       309.9       148.9
+  recoverable by overlapping the host step: 329.2 us/token = 0.539% of the 61.1 ms/token projection cost (measured, BONSAI_SYNC runs one GEMV, not a whole token)
+  one submit+fence round trip: 160.2 us -> submitting every op separately (201 ops/token) would pay 32.2 ms/token = 52.7% of 61.1 ms; one submit per block (32) pays 5.1 ms = 8.4%; one submit per token costs 5.0 us = 0.008%
+
+### E) BONSAI_OVERLAP=1 (engine timestamps, H2D + D2H, both queues)
+
+== compute/copy concurrency (BONSAI_OVERLAP) ==
+  compute queue family 0, transfer queue family 2, compute = 10 token-ops (wall 2934 us, engine 2856 us)
+      copy size   alone eng    GB/s    conc eng    GB/s    tok conc  tok slow   both wall
+       --- host -> device (load) ---
+          32.0KB         6.2    5.25           6.2    5.25      2854.4     -0.0%      2967.7  (alone wall 56)
+        1024.0KB       149.0    7.04         149.0    7.04      2856.0     +0.0%      2953.5  (alone wall 200)
+       16384.0KB      2357.0    7.12        2357.6    7.12      2863.4     +0.3%      2964.7  (alone wall 2404)
+       65536.0KB      9455.8    7.10        9431.2    7.12      2868.0     +0.4%      9541.4  (alone wall 9526)
+       --- device -> host (evict) ---
+          32.0KB         5.3    6.21           5.3    6.21      2856.3     +0.0%      2943.2  (alone wall 60)
+        1024.0KB       146.9    7.14         146.9    7.14      2853.9     -0.1%      2944.5  (alone wall 190)
+       16384.0KB      2338.4    7.17        2338.2    7.18      2858.4     +0.1%      2959.6  (alone wall 2405)
+       65536.0KB      9351.5    7.18        9355.7    7.17      2860.6     +0.2%      9477.2  (alone wall 9424)
+  -> copy engine while compute runs (16 MiB row): 147.3 us per MiB (7.12 GB/s). A 1 MiB expert page is 147 us = 0.2% of the 61.1 ms/token projection cost measured in STAGE3, and it is only visible at all if the transfer queue is already busy.
+
+### F) BONSAI_PIPE=1 - the 37% submission-granularity claim, measured, with the real logits row
+###  same run archived verbatim in runs/pipe_measured.txt.  201 ops/token, 993280 B (248320 f32) logits D2H,
+###  host step = memcpy out of the HOST_COHERENT mapping + greedy argmax.  min-of-3, NTOK=6.
+  shape                                      wall/token     GPU busy    copy/sdma     host step    bubble
+  A  per-op submit + per-op fence (201x)        81134.8      9683.1(*)         0.0      6455.0    71451.6 us
+  A2 per-op submit, 1 fence/token               69308.3     untrust            0.0      6440.5        0.0 us
+  B  1 CB/token, D2H inline on compute queue    64325.4      58130.9         160.2      6367.2     6194.5 us
+  C  1 CB/token + SDMA D2H (family 2)           64620.3      57955.2         140.2      6471.7     6665.1 us
+  D  depth-2 (sample N while GPU runs N+1)      59097.3      57967.8         140.2      6386.5     1129.5 us
+  (*) A's per-op engine timestamps read 48.2 us/op while the identical op inside one command buffer reads 289 us/op.
+      The timestamp counter follows a clock domain that drops when the queue idles, so per-op timestamps are only
+      valid on a continuously busy queue.  A is reported as wall-time only; the GPU-busy column is marked untrust.
+  -> the 37% splits, measured: waiting on 201 fences costs 11.8 ms/token (14.6% of A); submitting 201 times costs
+     5.0 ms/token (6.1% of A); total A -> B = 16.8 ms/token.  DEEPINFER_EVAL section 3 projected 20.0 ms = 37.1%.
+  -> D2H of the 993280 B logits row: 160.2 us on the compute queue vs 140.2 us = 7.09 GB/s on the transfer-only
+     queue (family 2).  The engine also stops being the copy pipe, so the next token can start underneath it.
+  -> depth-2 is the only shape that hides the sampler: bubble 1.1 ms = 1.91% of the token, wall 59.1 ms/token.
+  -> sampling through the mapped HOST_COHERENT pointer in place costs 24816.5 us/token (24.8 ms) instead of
+     6280.2 us memcpy + 144.0 us scan.  Never argmax the coherent mapping.
+  -> vkResetQueryPool: with the instance created at VK_API_VERSION_1_1, vkGetDeviceProcAddr returns NULL (the
+     instance-level entry point resolves).  The earlier amdvlk64.dll SIGSEGV was a NULL jump through the import
+     lib stub, made worse by the upload block running before the query pool existed (vkCmdResetQueryPool with a
+     NULL pool).  Both fixed: pool created before any recording, and BONSAI_API12=1 shows the device entry point
+     resolving once apiVersion is 1.2.  With 1.2 the whole run is unchanged: 172.7 Gop/s, D 59.1 ms/token.
+  -> the two ROI-1 edits are in the live path: every arena/stage/readback buffer is now
+     VK_SHARING_MODE_CONCURRENT across {family 0, family 2}, and the bulk weight upload records on family 2.
+     GEMV rate is untouched by CONCURRENT (176.3 -> 176.3 Gop/s), the upload moved 4.93 -> 7.11 GB/s
+     (engine 1550.4 us for 10.5 MiB, wall 2268.3 us).

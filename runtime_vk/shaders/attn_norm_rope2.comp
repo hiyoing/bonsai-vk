@@ -1,0 +1,218 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "f16_rne.glslh"
+
+// attn_norm_rope2.comp - the engine's stage-1 attention kernel with a SWITCHABLE V representation.
+//
+// WHY A SECOND FILE INSTEAD OF AN EDIT (the rule the whole attention path lives by):
+//   attn_norm_rope.comp is the kernel that align_attn.exe validated to score 6.695e-04 / context
+//   0.000e+00 against the official layer-3 dump, and align_attn.exe loads
+//   shaders/attn_norm_rope.spv directly (align_attn.cpp:547) with its own NRPush. Editing that file
+//   would move the oracle and the thing-under-test at the same time. So the oracle stays byte-frozen
+//   and this file is a COPY of it with exactly three additions:
+//     (1) push word `v_q8`   : 0 = write V as fp16 into binding 7 (the original behaviour, same
+//                                expressions, same barriers, byte-for-byte the same arena);
+//                             1 = write V as a q8_0 block quantisation into bindings 7 (data) and
+//                                 8 (scales).
+//     (2) push word `emit_kf`: gates the fp32 KF debug stream. The header of the original file says
+//                                of QF/KF "No engine buffer is involved ... nothing reads them back",
+//                                and that is true - grep finds R.KF only at the allocation, the
+//                                binding and the region dump. But KF is `cap*nkv*hd` fp32 floats, i.e.
+//                                4.0 KiB of the 36.16 KiB per-token budget, 11% of the arena, growing
+//                                with context for a stream no engine pass reads. Gating it is free.
+//     (3) a 12th binding (VS). The 11 original bindings keep their numbers except Q16/QF/KF, which
+//                                shift by one to make room for the scale array next to the data array.
+//
+// K IS NEVER COMPRESSED. The K arena at binding 6 is the fp16 one, and the code that writes it is
+// character-identical to the validated kernel's, including the ascending-d lane-0 sum of squares that
+// blocks FMA fusion. Everything in the `if (is_q)` branch is likewise unchanged.
+//
+// ---------------------------------------------------------------- the q8_0 block layout (measured against ggml)
+// One head row = hd = 256 elements = 8 blocks of 32, matching ggml_q8_0's QK8_0 = 32 exactly:
+//   data   : 4 int8 per uint word, 256/4 = 64 words per head row, element e -> word e/4, byte e%4.
+//   scales : 1 fp16 per block, 8 per head row -> 2 packed per uint word -> 4 words per head row.
+// So per (position, layer): V data = nkv*hd/4 words and V scales = nkv*hd/64 words, and the whole
+// slot costs K 2048 B + V data 1024 B + V scales 64 B = 3136 B instead of K 2048 + V 2048 = 4096 B.
+// (hd/32) must be EVEN for the two-per-word scale packing never to straddle a head boundary; 256/32=8
+// is, and fwd_init asserts it rather than trusting the checkpoint.
+//
+// The quantisation is ggml's, not an approximation of it:
+//   amax = max|x| over the 32 (fabs + max, order-independent so no accumulation-order question arises)
+//   amax > 1e-35 ? (d = amax / 127.0f, id = 1.0f / d) : (d = 0, id = 0)
+//   q    = clamp(round(x * id), -127, 127)          <- round(), i.e. half AWAY FROM ZERO = ggml's
+//                                                     roundf(), NOT roundEven()
+//   stored scale = f32_to_f16_rne(d)                <- the same hand RNE packer the fp16 arena uses
+//                                                     (packHalf2x16 on this driver rounds toward zero:
+//                                                     f16_rne.glslh has the 62.16% measurement)
+//   reconstruct  = float(stored_half) * float(q)    <- what attn_pv_q8v.comp does, so the fp16
+//                                                     rounding of d is part of the value the model
+//                                                     actually sees, exactly as in a q8_0 ggml file.
+//
+// ---------------------------------------------------------------- the block reduction, and why it is a butterfly
+// A q8_0 scale needs max|x| over 32 CONSECUTIVE dims, and here lane d owns dim d. GCN4 runs 64-lane
+// waves, so a 32-wide block is half a wave and 256 lanes are 4 waves; portable GLSL has no cross-lane
+// shuffle, so the reduction is 5 stages of an xor-butterfly through two shared arrays:
+//   b[d] = max(a[d], a[d ^ s])  for s = 1,2,4,8,16
+// which replicates the block max into EVERY lane of the block (a reduce-then-broadcast, no final
+// gather, no leader lane). The `d ^ s` partner never leaves the 32-aligned block, so the stages are
+// inside-block by construction. Cost: 5*256 LDS reads + 5 barriers, and the whole branch is
+// workgroup-uniform (`v_q8` is a push constant, `is_q` is gl_WorkGroupID.x) so the barriers inside it
+// are executed by every lane of the workgroup the same number of times - the one case where a barrier
+// in control flow is legal, and the reason the original kernel's header says barriers are never placed
+// in DIVERGENT flow. The only per-lane-predicated stores are the `d < hd/4` data-word store (which
+// lands exactly on a wave boundary: 64 of 256 lanes) and the strided scale store copied from
+// attn_qk_softmax_wide.comp:106, the codebase's established way of writing a region smaller than the
+// lane count. The inner accumulate loops of the kernels that matter for speed are branchless.
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0)  readonly  buffer QIN  { float q_in[]; };   // [seq][nh ][hd] pre-norm
+layout(binding = 1)  readonly  buffer KIN  { float k_in[]; };   // [seq][nkv][hd] pre-norm
+layout(binding = 2)  readonly  buffer VIN  { float v_in[]; };   // [seq][nkv][hd]
+layout(binding = 3)  readonly  buffer QNW  { float qn_w[]; };   // [hd] real GGUF weights
+layout(binding = 4)  readonly  buffer KNW  { float kn_w[]; };   // [hd]
+layout(binding = 5)  readonly  buffer POS  { uint  pos[]; };    // [seq] absolute positions
+layout(binding = 6)  writeonly buffer KC   { uint  kc[]; };     // [cap][nkv][hd/2] the fp16 K arena
+// binding 7 and 8 are ONE region pair whose meaning is chosen by v_q8:
+layout(binding = 7)  writeonly buffer VC   { uint  vc[]; };     // v_q8=0: [cap][nkv][hd/2] fp16 V arena
+                                                                // v_q8=1: [cap][nkv][hd/4] q8_0 data words
+layout(binding = 8)  writeonly buffer VS   { uint  vs[]; };     // v_q8=1: [cap][nkv][hd/64] scale words
+                                                                // v_q8=0: a 16-float dummy, never written
+layout(binding = 9)  writeonly buffer Q16  { uint  q16[]; };    // [seq][nh][hd/2] fp16 Q operand
+layout(binding = 10) writeonly buffer QF   { float qf[]; };     // [seq][nh][hd] post-rope fp32 (debug)
+layout(binding = 11) writeonly buffer KF   { float kf[]; };     // [cap][nkv][hd] post-rope fp32 (debug)
+
+layout(push_constant) uniform Push {
+    uint seq, nh, nkv, hd, nrot, cap;
+    float eps, freq_base;
+    uint v_q8, emit_kf, pad2, pad3;
+} p;
+
+shared float sh[256];      // the normed row (input of rope)      <- unchanged from the oracle
+shared float sy[256];      // the roped row (input of the pack)
+shared float sq[256];      // x*x, materialised on purpose (see the oracle's FMA comment)
+shared float sinv[1];      // 1/sqrt(mean(x^2)+eps), lane 0 only
+shared float vb[256];      // the raw V row, staged for the block reduction
+shared float a0[256];      // butterfly stage buffers (absmax)
+shared float a1[256];
+
+// the norm weight for this row: Q rows use qn_w, K rows use kn_w
+float wref(uint d, bool is_q) { return is_q ? qn_w[d] : kn_w[d]; }
+
+// ggml's q8_0 scale for one block, from the block's absmax, in the SAME two steps the host code does
+// (a division by the exactly-representable 127.0f, then a reciprocal of THAT value). Written as
+// 1.0f/(amax/127.0f) in one expression a compiler is free to reassociate into 127.0f/amax, which is a
+// DIFFERENT float; the temporary below is what keeps d and id consistent, and d is what the scale word
+// stores, so id and the stored half must come from the same rounded d or the reconstruction drifts.
+float q8_scale(float amax)  { return amax > 1e-35f ? amax / 127.0f : 0.0f; }
+float q8_iscale(float amax) { const float d = q8_scale(amax); return d != 0.0f ? 1.0f / d : 0.0f; }
+
+// one q8_0 element: the byte that goes into the data word, in ggml's recipe.
+uint q8_byte(float x, float id) {
+    const float r = clamp(round(x * id), -127.0f, 127.0f);
+    const int qi = int(r);                       // r is an exact integer value, so this is exact
+    return uint(qi & 0xFF);                      // int-domain mask: -5 -> 251, no uint(int) edge case
+}
+
+void main() {
+    const uint w = gl_WorkGroupID.x;
+    const uint d = gl_LocalInvocationID.x;
+    // No early return here on purpose: barrier() below must not be inside divergent control flow.
+    // align_attn asserts hd <= 256 and cap <= 256 before dispatching; the engine asserts cap <= 2048.
+    const uint hw   = p.hd / 2u;
+    const uint nq   = p.seq * p.nh;
+    const bool is_q = w < nq;
+
+    uint t, h;
+    if (is_q) { t = w / p.nh; h = w % p.nh; }
+    else      { const uint k = w - nq; t = k / p.nkv; h = k % p.nkv; }
+
+    const uint position = pos[t];
+    const uint row = is_q ? (t * p.nh + h) * p.hd : (t * p.nkv + h) * p.hd;
+    const float  x = (is_q ? q_in[row + d] : k_in[row + d]);
+    sh[d] = x;
+    // THE SQUARE IS WRITTEN OUT AND NOT ADDED IN-PLACE - numerical, not stylistic; see the oracle.
+    sq[d] = x * x;
+    barrier();
+
+    // ---- RMS norm: lane 0 sums in ascending order so the shader and the CPU reference agree
+    if (d == 0u) {
+        float ss = 0.0;
+        for (uint i = 0u; i < p.hd; ++i) ss = ss + sq[i];
+        sinv[0] = 1.0 / sqrt(ss / float(p.hd) + p.eps);
+    }
+    barrier();
+
+    // ---- y = (x * inv) * w, then the half-split rotation inside the first n_rot dims.
+    const float inv = sinv[0];
+    float y = (x * inv) * wref(d, is_q);
+    if (d < p.nrot) {
+        const uint nhalf = p.nrot / 2u;               // 'half' is a reserved word in GLSL
+        const bool low   = d < nhalf;
+        const uint pi    = low ? d : d - nhalf;
+        const uint pd    = low ? d + nhalf : d - nhalf;
+        const float th   = pow(p.freq_base, -2.0f * float(pi) / float(p.nrot));
+        const float a    = float(position) * th;
+        const float c    = cos(a), s = sin(a);
+        const float xp   = (sh[pd] * inv) * wref(pd, is_q);
+        y = low ? (y * c - xp * s) : (y * c + xp * s);
+    }
+    sy[d] = y;
+    // the fp32 debug streams. QF is cap-INDEPENDENT (nh*hd floats) so it stays unconditional;
+    // KF is the cap-proportional one and only exists when the harness asks for it.
+    if (is_q) qf[row + d] = y;
+    else if (p.emit_kf != 0u) kf[(position * p.nkv + h) * p.hd + d] = y;
+    barrier();
+
+    // ---- K and Q: exactly the validated fp16 pack, in the same words, at the same indices.
+    if (d < hw) {
+        const uint wq = 2u * d;
+        if (is_q) {
+            q16[(t * p.nh + h) * hw + d] = pack2_rne(vec2(sy[wq], sy[wq + 1u]));
+        } else {
+            kc[(position * p.nkv + h) * hw + d] = pack2_rne(vec2(sy[wq], sy[wq + 1u]));
+            if (p.v_q8 == 0u) {
+                // V: no norm, no rope, straight from the projection into the fp16 arena (measured)
+                const uint vrow = (t * p.nkv + h) * p.hd;
+                vc[(position * p.nkv + h) * hw + d] =
+                    pack2_rne(vec2(v_in[vrow + wq], v_in[vrow + wq + 1u]));
+            }
+        }
+    }
+    if (is_q || p.v_q8 == 0u) return;   // every other path above is done; no barrier follows
+
+    // ---- V as q8_0. Uniform control flow: v_q8 is a push constant, is_q is this workgroup's id.
+    const uint vrow = (t * p.nkv + h) * p.hd;
+    const float v = v_in[vrow + d];
+    vb[d] = v;
+    a0[d] = abs(v);
+    barrier();
+    // 5 xor-butterfly stages, block = 32 consecutive dims; the max ends up replicated in all 32.
+    a1[d] = max(a0[d], a0[d ^  1u]);  barrier();
+    a0[d] = max(a1[d], a1[d ^  2u]);  barrier();
+    a1[d] = max(a0[d], a0[d ^  4u]);  barrier();
+    a0[d] = max(a1[d], a1[d ^  8u]);  barrier();
+    a1[d] = max(a0[d], a0[d ^ 16u]);  barrier();
+
+    const uint nblk = p.hd / 32u;                    // blocks (and scales) per head row = 8
+    // Data words: lane d < hd/4 owns the uint made of elements 4d..4d+3. With hd = 256 that is the
+    // first 64 of 256 lanes - exactly one wave and a half of 64 on this card, so the predicate never
+    // splits a wave in the middle.
+    if (d < p.hd / 4u) {
+        const uint e0  = 4u * d;
+        const float id = q8_iscale(a1[e0]);            // id = 1/d, d = amax/127 (0 for a dead block)
+        vc[(position * p.nkv + h) * (p.hd / 4u) + d] =
+              q8_byte(vb[e0],       id)
+          |  (q8_byte(vb[e0 + 1u],  id) <<  8u)
+          |  (q8_byte(vb[e0 + 2u],  id) << 16u)
+          |  (q8_byte(vb[e0 + 3u],  id) << 24u);
+    }
+    // Scale words: nblk/2 per head row, written by the codebase's strided store (the region is smaller
+    // than the lane count, so the trip count does the predication instead of an `if`).
+    for (uint sw = d; sw < nblk / 2u; sw += 256u) {
+        const float dlo = q8_scale(a1[(2u * sw + 0u) * 32u]);
+        const float dhi = q8_scale(a1[(2u * sw + 1u) * 32u]);
+        vs[(position * p.nkv + h) * (nblk / 2u) + sw] =
+            f32_to_f16_rne(dlo) | (f32_to_f16_rne(dhi) << 16u);
+    }
+}

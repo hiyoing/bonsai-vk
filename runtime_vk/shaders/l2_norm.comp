@@ -1,0 +1,78 @@
+#version 450
+// l2_norm.comp - per-head L2 normalisation of n_cols contiguous floats: one workgroup per row.
+//
+// ggml op it replaces: L2_NORM. The node dump proves it exists and where:
+//   qk_conv_l2-0 = L2_NORM(conv_output_silu-0 (view){128, 32, 2, 1}) = {128, 32, 2, 1}
+//   (runs/dbg_full_real.log line 316, and once per GDN layer: 1398, 2480, 4309, ...)
+// so the row length is 128 (= qwen35.ssm.state_size) and there are 32 rows per token: the 4096
+// qkv channels split as {128, 32} = 16 q heads + 16 k heads (qwen35.ssm.group_count = 16) - which is
+// also why GATED_DELTA_NET receives q/k as {128, 16, 2}: the L2 norm runs over the 32-row view and
+// the delta rule then reads 16 of those rows as q and 16 as k.
+// ggml's Vulkan side confirms the two things that matter for the interface: it is dispatched as a
+// UNARY op with ne00/nrows (so the reduction is over the CONTIGUOUS dim, per row) and the epsilon is
+// carried in dst->op_params[0] -> p.param1 (ggml_vk_l2_norm, _ggml-vulkan.cpp line 11220). Both
+// agree with "eps is a per-call scalar", which is why it is a push-constant float here too.
+//
+// ---------------------------------------------------------------- 未决 (CONVENTION OPEN): the form, and eps
+// Two families exist and the printed dump cannot separate them (it prints 3 head + 3 tail values at
+// 4 decimals per row, and neither the eps nor the formula appears in the node text):
+//   mode 0   y = x * (1/(sqrt(ss) + eps))    x / (||x||_2 + eps)    - the "add eps to the norm"
+//                                            reading, what a hand-written l2norm usually does
+//   mode 1   y = x * (1/sqrt(ss + eps))     x * rsqrt(sum(x^2)+eps) - the rms_norm-shaped reading,
+//                                            what fla's l2norm triton kernel does
+// They differ by O(eps/||x||) RELATIVE, i.e. by nothing at all for ||x|| ~ 1 and eps = 1e-6, and by
+// the full eps for ||x|| -> 0 - which is exactly the case a zero-padded or freshly zeroed state row
+// produces, and where 1/eps vs 1/sqrt(eps) is a factor of sqrt(eps) = 1e3 apart. So the choice is
+// not cosmetic in the degenerate case and it is LEFT OPEN ON PURPOSE: mode and eps are both push
+// constants, so the engine can flip either without a rebuild, and a numerical comparison against
+// the official L2_NORM row output (or fwd_spec.md) has to close it.
+// eps candidates and where each comes from: fla's l2norm default 1e-12, HF Qwen3-Next's norm
+// epsilon 1e-6, and this checkpoint's own qwen35.attention.layer_norm_rms_epsilon = float(1e-6f).
+// None of them is MEASURED for this node yet - that is the open item, not a TODO.
+//
+// Determinism: n_cols <= 256 lets this kernel put ONE ELEMENT PER LANE and have lane 0 add the
+// squares in PURE ASCENDING d order, i.e. the same order the CPU reference uses, so this reduction
+// is bit-exact rather than block-ascending (rms_norm.comp at 4096 wide cannot afford that and has
+// to go two-level; at 128 it costs 128 LDS reads in one lane, which is noise). x*x is stored to
+// shared before being added, which is the construct that keeps glslang from contracting the
+// multiply into the accumulate - an FMA adds the UNROUNDED product and is a different number.
+//
+// DISPATCH: gl_WorkGroupCount.x == n_rows, one workgroup per row, local_size 256 >= n_cols.
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly buffer X { float x[]; };   // [n_rows][n_cols]
+layout(binding = 1)       buffer Y { float y[]; };      // [n_rows][n_cols]
+
+layout(push_constant) uniform PC {
+    uint x_off;    // in float units
+    uint y_off;    // in float units
+    uint n_rows;   // workgroups
+    uint n_cols;   // <= 256; 128 for the GDN q/k rows
+    uint mode;     // 0 = x/(||x||+eps), 1 = x*rsqrt(ss+eps)
+    float eps;     // scalar; push-constant so the convention can be flipped without a rebuild
+    uint _p0, _p1; // pad to 32 B
+};
+
+shared float sq[256];
+
+void main() {
+    const uint r = gl_WorkGroupID.x;
+    const uint d = gl_LocalInvocationID.x;
+    const uint row = r * n_cols;
+    const bool live = d < n_cols;      // no early return anywhere below: this workgroup has barriers
+
+    const float x = live ? x[x_off + row + d] : 0.0;
+    sq[d] = live ? x * x : 0.0;        // idle lanes contribute exactly +0.0, which cannot move a sum
+    barrier();
+
+    if (d == 0u) {
+        float ss = 0.0;
+        for (uint i = 0u; i < n_cols; ++i) ss = ss + sq[i];      // ascending, single lane, as the
+                                                                  // reference does
+        sq[0] = mode == 0u ? 1.0 / (sqrt(ss) + eps) : 1.0 / sqrt(ss + eps);
+    }
+    barrier();
+
+    if (live) y[y_off + row + d] = x * sq[0];
+}

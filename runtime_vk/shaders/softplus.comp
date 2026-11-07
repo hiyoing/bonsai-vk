@@ -1,0 +1,59 @@
+#version 450
+// softplus.comp - y = log(1 + exp(x)) with a saturation branch, elementwise, vectorised by 4.
+//
+// ggml op it replaces: UNARY(SOFTPLUS), the GDN time step:
+//   node_44 = ADD(alpha-0, blk.0.ssm_dt.bias{32})      (runs/dbg_full_real.log line 420)
+//   a_softplus-0 = SOFTPLUS(node_44)                    (line 428)
+//   gate-0 = MUL(a_softplus-0, blk.0.ssm_a{32})         (line 436)  <- the log-decay g
+// so softplus is over 32 values per token per GDN layer; its cost is nothing and its FORM is not.
+//
+// ---------------------------------------------------------------- the x > 20 threshold, stated twice
+// mode 0 (default) is torch/F.softmax's documented behaviour, threshold = 20:
+//     y = (x > threshold) ? x : log(1.0 + exp(x))
+// The threshold is a push constant so the engine can see what a different one costs without a
+// rebuild; 20 is torch's default and the number the task names. Above the threshold the answer is
+// x EXACTLY (0 ulp), and log(1+exp(20)) in fp32 is 20.000000 - the "+1" is 2e-9 of a 4.85e8
+// argument, i.e. already below the mantissa - so the branch is a discontinuity of well under 1 fp32
+// ulp of the RESULT at x=20 (align_ops.exe prints the measured jump instead of asserting it is 0).
+// exp(x) at x=20 is 4.85e8: finite, no overflow, which is the whole reason the threshold exists.
+// mode 1 is ggml-cpu's GGML_SOFT_PLUS_UNREASONABLE shape:
+//     y = max(x, 0) + log(1.0 + exp(-abs(x)))
+// which is the same function with no threshold and no large-argument path at all: exp(-|x|) <= 1.
+// For |x| > 20 the two modes differ by at most the log1p term the "+1" rounding drops, and mode 1 is
+// the faithful one if the fork's UNARY(SOFTPLUS) is ggml's default op - which the node dump does not
+// print. CONVENTION OPEN (未决): ggml carries the softplus variant in op_params and the dump shows
+// only "SOFTPLUS(x, }". Both modes are compiled in; the engine picks per layer without a rebuild.
+//
+// GLSL has no log1p(), and for these arguments log(1+z) does not need it: z = exp(x) >= 0 and the
+// cancellation only bites when z < 2^-24, where the true log1p(z) is z itself and z contributes
+// less than 1 ulp of the result anyway. Measured, not assumed: align_ops reports the max relative
+// error of the whole kernel against a float64 log1p reference.
+//
+// DISPATCH: gl_WorkGroupCount.x == ceil(n_vec4 / 256). Requires n % 4 == 0 (32 is not: the GDN call
+// passes n_vec4 = 8 for its 32 values).
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly buffer X { vec4 xb[]; };
+layout(binding = 1)       buffer Y { vec4 yb[]; };
+
+layout(push_constant) uniform PC {
+    uint x_off;      // in vec4 units
+    uint y_off;      // in vec4 units
+    uint n_vec4;     // n_elements / 4
+    uint mode;       // 0 = torch threshold form, 1 = ggml UNREASONABLE form
+    float thr;       // the mode-0 threshold, 20.0
+    uint _p0, _p1, _p2;   // pad to 32 B
+};
+
+float sp1(float x) {
+    if (mode == 0u) return x > thr ? x : log(1.0 + exp(x));
+    return (x > 0.0 ? x : 0.0) + log(1.0 + exp(-abs(x)));
+}
+
+void main() {
+    const uint i = gl_WorkGroupID.x * 256u + gl_LocalInvocationID.x;
+    if (i >= n_vec4) { return; }
+    const vec4 x = xb[x_off + i];
+    yb[y_off + i] = vec4(sp1(x.x), sp1(x.y), sp1(x.z), sp1(x.w));
+}

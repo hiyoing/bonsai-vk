@@ -1,0 +1,23 @@
+==== device ====
+  Radeon RX 550X (vendor 0x1002, device 0x699F, driver 8388887)
+  maxComputeSharedMemorySize      = 32768 B
+  maxComputeWorkGroupInvocations  = 1024
+  maxComputeWorkGroupSize         = 1024 x 1024 x 1024
+  api 1.3
+
+==== per case ====
+       n  shared B  vs limit  pipe     round-trip  note
+    3072     24576  under     VK_SUCCESS all 3072/3072 OK 24576 B, far below the limit - must-succeed control
+    4000     32000  under     VK_SUCCESS all 4000/4000 OK 32000 B, 768 B below the limit
+    4090     32720  under     VK_SUCCESS all 4090/4090 OK 32720 B, 48 B below the limit - the last size with any headroom
+    4096     32768  EQUALS    VK_SUCCESS all 4096/4096 OK 32768 B, EXACTLY the limit - the 4 K question
+    4224     33792  OVER      VK_SUCCESS all 4224/4224 OK 33792 B, 1024 B over the limit - over-limit control
+    4608     36864  OVER      VK_SUCCESS all 4608/4608 OK 36864 B, 4096 B over the limit - over-limit control
+
+==== what this decides ====
+  MAXCAP 4096 (32768 B, the size 4 K context needs) : ACCEPTED AND RUN CORRECTLY - 4 K is blocked by something else
+  over-limit cases: 2 declared above the limit, 2 had a pipeline created, 2 also round-tripped every element correctly
+    (gfx803 has 64 KiB of LDS per CU, so an over-limit declaration CAN execute: the Vulkan
+     limit is a software rule, not the silicon. That is why the engine may not rely on it,
+     and why this is reported as the measured behaviour of THIS driver, not as a licence.)
+  the engine keeps MAXCAP 2048 either way; the numbers above are what this machine did.

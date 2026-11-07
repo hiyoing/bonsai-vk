@@ -1,0 +1,308 @@
+device: Radeon RX 550X | driver 2.0.279 | device-local heap 3840 MiB | timestampPeriod 40.000 ns
+  limits: maxComputeWorkGroupSize[0]=1024 maxComputeWorkGroupCount[0]=4294967295 bufferImageGranularity=1
+  limits: maxComputeSharedMemorySize=32768 B (= 32 KiB) maxComputeWorkGroupInvocations=1024
+  compute queue = family 0, transfer-only queue = family 2
+
+=== weight plan, read from the tensor table (实测, not estimated) ===
+  tensors 427 = 202 PTQ1_0 + 225 f32   weights 8953803264 elems = 8.954 B
+  per-tensor shapes are K x M with K in {4096, 12288}; sign_widths says the same, so the
+  activation-side Hadamard has exactly two widths to cover.
+  checkpoint's own block form : 1957036032 B = 1.823 GiB  (1.75 bpw)
+  our 2-bit random-access form: 2516189184 B = 2.343 GiB  (codes 2.083 GiB + scales 0.260 GiB, 2.125 bpw)
+  f32 blob                    :  29411328 B = 28.049 MiB
+  LAYOUT COST = 0.521 GiB extra = 17064 tokens of KV at 32768 B/token
+
+=== the rest of the footprint ===
+  blocks: 24 GDN + 8 softmax-attention (full_attention_interval=4)
+  recurrent state, context-INDEPENDENT: 2097152 B/layer state + 98304 B/layer conv = 50.2 MiB over 24 layers
+  KV cache: 32768 B/token (32.0 MiB per 1k tokens), fp16, 8 layers
+  device-local heap: 0 MiB
+
+arena (single DEVICE_LOCAL allocation; sizes are the plan's, offsets are the driver's):
+  codes           2236612608 B  align 4    -> offset 0
+  scales           279576576 B  align 4    -> offset 2236612608
+  f32blob           29411328 B  align 4    -> offset 2516189184
+  ptq_scratch       33554432 B  align 4    -> offset 2545600512
+  x                    65536 B  align 4    -> offset 2579154944
+  xsum                  4096 B  align 4    -> offset 2579220480
+  out                8388608 B  align 4    -> offset 2579224576
+  arena committed 2.410 GiB, alignment padding 0 B
+  attention QK kernel: WIDE  attn_qk_softmax_wide.comp (cap 1024; narrow covers <= 256, wide <= 2048; force=0)
+
+=== forward bring-up ===
+  driver: minStorageBufferOffsetAlignment = 4 B, maxStorageBufferRange = 4096.000 MiB
+  split-K scratch sized from the plan: 65536 floats (0.2 MiB) - max S*M over 202 PTQ tensors
+  activation arena: 23114528 floats = 88.175 MiB (state 48.0 MiB + KV 32.0 MiB + logits 0.95 MiB)
+  act               92458112 B  align 4    -> offset 0
+  signs: sum(0..4095) = 60, sum(4096..16383) = -94   (the file's own values; 60 / -94
+  were the numbers read off the metadata, and they are what makes this upload checkable)
+  pipelines: 21 elementwise/GEMV + 8 layers x 4 attention descriptor sets (53 of 96)
+
+=== region table (float units; every offset is a multiple of 16) ===
+  RES      off         0  size      4096
+  NRM      off      4096  size      4096
+  AN       off      8192  size      4096
+  ROT      off     12288  size      4096
+  HR       off     16384  size      4096
+  EMB      off     20480  size      4096
+  QKV      off     24576  size      8192
+  K        off     32768  size      1024
+  V        off     33792  size      1024
+  Z        off     34816  size      4096
+  ALPHA    off     38912  size        32
+  BETA     off     38944  size        32
+  G1       off     38976  size        32
+  G2       off     39008  size        32
+  GATE32   off     39040  size        32
+  CONV     off     39072  size      8192
+  L2       off     47264  size      4096
+  GDNO     off     51360  size      4096
+  GDNORM   off     55456  size      4096
+  SWG      off     59552  size      4096
+  PERM     off     63648  size      4096
+  FG       off     67744  size     12288
+  FU       off     80032  size     12288
+  FS       off     92320  size     12288
+  PART     off    104608  size     65536
+  XS       off    170144  size       128
+  LOGITS   off    170272  size    248320
+  Q16      off    418592  size      2048
+  QF       off    420640  size      4096
+  QD       off    424736  size      4096
+  GD       off    428832  size      4096
+  SCORE    off    432928  size     16384
+  PROB     off    449312  size     16384
+  P16      off    465696  size      8192
+  PGATE    off    473888  size      4096
+  GOUT     off    477984  size      4096
+  MASK     off    482080  size      1024
+  POS      off    483104  size      1024
+  KF       off    484128  size   1048576
+  QKWN     off   1532704  size      4096
+  SIGNS    off   1536800  size     16384
+  KV       off   1553184  size   1048576
+  ST       off   9941792  size    524288
+  CH       off  22524704  size     24576
+  signs on device: sum4096 = 60, sum12288 = -94, nonzero = 16384/16384
+
+  weight load 1093.9 ms, forward bring-up 51.1 ms
+  device-local total: weights 2.410 GiB + activations 88.175 MiB
+  chat template: thinking=on  system=(none) user=30 chars -> 16 tokens, id paths (encode vs assembled) IDENTICAL
+  prompt 16 tokens: 248045 846 198 95826 110827 98682 95986 96326 103725 248046 198 248045 74455 198 248068 198
+  sampler: temp=0.00 top_k=0 top_p=1.00 eos=248046 cap=1024
+  prefill 1153.0 ms for 16 prompt tokens (13.88 tok/s)
+  logits after the prompt: max 23.4437 min -12.8155 mean -1.276158  nan 0 inf 0
+  top 8:  90700(23.44"Thinking")  8160(20.12"Here")  107680(16.98"嗯")  97237(14.25"用户")  96747(14.19"好的")  99496(13.87"思考")  5514(13.38" Here")  97490(13.04"这里")
+  gen  1  tok=  90700     70.74 ms  Thinking
+  gen  2  tok=   8340     71.12 ms   Process
+  gen  3  tok=     25     71.71 ms  :
+  gen  4  tok=    271     72.01 ms  
+
+
+  gen  5  tok=     16     71.27 ms  1
+  gen  6  tok=     13     71.20 ms  .
+  gen  7  tok=    220     71.43 ms   
+  gen  8  tok=   2972     72.28 ms   **
+  gen  9  tok=   2014     71.72 ms  An
+  gen 10  tok=  53983     71.25 ms  alyze
+  gen 11  tok=    279     71.94 ms   the
+  gen 12  tok=   5952     71.46 ms   Request
+  gen 13  tok=  64700     72.03 ms  :**
+  gen 14  tok=    198     71.79 ms  
+
+  gen 15  tok=    262     70.73 ms     
+  gen 16  tok=    348     71.27 ms   *
+  gen 17  tok=    256     71.56 ms    
+  gen 18  tok=   5396     71.86 ms   Input
+  gen 19  tok=     25     71.99 ms  :
+  gen 20  tok=    328     71.75 ms   "
+  gen 21  tok=   3710     71.89 ms  What
+  gen 22  tok=    369     71.65 ms   is
+  gen 23  tok=    279     71.75 ms   the
+  gen 24  tok=   7063     71.25 ms   meaning
+  gen 25  tok=    314     72.29 ms   of
+  gen 26  tok=    359     71.78 ms   '
+  gen 27  tok=   3710     71.43 ms  What
+  gen 28  tok=    369     72.37 ms   is
+  gen 29  tok=    279     72.60 ms   the
+  gen 30  tok=   7063     71.99 ms   meaning
+  gen 31  tok=    314     71.90 ms   of
+  gen 32  tok=    411     72.01 ms   this
+  gen 33  tok=   3296     72.41 ms   question
+  gen 34  tok=      6     71.70 ms  '
+  gen 35  tok=   7285     72.23 ms  ?"
+  gen 36  tok=    318     71.60 ms   (
+  gen 37  tok=  13784     71.63 ms  Wait
+  gen 38  tok=     11     71.39 ms  ,
+  gen 39  tok=    279     72.35 ms   the
+  gen 40  tok=   1156     72.10 ms   user
+  gen 41  tok=    369     71.89 ms   is
+  gen 42  tok=   9859     72.65 ms   asking
+  gen 43  tok=    728     72.10 ms   me
+  gen 44  tok=    310     71.69 ms   to
+  gen 45  tok=  10033     72.37 ms   explain
+  gen 46  tok=   2414     72.44 ms   something
+  gen 47  tok=     11     71.74 ms  ,
+  gen 48  tok=    694     71.86 ms   but
+  gen 49  tok=    279     71.38 ms   the
+  gen 50  tok=   9640     72.46 ms   prompt
+  gen 51  tok=    369     72.19 ms   is
+  gen 52  tok=   1066     72.10 ms   just
+  gen 53  tok=    328     72.21 ms   "
+  gen 54  tok=   3710     71.97 ms  What
+  gen 55  tok=    369     72.27 ms   is
+  gen 56  tok=    279     72.39 ms   the
+  gen 57  tok=   7063     71.69 ms   meaning
+  gen 58  tok=    314     72.14 ms   of
+  gen 59  tok=    411     72.79 ms   this
+  gen 60  tok=   3296     71.67 ms   question
+  gen 61  tok=   7285     71.97 ms  ?"
+  gen 62  tok=    466     72.39 ms   or
+  gen 63  tok=   2414     72.05 ms   something
+  gen 64  tok=   4283     72.37 ms   similar
+  gen 65  tok=     30     72.72 ms  ?
+  gen 66  tok=   2233     72.28 ms   No
+  gen 67  tok=     11     72.05 ms  ,
+  gen 68  tok=    279     72.31 ms   the
+  gen 69  tok=   1156     72.04 ms   user
+  gen 70  tok=    369     72.53 ms   is
+  gen 71  tok=   9859     72.35 ms   asking
+  gen 72  tok=    728     72.01 ms   me
+  gen 73  tok=    310     72.18 ms   to
+  gen 74  tok=  10033     72.35 ms   explain
+  gen 75  tok=   2414     72.35 ms   something
+  gen 76  tok=     11     72.60 ms  ,
+  gen 77  tok=    694     73.03 ms   but
+  gen 78  tok=    279     72.88 ms   the
+  gen 79  tok=   9640     72.95 ms   prompt
+  gen 80  tok=   4924     72.62 ms   itself
+  gen 81  tok=    369     72.38 ms   is
+  gen 82  tok=   1066     73.08 ms   just
+  gen 83  tok=    328     72.27 ms   "
+  gen 84  tok=   3710     72.19 ms  What
+  gen 85  tok=    369     72.93 ms   is
+  gen 86  tok=    279     72.76 ms   the
+  gen 87  tok=   7063     72.76 ms   meaning
+  gen 88  tok=    314     72.90 ms   of
+  gen 89  tok=    411     73.17 ms   this
+  gen 90  tok=   3296     72.58 ms   question
+  gen 91  tok=   7285     72.81 ms  ?"
+  gen 92  tok=   2233     73.41 ms   No
+  gen 93  tok=     11     72.25 ms  ,
+  gen 94  tok=   3655     72.81 ms   wait
+  gen 95  tok=     13     72.95 ms  .
+  gen 96  tok=    561     72.87 ms   The
+  gen 97  tok=   1156     72.91 ms   user
+  gen 98  tok=    369     73.24 ms   is
+  gen 99  tok=   9859     73.14 ms   asking
+  gen 100  tok=    728     72.98 ms   me
+  gen 101  tok=    310     73.64 ms   to
+  gen 102  tok=  10033     73.52 ms   explain
+  gen 103  tok=   2414     73.57 ms   something
+  gen 104  tok=     11     72.71 ms  ,
+  gen 105  tok=    694     74.03 ms   but
+  gen 106  tok=    279     73.11 ms   the
+  gen 107  tok=   9640     72.43 ms   prompt
+  gen 108  tok=   4924     73.38 ms   itself
+  gen 109  tok=    369     72.77 ms   is
+  gen 110  tok=   1066     72.92 ms   just
+  gen 111  tok=    328     73.11 ms   "
+  gen 112  tok=   3710     72.61 ms  What
+  gen 113  tok=    369     72.80 ms   is
+  gen 114  tok=    279     73.35 ms   the
+  gen 115  tok=   7063     73.06 ms   meaning
+  gen 116  tok=    314     73.25 ms   of
+  gen 117  tok=    411     73.36 ms   this
+  gen 118  tok=   9640     73.28 ms   prompt
+  gen 119  tok=   7285     73.07 ms  ?"
+  gen 120  tok=   2233     72.75 ms   No
+  gen 121  tok=     11     72.93 ms  ,
+  gen 122  tok=   3655     72.90 ms   wait
+  gen 123  tok=     13     72.97 ms  .
+  gen 124  tok=    198     74.03 ms  
+
+  gen 125  tok=    262     73.19 ms     
+  gen 126  tok=    348     72.82 ms   *
+  gen 127  tok=    256     72.84 ms    
+  gen 128  tok=  13428     73.04 ms   Wait
+  gen 129  tok=     11     73.18 ms  ,
+  gen 130  tok=    279     73.89 ms   the
+  gen 131  tok=   1156     73.49 ms   user
+  gen 132  tok=   1879     73.44 ms   input
+  gen 133  tok=    369     73.30 ms   is
+  gen 134  tok=     25     72.86 ms  :
+  gen 135  tok=    328     73.57 ms   "
+  gen 136  tok=   3710     73.41 ms  What
+  gen 137  tok=    369     73.30 ms   is
+  gen 138  tok=    279     73.35 ms   the
+  gen 139  tok=   7063     73.35 ms   meaning
+  gen 140  tok=    314     73.06 ms   of
+  gen 141  tok=    411     73.72 ms   this
+  gen 142  tok=   9640     73.60 ms   prompt
+  gen 143  tok=   7285     74.02 ms  ?"
+  gen 144  tok=   2233     73.60 ms   No
+  gen 145  tok=     11     73.64 ms  ,
+  gen 146  tok=    279     73.49 ms   the
+  gen 147  tok=   1156     73.24 ms   user
+  gen 148  tok=    369     73.27 ms   is
+  gen 149  tok=   9859     74.48 ms   asking
+  gen 150  tok=    728     73.77 ms   me
+  gen 151  tok=    310     73.35 ms   to
+  gen 152  tok=  10033     74.09 ms   explain
+  gen 153  tok=   2414     73.60 ms   something
+  gen 154  tok=     13     74.11 ms  .
+  gen 155  tok=    198     74.10 ms  
+
+  gen 156  tok=    262     73.28 ms     
+  gen 157  tok=    348     74.14 ms   *
+  gen 158  tok=    256     74.28 ms    
+  gen 159  tok=  13428     73.78 ms   Wait
+  gen 160  tok=     11     73.89 ms  ,
+  gen 161  tok=   3221     73.74 ms   looking
+  gen 162  tok=    506     74.03 ms   at
+  gen 163  tok=    279     73.58 ms   the
+  gen 164  tok=   9640     74.20 ms   prompt
+  gen 165  tok=   1495     73.72 ms   again
+  gen 166  tok=     25     73.74 ms  :
+  gen 167  tok=    328     73.70 ms   "
+  gen 168  tok=   3710     74.01 ms  What
+  gen 169  tok=    369     73.96 ms   is
+  gen 170  tok=    279     74.46 ms   the
+  gen 171  tok=   7063     73.83 ms   meaning
+  gen 172  tok=    314     73.89 ms   of
+  gen 173  tok=    411     74.39 ms   this
+  gen 174  tok=   9640     74.01 ms   prompt
+  gen 175  tok=   7285     73.57 ms  ?"
+  gen 176  tok=   2233     74.29 ms   No
+  gen 177  tok=     11     73.74 ms  ,
+  gen 178  tok=    279     73.88 ms   the
+  gen 179  tok=   1156     73.64 ms   user
+  gen 180  tok=    369     73.96 ms   is
+  gen 181  tok=   9859     73.53 ms   asking
+  gen 182  tok=    728     74.08 ms   me
+  gen 183  tok=    310     73.52 ms   to
+  gen 184  tok=  10033     73.81 ms   explain
+  gen 185  tok=   2414     73.88 ms   something
+  gen 186  tok=     13     74.17 ms  .
+  gen 187  tok=    198     73.87 ms  
+
+  gen 188  tok=    262     74.13 ms     
+  gen 189  tok=    348     74.21 ms   *
+  gen 190  tok=    256     74.42 ms    
+  gen 191  tok=  13428     74.74 ms   Wait
+  gen 192  tok=     11     74.07 ms  ,
+
+=== pure-blood token rate (measured, this card) ===
+  192 generated tokens in 13985.8 ms  ->  13.73 tok/s
+  first generated token (prefill+1): 70.7 ms; steady-state: 72.8 ms/token
+  dispatches 309920, barriers 309712 per command buffer (one submit per token)
+
+=== text ===
+Thinking Process:
+
+1.  **Analyze the Request:**
+    *   Input: "What is the meaning of 'What is the meaning of this question'?" (Wait, the user is asking me to explain something, but the prompt is just "What is the meaning of this question?" or something similar? No, the user is asking me to explain something, but the prompt itself is just "What is the meaning of this question?" No, wait. The user is asking me to explain something, but the prompt itself is just "What is the meaning of this prompt?" No, wait.
+    *   Wait, the user input is: "What is the meaning of this prompt?" No, the user is asking me to explain something.
+    *   Wait, looking at the prompt again: "What is the meaning of this prompt?" No, the user is asking me to explain something.
+    *   Wait,
+  gdn_mode=0 gdn_gmap=0 l2_mode=1 round_probs=1 cap=1024

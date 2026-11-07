@@ -1,0 +1,39 @@
+=== bonsai_fleet probe v2 (01:35 2026-11-05; the (A) verdict wording corrected to three-valued - v1 printed a bare NO for a fleet property on a 1-device host) ===
+
+== gpu fleet topology (no logical device created - enumerate + classify only) ==
+  1 physical device(s)
+
+  [0] Radeon RX 550X | DISCRETE_GPU | vendor 0x1002 device 0x699F | api 1.3.260 | driver 2.0.279
+      device-local heap 3840.0 MiB | host-visible heap 7868.0 MiB | unified (both at once) heap 0.0 MiB | timestampPeriod 40.000 ns | maxMemoryAllocationCount 4096 | nonCoherentAtomSize 128 B | host-import alignment 4096 B
+      zero-copy (DEVICE_LOCAL|HOST_VISIBLE|HOST_COHERENT at once) type = yes, type 2 | ext: external_memory_host external_memory_win32 -
+      queue family 0: flags=0xF COMPUTE TRANSFER GRAPHICS SPARSE  tiler=1,1,1 contexts=1  
+      queue family 1: flags=0xE COMPUTE TRANSFER SPARSE  tiler=1,1,1 contexts=2  
+      queue family 2: flags=0xC TRANSFER SPARSE  tiler=8,8,8 contexts=2  <- TRANSFER-ONLY (SDMA): async hops possible
+  memory types:
+     0 heap0  DEVICE_LOCAL                                                     (3840 MiB heap)
+     1 heap1  HOST_VISIBLE HOST_COHERENT                                       (7868 MiB heap)
+     2 heap2  DEVICE_LOCAL HOST_VISIBLE HOST_COHERENT                          (256 MiB heap)
+     3 heap1  HOST_VISIBLE HOST_COHERENT HOST_CACHED                           (7868 MiB heap)
+     4 heap0  DEVICE_LOCAL                                                     (3840 MiB heap)
+     5 heap1  HOST_VISIBLE HOST_COHERENT                                       (7868 MiB heap)
+     6 heap2  DEVICE_LOCAL HOST_VISIBLE HOST_COHERENT                          (256 MiB heap)
+     7 heap1  HOST_VISIBLE HOST_COHERENT HOST_CACHED                           (7868 MiB heap)
+
+  1 physical device group(s)
+    group 0: 1 device(s), subsetAllocation=0
+
+== capability verdicts for THIS host ==
+  (A) layer-pipelined multi-GPU : NOT AVAILABLE
+      1 COMPUTE-capable device(s) of 1 physical device(s) visible to this loader - NOT EXERCISABLE HERE: a layer pipeline needs two independent command streams, so the schedule, the ring and the fences are compiled and offline-tested but no PCIe-to-PCIe hop has been taken on this host
+      transfer-only queue on every compute device: UNEVALUABLE for a fleet (needs >= 2 compute devices; here 1). Per-device on THIS card: 1/1 compute device(s) expose a transfer-only family - see the queue table above. The queue choice itself is measured, not assumed: a copy on the compute queue runs D2H 7.15 -> 3.89 GB/s, H2D 7.12 -> 4.93.
+      shared unified host heap across cards  : unevaluable with one compute device; per-device the unified (DEVICE_LOCAL|HOST_VISIBLE) heap is printed above
+  (B) iGPU zero-copy arena        : AVAILABLE
+      a device offers a heap that is host- and device-accessible at once; the arena can be mapped and written directly
+
+  instance destroyed. `probe` never created a logical device, never allocated, never
+  submitted: it is the only command here that reads topology without touching the card.
+rc_probe=0
+
+=== bonsai_fleet ring 4 8 6 ===
+/usr/bin/bash: line 1:  4640 Segmentation fault      ./bonsai_fleet.exe ring 4 8 6 2>&1
+rc_ring=139

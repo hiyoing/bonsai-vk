@@ -1,0 +1,31 @@
+// attn_qk_softmax_tile_q8192.comp - tiled stage-2 kernel, tile = 8192 keys.
+//
+//   LDS = sd[8192] (32768 B) + s_sum (4 B) = 32772 B.
+//
+// THIS IS A PROBE, NOT A SHIPPING CONFIG. It deliberately asks for MORE shared than this driver
+// reports: maxComputeSharedMemorySize = 32768 B (measured, runs/limits_probe.log and
+// runs/shared_probe_v3.log). On this machine an over-limit static shared declaration still creates
+// and still runs - shared_probe measured 33792 B and 36864 B round-tripping every element - but that
+// is a per-driver phenomenon, it is a Vulkan valid-usage violation, and the project rule is that such
+// a measurement gets recorded, not licensed. Nothing in the engine picks this width automatically and
+// the auto band never reaches it; it exists so that ONE question can be answered with the real kernel
+// instead of a synthetic loop:
+//
+//   where is the occupancy cliff?
+//
+// runs/shared_probe_v3.log's bench (identical instruction stream, only the `shared` declaration
+// differs) says 16 KiB -> 32 KiB costs +19.6% and 8 KiB -> 16 KiB costs +1.5%. That bench is not the
+// attention kernel, so the +19.6% cannot be transferred to it as a fact. With this wrapper the same
+// comparison becomes a same-kernel, same-work measurement: at cap 8192 the row is ONE tile at 32 KiB
+// (QTILE 8192) or TWO tiles at 16 KiB (QTILE 4096), and the arithmetic per key is identical in both
+// cases. Diff the two timings and the cliff is priced in the kernel that actually runs in production.
+//
+// Correctness: the body is the shared tiled kernel, whose wide<->tiled bitwise gate (A2) has passed at
+// QTILE 1024, 2048 and 4096. Running the gate at QTILE 8192 (i.e. cap <= 2048, one tile) proves this
+// instantiation too - it is the same source, only the array length differs, and the array length is
+// what is being tested.
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "f16_rne.glslh"
+#define QTILE 8192u
+#include "attn_qk_softmax_tile.glslh"

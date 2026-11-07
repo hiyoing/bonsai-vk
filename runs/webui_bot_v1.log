@@ -1,0 +1,161 @@
+screenshot: webui\shots\bot-report-v1.png
+ok: false
+duration: 38ms
+totals: {"A":30,"B":59,"C":27,"D":37,"passed":147,"failed":6}
+PASS | paper is #FFFFFF | 
+PASS | ink is #2D2D2D | 
+PASS | column is 768px | 
+PASS | hairline is #E5E5E5 | 
+PASS | the send button uses the accent | 
+PASS | the composer focus ring is the accent | 
+FAIL | the composer border returns to the hairline | 
+PASS | code background is #F7F7F8 | 
+PASS | code block uses a monospace stack | 
+PASS | no img element | 
+PASS | no canvas element | 
+PASS | no external script | 
+PASS | no external stylesheet | 
+PASS | exactly one inline style block | 
+PASS | exactly one inline script block | 
+PASS | seeded PRNG replays exactly | 
+PASS | a different seed gives a different sequence | 
+PASS | fmtKib rounds the measured size | 
+PASS | fmtKib tolerates a missing size | 
+PASS | fmtRate keeps two decimals | 
+PASS | fmtRate rejects a non-rate | 
+PASS | device name is shortened | 
+PASS | empty device falls back | 
+PASS | transcript drops failed replies and non-chat roles | 
+PASS | system prompt is prepended when given | 
+PASS | request asks for a stream | 
+PASS | request carries max_tokens | 
+PASS | request carries temperature | 
+PASS | request carries seed | 
+PASS | request omits an unset top_p | 
+PASS | md: heading levels | 
+PASS | md: heading with closing hashes | 
+PASS | md: bold and italic | 
+PASS | md: strikethrough | 
+PASS | md: inline code | 
+PASS | md: fenced code with language | 
+PASS | md: unclosed fence is a partial block | 
+PASS | md: fence delimiters inside code stay literal | 
+PASS | md: unordered list | 
+PASS | md: ordered list keeps its start | 
+PASS | md: nested list | 
+PASS | md: list item with a fence | 
+PASS | md: blockquote | 
+PASS | md: horizontal rule | 
+PASS | md: table with alignment | 
+PASS | md: table cell with a pipe in code | 
+PASS | md: link | 
+PASS | md: autolink | 
+PASS | md: image syntax degrades to a link, never an img | 
+PASS | md: snake_case is not emphasis | 
+PASS | md: backslash escape | 
+PASS | md: hard break from two spaces | 
+PASS | md: soft break becomes a space | 
+PASS | md: raw html is text, not markup | 
+PASS | md: script tag in a reply is inert | 
+PASS | md: javascript href is refused | 
+PASS | md: data href is refused | 
+PASS | md: vbscript href is refused | 
+PASS | md: obfuscated javascript href is refused | 
+PASS | md: relative href is allowed | 
+PASS | md: mailto autolink | 
+PASS | md: unclosed bold stays literal while streaming | 
+PASS | md: closed bold renders | 
+PASS | md: empty input renders nothing | 
+PASS | md: cjk paragraph | 
+PASS | md: emoji survives | 
+PASS | sse: one shot finds every event plus DONE | 
+PASS | sse: the last event is DONE | 
+PASS | sse: 1-byte slices give the identical event list | 
+PASS | sse: 3-byte slices give the identical event list | 
+PASS | sse: 64-byte slices give the identical event list | 
+PASS | sse: CRLF framing gives the identical event list | 
+PASS | sse: content reassembles across slices | 
+PASS | sse: reasoning_content is kept separate | 
+PASS | sse: finish reason arrives on the last chunk | 
+PASS | sse: usage arrives with the finish chunk | 
+PASS | sse: role delta is recognised | 
+PASS | sse: malformed JSON is reported, not thrown | 
+PASS | sse: a comment line produces no event | 
+PASS | sse: a chunk with no choices still parses | 
+PASS | utf-8: byte-at-a-time streaming decode is lossless | 
+PASS | typewriter: an empty backlog reveals nothing | 
+PASS | typewriter: a small backlog uses the floor rate | 
+PASS | typewriter: a huge backlog is capped | 
+PASS | typewriter: rate grows with backlog | 
+PASS | safeHref refuses javascript | 
+PASS | safeHref refuses a control-char prefix | 
+PASS | safeHref accepts https | 
+PASS | safeHref accepts a relative path | 
+PASS | two prompts produce four turns | 
+PASS | both replies finished | 
+PASS | reply text is the concatenation of the deltas | 
+PASS | reasoning is kept out of the answer text | 
+PASS | the typewriter drained completely | 
+PASS | markdown reached the DOM as markup | 
+PASS | the second reply rendered a code block | 
+FAIL | usage tokens are attached | 
+PASS | the engine rate is attached from status, not guessed | 
+FAIL | the second request carries the whole transcript | 
+FAIL | transcript roles alternate correctly | 
+PASS | no runtime errors during the simulation | 
+PASS | the engine is idle afterwards | 
+PASS | the same seed and clock replay identically | 
+PASS | a 429 ends the turn as an error | 
+PASS | the 429 note explains the single-conversation limit | 
+PASS | a 429 releases the busy flag | 
+FAIL | a failed reply is not sent back in the next prompt | 
+PASS | the turn is streaming before the stop | 
+PASS | stop marks the turn stopped, not errored | 
+PASS | stop keeps whatever text already arrived | 
+PASS | stop drains the queue so nothing is lost | 
+PASS | stop clears the busy flag | 
+PASS | stop leaves no error note | 
+PASS | a 4000-character reply drains fully | 
+PASS | a long reply keeps its text intact | 
+FAIL | a long reply produced no runtime error | 
+PASS | badge shows device, measured size and rate | 
+PASS | badge tooltip cites the executable measurement | 
+PASS | the empty state is visible before the first turn | 
+PASS | send is disabled on an empty composer | 
+PASS | stop is hidden while idle | 
+PASS | a chip click creates the user turn | 
+PASS | the chip prompt is what got sent | 
+PASS | the user bubble is right aligned | 
+PASS | the empty state hides once a turn exists | 
+PASS | the AI reply has no bubble class | 
+PASS | the reply reached the DOM | 
+PASS | markdown produced a strong element | 
+PASS | markdown produced a code block | 
+PASS | the caret is gone once the reply is done | 
+PASS | reasoning is collapsed after the answer | 
+PASS | no extra request was fired by the pump | 
+PASS | the reasoning toggle expands | 
+PASS | the reasoning toggle reports its state | 
+PASS | the reasoning text is the model's | 
+PASS | the reasoning toggle collapses again | 
+PASS | copy puts the code on the clipboard | 
+PASS | typing enables send | 
+PASS | Enter is consumed by the send handler | 
+PASS | Enter fired a request | 
+PASS | Shift+Enter is left to the textarea | 
+PASS | an IME candidate Enter is not swallowed | 
+PASS | header and composer do not overlap | 
+PASS | the column never exceeds 768px | 
+PASS | the column is centred | 
+PASS | the scroll area starts below the header | 
+PASS | no horizontal overflow | 
+PASS | the newest reply is not hidden behind the composer | 
+PASS | the user bubble stays inside the column | 
+PASS | new chat clears the transcript | 
+PASS | new chat restores the empty state | 
+PASS | new chat clears the composer | 
+PASS | new chat leaves the engine idle | 
+exceptions: 0
+consoleErrors: 0
+logErrors: 1
+Failed to load resource: net::ERR_FILE_NOT_FOUND

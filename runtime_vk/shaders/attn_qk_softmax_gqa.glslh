@@ -1,0 +1,198 @@
+// attn_qk_softmax_gqa.glslh - body of the GQA-MERGED stage-2 kernel. Included by
+// attn_qk_softmax_gqa_h4_q512.comp / _h4_q1024.comp, each of which only sets QTILE and HPK.
+//
+// WHAT THIS IS FOR, and what it is NOT for. attn_qk_softmax_wide.comp and
+// attn_qk_softmax_tile_q*.comp both map ONE workgroup to ONE (layer, query head). With n_head 16 and
+// n_head_kv 4, four query heads share one K row and one V row, so the SAME 512-byte key vector is
+// fetched FOUR TIMES - by four different workgroups, on four different wavefronts. That is not a
+// bandwidth problem (measured effective rate on this card: 6.95 GB/s against a weight path that does
+// 43 GB/s - KV_P0P1P2_MEASURED.md §9.5); it is a *transaction* problem, because the fetch is a gather:
+// the arena is [cap][nkv][hd/2], consecutive lanes own consecutive keys, so one 64-lane instruction
+// touches 64 addresses 2 KiB apart and uses 4 bytes of the 32 in each sector. Four workgroups issuing
+// the same addresses is four times the instructions and four times the sector traffic for one copy of
+// the data.
+//
+// This file removes the duplication by mapping ONE workgroup to ONE (layer, kv head) and giving each
+// lane ALL HPK = n_head/n_head_kv query heads for the key it owns:
+//
+//   * workgroups per token per layer: n_head (16) -> n_head_kv (4);
+//   * the K word of (key k, half-pair d) is loaded once and unpacked once, then multiplied into HPK
+//     independent accumulators, so the gather instructions and the K-side unpackHalf2x16 count both
+//     drop by exactly HPK while the irreducible FP32 multiply-add count (2 per half-pair per head)
+//     does not change at all;
+//   * the q16 side gets better rather than worse: inside a workgroup every lane serves the same HPK
+//     head rows, so the HPK q loads per half-pair are wavefront broadcasts instead of strided reads.
+//
+// BIT-EXACTNESS CONTRACT (the same one attn_qk_softmax_tile.glslh carries, enforced by the same kind
+// of gate - qk_audit stage A3 compares this kernel's SCORE/PROB/P16 against narrow/wide/tiled BITWISE
+// and rc 6 refuses to generate on a single differing bit). Merging workgroups must not change a
+// number, because every number here belongs to ONE (head, key) pair and the merge only changes WHICH
+// LANE computes it:
+//   - the dot expression is verbatim: `acc = acc + a.x*b.x`, then `acc = acc + a.y*b.y`, ascending d,
+//     per head, in that head's own accumulator. The K operand arrives through a hoisted
+//     unpackHalf2x16 result instead of an inline call - the same fp32 value out of the same bits, so
+//     the product is the same bits;
+//   - max and exp+sum stay SERIAL PER ROW and ASCENDING: the tiled kernel gives the whole walk to lane
+//     0, here lane s walks row s for s = 0..HPK-1, in ascending tile order and ascending l inside each
+//     tile. HPK rows walked by HPK lanes at once is HPK independent chains, each identical to the
+//     sequence the tiled kernel's lane 0 produces for that row;
+//   - dead slots outside the live prefix stay exact +0.0, the divide stays per element, and the RNE
+//     pack still strides the WHOLE cap/2 pairs, so the WIDE#2 stale-byte failure mode stays closed;
+//   - LDS grows from 4*QTILE+4 to HPK*4*QTILE + 8*HPK bytes, so the tile width is what keeps this
+//     under the design line: QTILE 512 -> 8,224 B, QTILE 1024 -> 16,416 B. The measured flat band is
+//     4-16 KiB (§9.4: 4/8/16 KiB differ by 0.13%), which is why 512 is the default and 1024 the line.
+//
+// WHY THE NON-MERGED PATH STAYS IN THE BINARY. The rule for this surgery is that the bit-exact path
+// must remain runnable as the control, and the only evidence that the merge is bit-exact is running
+// both and comparing: attn_qk_softmax{_wide,_tile_q*}.comp are byte-frozen, BONSAI_GQA_OPT=0 selects
+// them, and BONSAI_QCHECK=1 runs A3 in the same process against whichever of them owns the row at that
+// cap. See README.md "两条注意力路径" for the user-facing version of this paragraph.
+//
+// HPK IS A COMPILE-TIME CONSTANT (the wrappers set it): the accumulator array and LDS's second
+// dimension are declared with it. The kernel bails out if the model's own ratio disagrees
+// (p.nh / p.nkv != HPK) and fwd_init refuses to select this module unless the plan says 4, so a model
+// with a different group size does not compute wrong rows - it simply does not get this kernel.
+
+#ifndef QTILE
+#define QTILE 512u
+#endif
+#ifndef HPK
+#define HPK 4u
+#endif
+
+#define NTILE 256u
+
+layout(local_size_x = NTILE, local_size_y = 1, local_size_z = 1) in;
+
+// The same seven bindings, same order, same meaning as attn_qk_softmax_wide.comp and
+// attn_qk_softmax_tile.glslh - mk_attn() hands every row kernel literally the same window vector, so a
+// dispatch-level A/B cannot be confounded by a binding mistake. SCORE/PROB lose `writeonly` HERE ONLY:
+// pass 2 re-reads the dots pass 1 wrote, which is the whole trick the tiled kernel introduced.
+layout(binding = 0) readonly  buffer Q16   { uint  q16[]; };   // [seq][nh][hd/2]
+layout(binding = 1) readonly  buffer KC    { uint  kc[]; };    // [cap][nkv][hd/2] the K arena
+layout(binding = 2) readonly  buffer MASK  { float mask[]; };  // [seq][cap] additive, -INF = dead
+layout(binding = 3) readonly  buffer POS   { uint  pos[]; };   // [seq] absolute positions
+layout(binding = 4)           buffer SCORE { float score[]; }; // [seq][nh][cap] raw kq
+layout(binding = 5)           buffer PROB  { float prob[]; };  // [seq][nh][cap] f32 probabilities
+layout(binding = 6) writeonly buffer P16   { uint  p16[]; };   // [seq][nh][cap/2] the fp16 operand
+
+// The same eight push words as every other row kernel: an A/B of two kernels must not differ in what
+// the engine pushes.
+layout(push_constant) uniform Push {
+    uint seq, nh, nkv, hd, cap;
+    uint round_probs;          // 1 = PV sees fp16 probabilities (ggml's mixed-type cast)
+    float scale, pad0;
+} p;
+
+// HPK row tiles, plus the two scalars each row's serial chain owns. HPK*4*QTILE + 8*HPK bytes.
+shared float sd[HPK][QTILE];
+shared float s_mx[HPK];
+shared float s_sum[HPK];
+
+void main() {
+    const uint w = gl_WorkGroupID.x;
+    const uint j = gl_LocalInvocationID.x;
+    const uint hw = p.hd / 2u;
+    // One workgroup per (layer, kv head) instead of per (layer, query head). seq is 1 in this engine's
+    // decode-shaped forward, exactly as the tiled kernel assumes it.
+    const uint t = w / p.nkv, kv = w % p.nkv;
+    if (p.nh / p.nkv != HPK) return;              // compile-time HPK vs the plan's own ratio
+    const uint h0 = kv * HPK;                     // first query head served here
+    const uint nfill = pos[t] + 1u;               // causal AND filled: live keys are 0..pos[t]
+    const uint row0 = (t * p.nh + h0) * p.cap;    // head s's row is row0 + s*cap (contiguous, head-major)
+    const uint q10  = (t * p.nh + h0) * hw;       // head s's q row is q10 + s*hw
+
+    if (j == 0u) for (uint s = 0u; s < HPK; ++s) {
+        s_mx[s]  = uintBitsToFloat(0xFF800000u);  // -inf, the same seed the tiled kernel uses
+        s_sum[s] = 0.0;
+    }
+    barrier();
+
+    // ---- pass 1: the dots and the running max, QTILE keys at a time, HPK heads per key ------------
+    for (uint tb = 0u; tb < nfill; tb += QTILE) {
+        const uint len = min(QTILE, nfill - tb);
+        for (uint l = j; l < len; l += NTILE) {
+            const uint k = tb + l;
+            const uint k1 = (k * p.nkv + kv) * hw;
+            float acc[HPK];
+            for (uint s = 0u; s < HPK; ++s) acc[s] = 0.0;
+            for (uint d = 0u; d < hw; ++d) {
+                // ONE global word, TWO unpacks, HPK heads. In the tiled kernel this same word is
+                // fetched and unpacked once PER HEAD by PER HEAD workgroups - that is the 4x.
+                const vec2 kxy = unpackHalf2x16(kc[k1 + d]);
+                for (uint s = 0u; s < HPK; ++s) {
+                    const vec2 qxy = unpackHalf2x16(q16[q10 + s * hw + d]);
+                    acc[s] = acc[s] + qxy.x * kxy.x;
+                    acc[s] = acc[s] + qxy.y * kxy.y;
+                }
+            }
+            for (uint s = 0u; s < HPK; ++s) {
+                sd[s][l] = acc[s];
+                score[row0 + s * p.cap + k] = acc[s];
+            }
+        }
+        barrier();
+        if (j < HPK) {                            // lane s owns row s's max chain, ascending l
+            float mx = s_mx[j];
+            for (uint l = 0u; l < len; ++l) {
+                const float v = sd[j][l] * p.scale + mask[t * p.cap + tb + l];
+                if (v > mx) mx = v;
+            }
+            s_mx[j] = mx;
+        }
+        barrier();                                // lane s must finish reading sd[s] before the next
+    }                                           // tile overwrites it
+    // Outside the live prefix the row is exact zero, written by ALL lanes on a stride, for each of the
+    // HPK rows this workgroup now owns. Same value and same rule as the tiled kernel.
+    for (uint s = 0u; s < HPK; ++s)
+        for (uint k = nfill + j; k < p.cap; k += NTILE) score[row0 + s * p.cap + k] = 0.0;
+    // DEVICE-scope barrier, not just the workgroup one: pass 2 reads bytes OTHER lanes wrote to a
+    // VkBuffer. Getting this wrong is not a crash, it is a stale float - see the tiled kernel's note.
+    memoryBarrier();
+    barrier();
+
+    // ---- pass 2: exp and sum, ascending, re-reading the dots from the global row -----------------
+    // The staging is done by every lane on a stride (parallel loads); the WALK is done by lane s alone,
+    // in ascending order, which is what makes that row's sum chain bit-for-bit the tiled kernel's.
+    for (uint tb = 0u; tb < nfill; tb += QTILE) {
+        const uint len = min(QTILE, nfill - tb);
+        for (uint s = 0u; s < HPK; ++s)
+            for (uint l = j; l < len; l += NTILE) sd[s][l] = score[row0 + s * p.cap + tb + l];
+        barrier();
+        if (j < HPK) {
+            const uint rw = row0 + j * p.cap;
+            const float mx = s_mx[j];
+            float sum = s_sum[j];
+            for (uint l = 0u; l < len; ++l) {
+                const float v = sd[j][l] * p.scale + mask[t * p.cap + tb + l];
+                const float e = exp(v - mx);
+                prob[rw + tb + l] = e;             // unnormalised; pass 3 divides it in place
+                sum = sum + e;                     // the same ascending dependency chain
+            }
+            s_sum[j] = sum;
+        }
+        barrier();
+    }
+    memoryBarrier();                              // lanes < HPK wrote rows every lane now reads
+    barrier();
+
+    // ---- pass 3: normalise, and zero the dead tail (per element, so any lane may own it) ---------
+    for (uint s = 0u; s < HPK; ++s) {
+        const uint rw = row0 + s * p.cap;
+        const float sum = s_sum[s];
+        for (uint i = j; i < nfill; i += NTILE) prob[rw + i] = prob[rw + i] / sum;
+        for (uint i = nfill + j; i < p.cap; i += NTILE) prob[rw + i] = 0.0;
+    }
+    memoryBarrier();
+    barrier();
+
+    // ---- pass 4: the fp16 pack, strided over the whole row, once per row this workgroup owns ------
+    // Same stride rule, same RNE helper, same full cap/2 coverage as the tiled and wide kernels.
+    for (uint s = 0u; s < HPK; ++s) {
+        const uint rw = row0 + s * p.cap;
+        const uint pw = (t * p.nh + h0 + s) * (p.cap / 2u);   // the same head-major P16 row the
+                                                              // tiled kernel writes, spelled directly
+        for (uint w2 = j; w2 < p.cap / 2u; w2 += NTILE)
+            p16[pw + w2] = pack2_rne(vec2(prob[rw + 2u * w2], prob[rw + 2u * w2 + 1u]));
+    }
+}

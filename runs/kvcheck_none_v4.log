@@ -1,0 +1,138 @@
+device: Radeon RX 550X | driver 2.0.279 | device-local heap 3840 MiB | timestampPeriod 40.000 ns
+  limits: maxComputeWorkGroupSize[0]=1024 maxComputeWorkGroupCount[0]=4294967295 bufferImageGranularity=1
+  limits: maxComputeSharedMemorySize=32768 B (= 32 KiB) maxComputeWorkGroupInvocations=1024
+  compute queue = family 0, transfer-only queue = family 2
+
+=== weight plan, read from the tensor table (实测, not estimated) ===
+  tensors 427 = 202 PTQ1_0 + 225 f32   weights 8953803264 elems = 8.954 B
+  per-tensor shapes are K x M with K in {4096, 12288}; sign_widths says the same, so the
+  activation-side Hadamard has exactly two widths to cover.
+  checkpoint's own block form : 1957036032 B = 1.823 GiB  (1.75 bpw)
+  our 2-bit random-access form: 2516189184 B = 2.343 GiB  (codes 2.083 GiB + scales 0.260 GiB, 2.125 bpw)
+  f32 blob                    :  29411328 B = 28.049 MiB
+  LAYOUT COST = 0.521 GiB extra = 17064 tokens of KV at 32768 B/token
+
+=== the rest of the footprint ===
+  blocks: 24 GDN + 8 softmax-attention (full_attention_interval=4)
+  recurrent state, context-INDEPENDENT: 2097152 B/layer state + 98304 B/layer conv = 50.2 MiB over 24 layers
+  KV cache: 32768 B/token (32.0 MiB per 1k tokens), fp16, 8 layers
+  device-local heap: 3840 MiB
+
+arena (single DEVICE_LOCAL allocation; sizes are the plan's, offsets are the driver's):
+  codes           2236612608 B  align 4    -> offset 0
+  scales           279576576 B  align 4    -> offset 2236612608
+  f32blob           29411328 B  align 4    -> offset 2516189184
+  ptq_scratch       33554432 B  align 4    -> offset 2545600512
+  x                    65536 B  align 4    -> offset 2579154944
+  xsum                  4096 B  align 4    -> offset 2579220480
+  out                8388608 B  align 4    -> offset 2579224576
+  arena committed 2.410 GiB, alignment padding 0 B
+  KV V representation: fp16 (unchanged arena) (BONSAI_KV_V_QUANT) | KF debug stream: off | KV block: 64 positions | spill watch: every 32 tokens, soft 32 / hard 64 MiB, growth run >= 3
+  spill thresholds are measured as GROWTH over the first decode sample (default; BONSAI_SPILL_ABS=1 for the absolute reading); the reference is the first decode sample and is printed with the curve
+  attention QK kernel: NARROW attn_qk_softmax.comp (cap 256; narrow covers <= 256, wide <= 2048; force=0)
+
+=== forward bring-up ===
+  driver: minStorageBufferOffsetAlignment = 4 B, maxStorageBufferRange = 4096.000 MiB
+  split-K scratch sized from the plan: 65536 floats (0.2 MiB) - max S*M over 202 PTQ tensors
+  KV geometry (derived from the kernel layout, not typed):
+    K  fp16             512 words/slot/layer =   2048 B   (never compressed)
+    V fp16            512 words/slot/layer =   2048 B   (BONSAI_KV_V_QUANT=none)
+    per layer-slot     4096 B -> x8 attention layers = 32768 B/token = 32.00 KiB/token
+  arena invariants | KV span 2097152 == cap 256 x 8 x 1024 OK; ST 12582912 / CH 589824 are 24 GDN layers x per-layer state, cap-free OK
+  activation arena: 15742272 floats = 60.052 MiB (state 48.0 MiB + KV 8.0 MiB + logits 0.95 MiB)
+    P0 check | cap-proportional regions = SCORE+PROB+P16+MASK+POS (42 floats) + KF off (0) + KV 8 layers x 1024 = 8234 floats/slot; GDN terms in it: 0 (ST = 12582912 floats total, independent of cap)
+  memory budget | device-local heap 3840.0 MiB, weights 2467.7 MiB already committed
+    activations at cap 256 : 60.1 MiB = cap-independent 52.0 MiB + 256 slots x 32.16 KiB/slot (fp16 K/V arena 32.00 KiB + fp32 side 0.16 KiB)
+    headroom after this allocation: 1312.2 MiB (= 41776 more slots of cap, but the widest VALIDATED attention row is 2048)
+  KV block hook: 256 slots = 4 blocks of 64 positions, 2.00 MiB per block (32.00 KiB/slot x 8 layers x 64), ceiling 1312.24 MiB, evict off
+  [spill] PDH Shared Usage counter added as \GPU Process Memory(*)\Shared Usage (sum of every instance whose name contains "pid_9276_")
+  dxgi budget LOCAL (VRAM)      : budget 3464.6 MiB, current usage 2471.6 MiB, available for reservation 1834.2 MiB, current reservation 0.0 MiB   (AUXILIARY: a reservation budget, not an eviction signal)
+  dxgi budget NON_LOCAL (system): budget 7461.9 MiB, current usage 40.8 MiB, available for reservation 3858.9 MiB, current reservation 0.0 MiB   (AUXILIARY: a reservation budget, not an eviction signal)
+  act               62969088 B  align 4    -> offset 0
+  signs: sum(0..4095) = 60, sum(4096..16383) = -94   (the file's own values; 60 / -94
+  were the numbers read off the metadata, and they are what makes this upload checkable)
+  pipelines: 21 elementwise/GEMV + 8 layers x 4 attention descriptor sets (53 of 96 sets, 320 of 512 descriptors) | V = fp16 (attn_pv, the validated kernel), K = fp16 | norm+rope+pack = attn_norm_rope2
+
+=== region table (float units; every offset is a multiple of 16) ===
+  RES      off         0  size      4096
+  NRM      off      4096  size      4096
+  AN       off      8192  size      4096
+  ROT      off     12288  size      4096
+  HR       off     16384  size      4096
+  EMB      off     20480  size      4096
+  QKV      off     24576  size      8192
+  K        off     32768  size      1024
+  V        off     33792  size      1024
+  Z        off     34816  size      4096
+  ALPHA    off     38912  size        32
+  BETA     off     38944  size        32
+  G1       off     38976  size        32
+  G2       off     39008  size        32
+  GATE32   off     39040  size        32
+  CONV     off     39072  size      8192
+  L2       off     47264  size      4096
+  GDNO     off     51360  size      4096
+  GDNORM   off     55456  size      4096
+  SWG      off     59552  size      4096
+  PERM     off     63648  size      4096
+  FG       off     67744  size     12288
+  FU       off     80032  size     12288
+  FS       off     92320  size     12288
+  PART     off    104608  size     65536
+  XS       off    170144  size       128
+  LOGITS   off    170272  size    248320
+  Q16      off    418592  size      2048
+  QF       off    420640  size      4096
+  QD       off    424736  size      4096
+  GD       off    428832  size      4096
+  SCORE    off    432928  size      4096
+  PROB     off    437024  size      4096
+  P16      off    441120  size      2048
+  PGATE    off    443168  size      4096
+  GOUT     off    447264  size      4096
+  MASK     off    451360  size       256
+  POS      off    451616  size       256
+  KF       off    451888  size        16
+  DUMMY    off    451872  size        16
+  QKWN     off    451904  size      4096
+  SIGNS    off    456000  size     16384
+  KV       off    472384  size   2097152
+  ST       off   2569536  size    524288
+  CH       off  15152448  size     24576
+  KV split  K(fp16) 512     V (fp16)    512     V-scales 0        x8 layers, x256 slots
+  signs on device: sum4096 = 60, sum12288 = -94, nonzero = 16384/16384
+
+  weight load 1074.9 ms, forward bring-up 392.3 ms
+  device-local total: weights 2.410 GiB + activations 60.052 MiB
+  prompt 37 tokens: 1719 3841 13477 37550 33075 888 279 15217 5388 279 3841 13477 37550 33075 888 279 15217 5388 279 3841 13477 37550 33075 888 279 15217 5388 279 3841 13477 37550 33075 888 279 15217 5388 220
+  sampler: temp=0.00 top_k=0 top_p=1.00 eos=248046 cap=256
+  prefill 2594.8 ms for 37 prompt tokens (14.26 tok/s)
+  kv check: layer 0, 37 positions, V = fp16 -> ../runs/kv_none_v4.tsv
+  logits after the prompt: max 10.4628 min -13.0560 mean -3.142869  nan 0 inf 0
+  top 8:  248068(10.46"<think>")  17(9.00"2")  318(8.88" (")  16(8.88"1")  95726(8.83"的")  96488(8.65"这个")  279(8.52" the")  96220(8.49"请")
+    [spill] tok 37     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2540.86 MiB, growth run 0)
+  gen  1  tok= 248068     70.67 ms  <think>
+  gen  2  tok=    198     70.61 ms  
+
+  gen  3  tok=  90700     69.76 ms  Thinking
+  gen  4  tok=   8340     70.13 ms   Process
+
+=== pure-blood token rate (measured, this card) ===
+  4 generated tokens in 281.2 ms  ->  14.23 tok/s
+  first generated token (prefill+1): 70.7 ms; steady-state: 70.3 ms/token
+  dispatches 61090, barriers 61049 per command buffer (one submit per token)
+  command buffers | load phase: 119 allocated (never reused, not counted below)
+                  | forward phase: 1 allocated + 62 reuses = 63 begins over 41 positions = 1.5 per position (BONSAI_CB_REUSE=1)
+  KV at the end: 41 live positions of cap 256 (1.28 MiB of arena, 32.00 KiB/token, V = fp16), blocks evicted 0, refused 0, soft-watched 0
+  guard actions (decisions taken at a block boundary) and spill samples (threshold crossings) are different counters - a refusal on the cap-geometry path needs no hard sample at all, so "refused > 0, hard = 0" is consistent, not a contradiction.
+    [spill] tok 41     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2540.86 MiB, growth run 0)
+
+=== PDH 'GPU Process Memory\Shared Usage' for this pid (the spill judge) ===
+  thresholds judge GROWTH over the first decode sample; reference sample 40.93 MiB, soft > 32 MiB, hard > 64 MiB with a growth run of >= 3
+  samples 2 of 2 tried, peak absolute 40.93 MiB, peak growth +0.00 MiB, soft 0, hard 0, monotonic-run(>=3 increases) 0
+  curve (every sample, MiB): 37:40.9 41:40.9
+
+=== text ===
+<think>
+Thinking Process
+  gdn_mode=0 gdn_gmap=0 l2_mode=1 round_probs=1 cap=256

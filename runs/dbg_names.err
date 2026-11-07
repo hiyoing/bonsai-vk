@@ -1,0 +1,5 @@
+0.01.655.668 I cmn          init: llama threadpool init, n_threads = 6
+0.02.778.796 I 
+0.02.778.837 I system_info: n_threads = 6 (n_threads_batch = 6) / 12 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | LLAMAFILE = 1 | REPACK = 1 | 
+0.02.778.838 I 
+0.03.441.493 W ~llama_context: Vulkan_Host compute buffer size of   4.5014 MiB, does not match expectation of   4.3603 MiB

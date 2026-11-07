@@ -1,0 +1,36 @@
+# Line-ending policy. The machine this project is built on has core.autocrlf=true, and git config is
+# not ours to change - so the rule lives here, per path, where it is reviewable and travels with the
+# commit.
+#
+# WHY dist/ IS PINNED AND NOTHING ELSE IS
+#
+# dist/bonsai-vk-0.1.0-win64/ is a shipped, byte-verified artifact: MANIFEST.sha256 contains a sha256
+# over the exact bytes of every other file, and the release claim is "run sha256sum -c in the package
+# root and get 89/89 OK". Under autocrlf=true that claim does not survive a clone. Git stores text
+# blobs with LF and, on a Windows checkout, rewrites them to CRLF - so a file we hashed while it was
+# LF comes back CRLF, and its recorded hash no longer matches its own bytes.
+#
+# That was demonstrated, not assumed, in a throwaway repo on this machine: commit "alpha\nbeta\n",
+# delete the work file, `git checkout --` it with autocrlf=true, and compare -
+#   blob sha256  e49c81e2d2f84e259d40e2fb8192f3bcd198b355184845d76d8f58807d0d78ee
+#   file sha256  98ab4d3aeab1e120560e942e2df6a0db1147bf94bafcf1590000ffb3c2b6fc80
+#   file bytes   b'alpha\r\nbeta\r\n'
+# Two different hashes for one file. Measured on this tree before the rule existed: 16 tracked
+# package files were i/lf in the index and w/lf on disk - exactly the class that silently changes
+# under checkout (the .md copies were already w/crlf and matched only by luck of prior checkout).
+# Binaries (.exe, .dll, .spv - git auto-detects them by the NUL byte) were never at risk.
+#
+# "-text" means: treat these bytes as data. No normalization on add, no conversion on checkout, so
+# index == worktree == what a clone produces, and the manifest verifies in all three places. Proof,
+# after this rule landed: `git checkout-index -a` into an empty directory produced 90 files and
+# `sha256sum -c MANIFEST.sha256` returned rc 0 with 89/89 OK from inside the exported package. The
+# package's text files are therefore LF on disk; the repository's own .md files stay whatever
+# autocrlf hands you, because nothing in the repo byte-verifies them.
+dist/bonsai-vk-0.1.0-win64/** -text
+
+# The two things that must never be text-filtered even if someone later moves them:
+*.spv -text
+*.exe -text
+*.dll -text
+*.gguf -text
+*.safetensors -text

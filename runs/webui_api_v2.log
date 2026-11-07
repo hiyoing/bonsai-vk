@@ -1,0 +1,105 @@
+=== serve-mode connectivity probe, Sun Nov  8 02:43:40     2026 ===
+=== leg: thinking-on (BONSAI_THINKING=1), Sun Nov  8 02:44:01     2026 ===
+--- bring-up (server log head)
+  [serve] BONSAI_CAP unset: defaulting to 2048 slots for a conversation (set BONSAI_CAP to override)
+arena (single DEVICE_LOCAL allocation; sizes are the plan's, offsets are the driver's):
+  arena committed 2.410 GiB, alignment padding 0 B
+    V path: frozen attn_pv_q8v.comp (BONSAI_GQA_PART bit1 off, or the fp16 V arena which has no merged twin)
+  arena invariants | KV span 12845056 == cap 2048 x 8 x 784 OK; ST 12582912 / CH 589824 are 24 GDN layers x per-layer state, cap-free OK
+  mixed-stack invariants | plan charges 12845056 KV words == arena 12845056 (+0 B/term of offset alignment); 24 recurrent layers charged 0 B of KV and 13172736 words of state == arena ST+CH; KV bytes per token 25088 (q8_0 V)
+  activation arena: 26565440 floats = 101.339 MiB (state 48.0 MiB + KV 49.0 MiB + logits 0.95 MiB)
+  memory budget | device-local heap 3840.0 MiB, weights 2467.7 MiB already committed
+    activations at cap 2048 : 101.3 MiB = cap-independent 52.0 MiB + 2048 slots x 24.66 KiB/slot (q8_0-V + fp16-K arena 24.50 KiB + fp32 side 0.16 KiB)
+  dxgi budget LOCAL (VRAM)      : budget 3464.6 MiB, current usage 2471.6 MiB, available for reservation 1834.2 MiB, current reservation 0.0 MiB   (AUXILIARY: a reservation budget, not an eviction signal)
+  dxgi budget NON_LOCAL (system): budget 7461.9 MiB, current usage 40.8 MiB, available for reservation 3858.9 MiB, current reservation 0.0 MiB   (AUXILIARY: a reservation budget, not an eviction signal)
+  listening   http://localhost:8080  (127.0.0.1 only, no CORS)
+  model       Ternary-Bonsai-2-9B-PTQ1_0
+  device      Radeon RX 550X
+  engine      650996 B = 636 KiB (this executable, measured now)
+  WebUI       index.html
+  context     cap 2048, KV 24.50 KiB/token, V = q8_0, thinking on
+--- probe
+PASS | GET / serves the WebUI | status=200 bytes=100596
+PASS | no CORS header on /
+PASS | GET /index.html serves the same page | status=200
+PASS | GET /favicon.ico is 204 | status=204
+PASS | GET /v1/models is an OpenAI list | status=200 id=Ternary-Bonsai-2-9B-PTQ1_0
+PASS | GET /v1/status reports the measured engine | status=200 engine_bytes=650996 cap=2048
+INFO | device=Radeon RX 550X engine_kib=635 cap=2048 v_quant=q8_0 reference_tok_s=14.16 thinking=true
+PASS | GET /health aliases status | status=200
+PASS | unknown route is 404 | status=404
+PASS | OPTIONS is 405 (no CORS) | status=405
+PASS | GET on completions is 405 | status=405
+PASS | non-loopback Host is refused | status=400
+PASS | unary completion returns a message | status=200 content=""
+PASS | unary completion carries usage | usage={"prompt_tokens":16,"completion_tokens":16,"total_tokens":32}
+PASS | unary completion produced text (thinking on) | content_chars=0 reasoning_chars=53
+PASS | SSE stream opens with the assistant role | status=200 role=assistant
+PASS | SSE stream delivers reasoning deltas (thinking on) | reasoning_chars=159 content_chars=0 events=50
+PASS | SSE stream delivers text in the active channel | content=0 reasoning=159 events=50
+PASS | SSE stream ends with finish_reason and DONE | finish=length done=true
+PASS | SSE stream carries usage on the finish chunk | usage={"prompt_tokens":17,"completion_tokens":48,"total_tokens":65}
+PASS | SSE headers disable buffering | cache-control=no-cache
+MEASURED | serve-mode engine last_tok_s=13.82 over last_ms=3472.6 (n_gen/ms_gen, excludes prefill)
+MEASURED | client wall rate=9.36 tok/s over 5128 ms for 48 tokens (includes prefill + network)
+PASS | the engine reports a measured serve rate | last_tok_s=13.82
+PASS | a second concurrent completion gets 429 | statuses=200,429
+PASS | status stays live while the GPU is busy | status=200
+PASS | malformed JSON body is 400 | status=400
+PASS | empty messages array is 400 | status=400
+PASS | a prompt beyond the KV cap is 400 | status=400 cap=2048
+api-probe: 26/26 passed
+SUMMARY | serve_engine_tok_s=13.82 client_wall_tok_s=9.36 cap=2048 engine_bytes=650996 thinking=on
+rc_probe=0
+=== leg: thinking-off (BONSAI_THINKING=0), Sun Nov  8 02:44:30     2026 ===
+--- bring-up (server log head)
+  [serve] BONSAI_CAP unset: defaulting to 2048 slots for a conversation (set BONSAI_CAP to override)
+arena (single DEVICE_LOCAL allocation; sizes are the plan's, offsets are the driver's):
+  arena committed 2.410 GiB, alignment padding 0 B
+    V path: frozen attn_pv_q8v.comp (BONSAI_GQA_PART bit1 off, or the fp16 V arena which has no merged twin)
+  arena invariants | KV span 12845056 == cap 2048 x 8 x 784 OK; ST 12582912 / CH 589824 are 24 GDN layers x per-layer state, cap-free OK
+  mixed-stack invariants | plan charges 12845056 KV words == arena 12845056 (+0 B/term of offset alignment); 24 recurrent layers charged 0 B of KV and 13172736 words of state == arena ST+CH; KV bytes per token 25088 (q8_0 V)
+  activation arena: 26565440 floats = 101.339 MiB (state 48.0 MiB + KV 49.0 MiB + logits 0.95 MiB)
+  memory budget | device-local heap 3840.0 MiB, weights 2467.7 MiB already committed
+    activations at cap 2048 : 101.3 MiB = cap-independent 52.0 MiB + 2048 slots x 24.66 KiB/slot (q8_0-V + fp16-K arena 24.50 KiB + fp32 side 0.16 KiB)
+  dxgi budget LOCAL (VRAM)      : budget 3215.7 MiB, current usage 2471.6 MiB, available for reservation 1834.2 MiB, current reservation 0.0 MiB   (AUXILIARY: a reservation budget, not an eviction signal)
+  dxgi budget NON_LOCAL (system): budget 7461.9 MiB, current usage 40.8 MiB, available for reservation 3858.9 MiB, current reservation 0.0 MiB   (AUXILIARY: a reservation budget, not an eviction signal)
+  listening   http://localhost:8080  (127.0.0.1 only, no CORS)
+  model       Ternary-Bonsai-2-9B-PTQ1_0
+  device      Radeon RX 550X
+  engine      650996 B = 636 KiB (this executable, measured now)
+  WebUI       index.html
+  context     cap 2048, KV 24.50 KiB/token, V = q8_0, thinking off
+--- probe
+PASS | GET / serves the WebUI | status=200 bytes=100596
+PASS | no CORS header on /
+PASS | GET /index.html serves the same page | status=200
+PASS | GET /favicon.ico is 204 | status=204
+PASS | GET /v1/models is an OpenAI list | status=200 id=Ternary-Bonsai-2-9B-PTQ1_0
+PASS | GET /v1/status reports the measured engine | status=200 engine_bytes=650996 cap=2048
+INFO | device=Radeon RX 550X engine_kib=635 cap=2048 v_quant=q8_0 reference_tok_s=14.16 thinking=false
+PASS | GET /health aliases status | status=200
+PASS | unknown route is 404 | status=404
+PASS | OPTIONS is 405 (no CORS) | status=405
+PASS | GET on completions is 405 | status=405
+PASS | non-loopback Host is refused | status=400
+PASS | unary completion returns a message | status=200 content="Hello"
+PASS | unary completion carries usage | usage={"prompt_tokens":18,"completion_tokens":1,"total_tokens":19}
+PASS | unary completion produced text (thinking off) | content_chars=5 reasoning_chars=0
+PASS | SSE stream opens with the assistant role | status=200 role=assistant
+PASS | SSE stream delivers content deltas (thinking off) | content_chars=91 events=50
+PASS | SSE stream delivers text in the active channel | content=91 reasoning=0 events=50
+PASS | SSE stream ends with finish_reason and DONE | finish=length done=true
+PASS | SSE stream carries usage on the finish chunk | usage={"prompt_tokens":19,"completion_tokens":48,"total_tokens":67}
+PASS | SSE headers disable buffering | cache-control=no-cache
+MEASURED | serve-mode engine last_tok_s=13.74 over last_ms=3493.1 (n_gen/ms_gen, excludes prefill)
+MEASURED | client wall rate=9.10 tok/s over 5277 ms for 48 tokens (includes prefill + network)
+PASS | the engine reports a measured serve rate | last_tok_s=13.74
+PASS | a second concurrent completion gets 429 | statuses=200,429
+PASS | status stays live while the GPU is busy | status=200
+PASS | malformed JSON body is 400 | status=400
+PASS | empty messages array is 400 | status=400
+PASS | a prompt beyond the KV cap is 400 | status=400 cap=2048
+api-probe: 26/26 passed
+SUMMARY | serve_engine_tok_s=13.74 client_wall_tok_s=9.10 cap=2048 engine_bytes=650996 thinking=off
+rc_probe=0

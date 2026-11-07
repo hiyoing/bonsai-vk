@@ -1,0 +1,160 @@
+device: Radeon RX 550X | driver 2.0.279 | device-local heap 3840 MiB | timestampPeriod 40.000 ns
+  limits: maxComputeWorkGroupSize[0]=1024 maxComputeWorkGroupCount[0]=4294967295 bufferImageGranularity=1
+  compute queue = family 0, transfer-only queue = family 2
+
+=== weight plan, read from the tensor table (实测, not estimated) ===
+  tensors 427 = 202 PTQ1_0 + 225 f32   weights 8953803264 elems = 8.954 B
+  per-tensor shapes are K x M with K in {4096, 12288}; sign_widths says the same, so the
+  activation-side Hadamard has exactly two widths to cover.
+  checkpoint's own block form : 1957036032 B = 1.823 GiB  (1.75 bpw)
+  our 2-bit random-access form: 2516189184 B = 2.343 GiB  (codes 2.083 GiB + scales 0.260 GiB, 2.125 bpw)
+  f32 blob                    :  29411328 B = 28.049 MiB
+  LAYOUT COST = 0.521 GiB extra = 17064 tokens of KV at 32768 B/token
+
+=== the rest of the footprint ===
+  blocks: 24 GDN + 8 softmax-attention (full_attention_interval=4)
+  recurrent state, context-INDEPENDENT: 2097152 B/layer state + 98304 B/layer conv = 50.2 MiB over 24 layers
+  KV cache: 32768 B/token (32.0 MiB per 1k tokens), fp16, 8 layers
+  device-local heap: 0 MiB
+
+arena (single DEVICE_LOCAL allocation; sizes are the plan's, offsets are the driver's):
+  codes           2236612608 B  align 4    -> offset 0
+  scales           279576576 B  align 4    -> offset 2236612608
+  f32blob           29411328 B  align 4    -> offset 2516189184
+  ptq_scratch       33554432 B  align 4    -> offset 2545600512
+  x                    65536 B  align 4    -> offset 2579154944
+  xsum                  4096 B  align 4    -> offset 2579220480
+  out                8388608 B  align 4    -> offset 2579224576
+  arena committed 2.410 GiB, alignment padding 0 B
+
+=== forward bring-up ===
+  driver: minStorageBufferOffsetAlignment = 4 B, maxStorageBufferRange = 4096.000 MiB
+  split-K scratch sized from the plan: 65536 floats (0.2 MiB) - max S*M over 202 PTQ tensors
+  activation arena: 15996192 floats = 61.021 MiB (state 48.0 MiB + KV 8.0 MiB + logits 0.95 MiB)
+  act               63984768 B  align 4    -> offset 0
+  signs: sum(0..4095) = 60, sum(4096..16383) = -94   (the file's own values; 60 / -94
+  were the numbers read off the metadata, and they are what makes this upload checkable)
+  pipelines: 20 elementwise/GEMV + 8 layers x 3 attention descriptor sets
+
+=== region table (float units; every offset is a multiple of 16) ===
+  RES      off         0  size      4096
+  NRM      off      4096  size      4096
+  AN       off      8192  size      4096
+  ROT      off     12288  size      4096
+  HR       off     16384  size      4096
+  EMB      off     20480  size      4096
+  QKV      off     24576  size      8192
+  K        off     32768  size      1024
+  V        off     33792  size      1024
+  Z        off     34816  size      4096
+  ALPHA    off     38912  size        32
+  BETA     off     38944  size        32
+  G1       off     38976  size        32
+  G2       off     39008  size        32
+  GATE32   off     39040  size        32
+  CONV     off     39072  size      8192
+  L2       off     47264  size      4096
+  GDNO     off     51360  size      4096
+  GDNORM   off     55456  size      4096
+  SWG      off     59552  size      4096
+  PERM     off     63648  size      4096
+  FG       off     67744  size     12288
+  FU       off     80032  size     12288
+  FS       off     92320  size     12288
+  PART     off    104608  size     65536
+  XS       off    170144  size       128
+  LOGITS   off    170272  size    248320
+  Q16      off    418592  size      2048
+  QF       off    420640  size      4096
+  SCORE    off    424736  size      4096
+  PROB     off    428832  size      4096
+  P16      off    432928  size      2048
+  PGATE    off    434976  size      4096
+  GOUT     off    439072  size      4096
+  MASK     off    443168  size       256
+  POS      off    443424  size       256
+  KF       off    443680  size    262144
+  QKWN     off    705824  size      4096
+  SIGNS    off    709920  size     16384
+  KV       off    726304  size    262144
+  ST       off   2823456  size    524288
+  CH       off  15406368  size     24576
+  signs on device: sum4096 = 60, sum12288 = -94, nonzero = 16384/16384
+
+  weight load 1127.3 ms, forward bring-up 43.5 ms
+  device-local total: weights 2.410 GiB + activations 61.021 MiB
+  align prompt "ab" -> ids 365
+
+=== block 0 op by op vs the official 1-token decode graph (token id 365) ===
+  op  0  GET_ROWS token_embd     
+       EMB    [ -0.01530   0.00000  -0.01530] vs [ -0.01530   0.00000  -0.01530] h-OK   | sum      -0.010437 vs      -0.010437 s-OK
+  op  1  H (inverse sandwich)    
+       ROT    [ -0.00016  -0.01162  -0.01310] vs [ -0.00020  -0.01160  -0.01310] h-OK   | sum      -0.979492 vs      -0.979492 s-OK
+  op  2  MUL signs.4096          
+       RES    [  0.00016   0.01162   0.01310] vs [  0.00020   0.01160   0.01310] h-OK   | sum      -0.464154 vs      -0.464154 s-OK
+  op  3  RMS_NORM                
+       NRM    [  0.01429   1.01836   1.14776] vs [  0.01430   1.01840   1.14780] h-OK   | sum     -40.661990 vs     -40.661980 s-OK
+  op  4  MUL attn_norm.weight    
+       AN     [  0.01345   1.12378   1.15960] vs [  0.01340   1.12380   1.15960] h-OK   | sum     -45.631554 vs     -45.631546 s-OK
+  op  5  MUL signs.4096          
+       ROT    [ -0.01345  -1.12378  -1.15960] vs [ -0.01340  -1.12380  -1.15960] h-OK   | sum     -89.238924 vs     -89.238937 s-OK
+  op  6  H                       
+       HR     [ -1.39436   0.02628  -1.44443] vs [ -1.39440   0.02630  -1.44440] h-OK   | sum      -0.860535 vs      -0.860536 s-OK
+  op  7  xsum                    
+  op  8  GEMV qkv -> PART        
+  op  9  reduce -> QKV           
+       QKV    [  0.53794  -0.82876   0.31063] vs [  0.53660  -0.83380   0.31790] h-FAIL  | sum    -324.971145 vs    -324.560303 s-FAIL
+  op 10  GEMV f32 ssm_alpha      
+       ALPHA  [ -0.04277   0.02034   3.24029] vs [ -0.04280   0.02030   3.24030] h-OK   | sum     -37.683082 vs     -37.683086 s-OK
+  op 11  GEMV f32 ssm_beta       
+       BETA   [ -3.09422   1.47970   3.61268] vs [ -3.09420   1.47970   3.61270] h-OK   | sum      34.892233 vs      34.892235 s-OK
+  op 12  ADD ssm_dt.bias         
+       G1     [ -3.57402  -1.42497  21.74029] vs [ -3.57400  -1.42500  21.74030] h-OK   | sum      38.082542 vs      38.082535 s-OK
+  op 13  SOFTPLUS                
+       G2     [  0.02766   0.21553  21.74029] vs [  0.02770   0.21550  21.74030] h-OK   | sum     146.662085 vs     146.662094 s-OK
+  op 14  MUL ssm_a               
+       GATE32 [ -0.00194  -0.00192  -1.22650] vs [ -0.00190  -0.00190  -1.22650] h-OK   | sum     -14.298704 vs     -14.298706 s-OK
+  op 15  SIGMOID beta            
+       BETA   [  0.04335   0.81453   0.97373] vs [  0.04330   0.81450   0.97370] h-OK   | sum      19.822167 vs      19.822166 s-OK
+  op 16  SSM_CONV + SILU         
+       CONV   [ -0.02868  -0.04235   0.01485] vs [ -0.02860  -0.04260   0.01520] h-OK   | sum     168.894486 vs     168.968338 s-FAIL
+  op 17  L2_NORM q/k             
+       L2     [ -0.01602  -0.02476   0.00819] vs [ -0.01170  -0.01740   0.00620] h-FAIL  | sum      40.307700 vs      21.658962 s-FAIL
+
+  L2 rows, measured on the host (oracle scale is inferred from its own print):
+    row   ||x|| ours   1/||x|| ours   oracle 1/||x||   ratio  |  conv head3 / l2 head3
+      0      1.77158        0.56447          0.40848    1.382  | [-0.02839 -0.04386  0.01451] [-0.01602 -0.02476  0.00819]
+      1      1.38128        0.72397          1.01534    0.713  | [ 0.02172  0.02102 -0.00034] [ 0.01572  0.01522 -0.00025]
+      2      1.29461        0.77244          1.10495    0.699  | [ 0.58352  0.04520  0.39208] [ 0.45073  0.03491  0.30286]
+     29      1.03152        0.96945          2.79910    0.346  | [-0.07579 -0.01507  0.02683] [-0.07348 -0.01461  0.02601]
+     30      1.38316        0.72298          1.58850    0.455  | [ 0.00177 -0.11337  0.08065] [ 0.00128 -0.08197  0.05831]
+     31      4.59833        0.21747          0.64481    0.337  | [ 0.03985 -0.08960 -0.07605] [ 0.00867 -0.01949 -0.01654]
+
+  channel probe: our conv vs the official one, and the x each one implies
+      ch   our conv   off conv  |    our x     off x   best match in our QKV
+        0   -0.02839  -0.02860  |    0.5379    0.0000   ch  1155 MOVED |d| 0.0000
+        1   -0.04386  -0.04260  |   -0.8288    0.0000   ch  1155 MOVED |d| 0.0000
+        2    0.01451   0.01520  |    0.3106    0.0000   ch  1155 MOVED |d| 0.0000
+      125   -0.27596  -0.16960  |    3.0252    0.0000   ch  1155 MOVED |d| 0.0000
+      127   -0.03311  -0.03370  |   -0.6424    0.0000   ch  1155 MOVED |d| 0.0000
+      128    0.02172   0.03320  |   -0.9898    0.0000   ch  1155 MOVED |d| 0.0000
+      129    0.02102   0.01280  |   -0.4904    0.0000   ch  1155 MOVED |d| 0.0000
+      254   -0.08140  -0.07740  |    1.2903    0.0000   ch  1155 MOVED |d| 0.0000
+      255    0.16194   0.06810  |   -3.5448    0.0000   ch  1155 MOVED |d| 0.0000
+      256    0.58352   0.28360  |    5.7672    0.0000   ch  1155 MOVED |d| 0.0000
+      257    0.04520   0.00580  |    1.4167    0.0000   ch  1155 MOVED |d| 0.0000
+      258    0.39208   0.21680  |    2.3729    0.0000   ch  1155 MOVED |d| 0.0000
+      381   -0.01307  -0.02060  |   -0.4866    0.0000   ch  1155 MOVED |d| 0.0000
+      382   -0.05881  -0.02650  |    1.3386    0.0000   ch  1155 MOVED |d| 0.0000
+      383    0.00835   0.01030  |   -1.2884    0.0000   ch  1155 MOVED |d| 0.0000
+     3837   -0.04895  -0.00740  |   -0.8818    0.0000   ch  1155 MOVED |d| 0.0000
+     3839    0.02049   0.00400  |    1.5711    0.0000   ch  1155 MOVED |d| 0.0000
+     3841   -0.11337  -0.05290  |    1.6882    0.0000   ch  1155 MOVED |d| 0.0000
+     3965    0.22839   0.07420  |    1.0861    0.0000   ch  1155 MOVED |d| 0.0000
+     3966    0.14311  -0.02040  |    1.3897    0.0000   ch  1155 MOVED |d| 0.0000
+     3969   -0.08960   0.00640  |    1.2671    0.0000   ch  1155 MOVED |d| 0.0000
+     3970   -0.07605  -0.10130  |   -0.7807    0.0000   ch  1155 MOVED |d| 0.0000
+     4093   -0.03267  -0.03040  |   -0.5545    0.0000   ch  1155 MOVED |d| 0.0000
+     4094    0.06455   0.06170  |   -1.8891    0.0000   ch  1155 MOVED |d| 0.0000
+  0/24 probes land on their own channel
+  5/32 anchor comparisons failed (16 anchors, head + sum each)

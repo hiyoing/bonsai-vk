@@ -1,0 +1,672 @@
+general.architecture                       = 'qwen35'
+general.file_type                          = 143
+general.name                               = 'Ternary-Bonsai-2-9B'
+general.quantization_version               = 2
+general.sampling.min_p                     = 0.0
+general.sampling.penalty_repeat            = 1.0
+general.sampling.temp                      = 1.0
+general.sampling.top_k                     = 20
+general.sampling.top_p                     = 0.949999988079071
+general.size_label                         = '9B'
+general.type                               = 'model'
+tokenizer.chat_template                    = <7756 chars>
+tokenizer.ggml.add_bos_token               = False
+tokenizer.ggml.bos_token_id                = 248044
+tokenizer.ggml.eos_token_id                = 248046
+tokenizer.ggml.merges                      = '<array 247587 elems, elem-type 8>'
+tokenizer.ggml.model                       = 'gpt2'
+tokenizer.ggml.padding_token_id            = 248044
+tokenizer.ggml.pre                         = 'qwen35'
+tokenizer.ggml.token_type                  = '<array 248320 elems, elem-type 5>'
+tokenizer.ggml.tokens                      = '<array 248320 elems, elem-type 8>'
+
+vocab = 248320   token_type = 248320   merges = 247587
+pre = None
+
+--- first 20 tokens (repr, utf-8 decoded as stored) ---
+       0 '!' type=1
+       1 '"' type=1
+       2 '#' type=1
+       3 '$' type=1
+       4 '%' type=1
+       5 '&' type=1
+       6 "'" type=1
+       7 '(' type=1
+       8 ')' type=1
+       9 '*' type=1
+      10 '+' type=1
+      11 ',' type=1
+      12 '-' type=1
+      13 '.' type=1
+      14 '/' type=1
+      15 '0' type=1
+      16 '1' type=1
+      17 '2' type=1
+      18 '3' type=1
+      19 '4' type=1
+
+--- tokens 151600..151700 (the qwen special neighbourhood) ---
+  151600 'ĠÄĮ' type=1
+  151601 'ahui' type=1
+  151602 'à¯įà®ª' type=1
+  151603 'ĠØ§Ùģ' type=1
+  151604 'ØŃØ±' type=1
+  151605 'Ã¹i' type=1
+  151606 'à¹Ĥà¸¥à¸ģ' type=1
+  151607 'Ø§ÙĨØª' type=1
+  151608 'à¹ģà¸£' type=1
+  151609 'ĠØ±Ø³' type=1
+  151610 'Ġë¸Į' type=1
+  151611 'ĠìŀĦ' type=1
+  151612 'ĠÎ´Î¹Î±' type=1
+  151613 'à¸§à¹Īà¸²à¸ĩ' type=1
+  151614 'Ú¯Ø§Ùĩ' type=1
+  151615 'à¸£à¸°à¸Ķà¸±à¸ļ' type=1
+  151616 'Ġà¹Ģà¸Ķ' type=1
+  151617 'ÐĿÐĺ' type=1
+  151618 'ÙĲÙĳ' type=1
+  151619 'Ġì±Ħ' type=1
+  151620 'Ġà®¤' type=1
+  151621 'à¸¡à¸µà¸ģà¸²à¸£' type=1
+  151622 'ĠÐ¿ÑĢÐ¾Ð¸Ñģ' type=1
+  151623 'Ð¾ÑĩÐ½Ð¾' type=1
+  151624 'Ø¶Ø¹' type=1
+  151625 'ĠÐºÐ²Ð°ÑĢÑĤÐ¸' type=1
+  151626 'ĠÐºÐ½Ð¸' type=1
+  151627 'à¸µà¹Īà¸¢à¸Ļ' type=1
+  151628 'ĠØ£Ø¯' type=1
+  151629 'ãģ¨ãģį' type=1
+  151630 'ĠØ§ÙĦØ§Øª' type=1
+  151631 'Ð²Ð¸Ð»' type=1
+  151632 'à¸Ļà¸°' type=1
+  151633 'ĠÑģÑĥÐ¼' type=1
+  151634 'ĠÐ±ÑĢÐ°' type=1
+  151635 'Ġë°©ë²ķ' type=1
+  151636 'à¹Ģà¸«à¸ķà¸¸' type=1
+  151637 'ĠÐ½ÐµÐ¼' type=1
+  151638 'Ø§Ø¨ÙĦ' type=1
+  151639 'ÐºÐ»Ð¾' type=1
+  151640 'ĠÐ¸Ð´Ðµ' type=1
+  151641 'à¦¾à¦²' type=1
+  151642 'ÑĪÐ¸Ð¹' type=1
+  151643 'ĠëĤ´ìļ©' type=1
+  151644 'ĠØ§ÙĦÙħØ·' type=1
+  151645 'à¸«à¸Ļà¸±à¸ĩ' type=1
+  151646 'à¸ªà¸¸à¸Ĥ' type=1
+  151647 'Ø³ØªØ§ÙĨ' type=1
+  151648 'ĠÐ½Ð°ÑģÑĤÐ¾Ñı' type=1
+  151649 'à¸±à¸ĩà¸«à¸§' type=1
+  151650 'Ġê³łê°Ŀ' type=1
+  151651 'à¸Ħà¸§à¸£' type=1
+  151652 'Ġìłĳ' type=1
+  151653 'ãģķãģĽãģ¦' type=1
+  151654 'à¸«à¸¡à¸·à¸Ńà¸Ļ' type=1
+  151655 'à¸ļà¸²à¸¥' type=1
+  151656 'à¸§à¸Ī' type=1
+  151657 'ĠÑĢÐµÐ³Ñĥ' type=1
+  151658 'ãĤ¢ãĤ¤' type=1
+  151659 'ãĥ¬ãĤ¹' type=1
+  151660 'ãĥ¼ãĤ¿' type=1
+  151661 'ĠÑĤÐµÑĢÑĢÐ¸ÑĤ' type=1
+  151662 'ĠØ§Ø®Øª' type=1
+  151663 'ebab' type=1
+  151664 'á»ıa' type=1
+  151665 'ÑıÑģ' type=1
+  151666 'ÑĳÐ¼' type=1
+  151667 'à¹ĩà¸¡' type=1
+  151668 'Ø®Ø¨Ø§Ø±' type=1
+  151669 'ĠãģĿãĤĮ' type=1
+  151670 'Ġê´' type=1
+  151671 'Ġë¯¼' type=1
+  151672 'Ð¾Ð¿Ð°Ñģ' type=1
+  151673 'ÑĢÐ¾Ð½' type=1
+  151674 'ĠÙħØ±' type=1
+  151675 'ĠÙĨØª' type=1
+  151676 'ÐºÑĤÐ¾ÑĢ' type=1
+  151677 '×Ļ×¨' type=1
+  151678 'Ø±Ø§Ùģ' type=1
+  151679 'ĠØ¯Ø³Øª' type=1
+  151680 'ĠãģĤ' type=1
+  151681 'à¦¿à¦ķ' type=1
+  151682 'ÏĩÎµÎ¹' type=1
+  151683 'ãĤ¹ãĤ¯' type=1
+  151684 'ĠÙĬØŃ' type=1
+  151685 'Ġëł' type=1
+  151686 'Ġê·ľ' type=1
+  151687 'rÃ¤' type=1
+  151688 'ÙĦØ³Ø·ÙĬÙĨ' type=1
+  151689 'ĠÐ¸ÑģÐ¿Ð¾Ð»' type=1
+  151690 'à¸Ľà¸±à¸į' type=1
+  151691 'Ø¹ÙĦØ§Ùħ' type=1
+  151692 'ÙģØ§Ø¹' type=1
+  151693 'à¸ĩà¹Īà¸²à¸¢' type=1
+  151694 'à¸§à¹Į' type=1
+  151695 'ĠØ§ÙĦØ¨ÙĦ' type=1
+  151696 'ĠÎµÎ½' type=1
+  151697 'upun' type=1
+  151698 'ÙĩÙĲ' type=1
+  151699 'ĠÐ²Ð¾Ð·Ð´Ñĥ' type=1
+
+--- last 300 tokens (byte-fallback <0xNN>?) ---
+  248020 'ãĤ¸ãĤ§ãĥĥãĥĪ' type=1
+  248021 'ãģĺãĤĥãģªãģıãģ¦' type=1
+  248022 'ãģĮéģħ' type=1
+  248023 'ãģĺãĤĥãĤĵ' type=1
+  248024 'è¿ĳãģıãģ«' type=1
+  248025 'èªŀãĤĬ' type=1
+  248026 'åħ¥éĩĳ' type=1
+  248027 'ãģªãģ®ãģĮ' type=1
+  248028 'ãĤ¹ãĥĨãĥ¼ãĤŃ' type=1
+  248029 'åĪ©çĶ¨èĢħ' type=1
+  248030 'æ¨¹èĦĤ' type=1
+  248031 'ãģ¾ãģĻãģ¾ãģĻ' type=1
+  248032 'æ¥½ãģĹãģ¿ãģ§ãģĻ' type=1
+  248033 'å½¹åĵ¡' type=1
+  248034 'æīĭä½ľãĤĬ' type=1
+  248035 'é«ªãģ®æ¯Ľ' type=1
+  248036 'å¤©äºķ' type=1
+  248037 'è©Ĳæ¬º' type=1
+  248038 'ãĥŀãĥĭãĥ¥ãĤ¢ãĥ«' type=1
+  248039 'æĻĤãĤĤ' type=1
+  248040 'æ¥½ãģĹãĤģãģ¾ãģĻ' type=1
+  248041 'ãĥĩãĥĥãĤŃ' type=1
+  248042 'èį·çī©' type=1
+  248043 'ãģĤãĤĬãģ¾ãģĻãģĭ' type=1
+  248044 '<|endoftext|>' type=3
+  248045 '<|im_start|>' type=3
+  248046 '<|im_end|>' type=3
+  248047 '<|object_ref_start|>' type=3
+  248048 '<|object_ref_end|>' type=3
+  248049 '<|box_start|>' type=3
+  248050 '<|box_end|>' type=3
+  248051 '<|quad_start|>' type=3
+  248052 '<|quad_end|>' type=3
+  248053 '<|vision_start|>' type=3
+  248054 '<|vision_end|>' type=3
+  248055 '<|vision_pad|>' type=3
+  248056 '<|image_pad|>' type=3
+  248057 '<|video_pad|>' type=3
+  248058 '<tool_call>' type=4
+  248059 '</tool_call>' type=4
+  248060 '<|fim_prefix|>' type=3
+  248061 '<|fim_middle|>' type=3
+  248062 '<|fim_suffix|>' type=3
+  248063 '<|fim_pad|>' type=3
+  248064 '<|repo_name|>' type=3
+  248065 '<|file_sep|>' type=3
+  248066 '<tool_response>' type=4
+  248067 '</tool_response>' type=4
+  248068 '<think>' type=4
+  248069 '</think>' type=4
+  248070 '<|audio_start|>' type=3
+  248071 '<|audio_end|>' type=3
+  248072 '<tts_pad>' type=3
+  248073 '<tts_text_bos>' type=3
+  248074 '<tts_text_eod>' type=3
+  248075 '<tts_text_bos_single>' type=3
+  248076 '<|audio_pad|>' type=3
+  248077 '[PAD248077]' type=5
+  248078 '[PAD248078]' type=5
+  248079 '[PAD248079]' type=5
+  248080 '[PAD248080]' type=5
+  248081 '[PAD248081]' type=5
+  248082 '[PAD248082]' type=5
+  248083 '[PAD248083]' type=5
+  248084 '[PAD248084]' type=5
+  248085 '[PAD248085]' type=5
+  248086 '[PAD248086]' type=5
+  248087 '[PAD248087]' type=5
+  248088 '[PAD248088]' type=5
+  248089 '[PAD248089]' type=5
+  248090 '[PAD248090]' type=5
+  248091 '[PAD248091]' type=5
+  248092 '[PAD248092]' type=5
+  248093 '[PAD248093]' type=5
+  248094 '[PAD248094]' type=5
+  248095 '[PAD248095]' type=5
+  248096 '[PAD248096]' type=5
+  248097 '[PAD248097]' type=5
+  248098 '[PAD248098]' type=5
+  248099 '[PAD248099]' type=5
+  248100 '[PAD248100]' type=5
+  248101 '[PAD248101]' type=5
+  248102 '[PAD248102]' type=5
+  248103 '[PAD248103]' type=5
+  248104 '[PAD248104]' type=5
+  248105 '[PAD248105]' type=5
+  248106 '[PAD248106]' type=5
+  248107 '[PAD248107]' type=5
+  248108 '[PAD248108]' type=5
+  248109 '[PAD248109]' type=5
+  248110 '[PAD248110]' type=5
+  248111 '[PAD248111]' type=5
+  248112 '[PAD248112]' type=5
+  248113 '[PAD248113]' type=5
+  248114 '[PAD248114]' type=5
+  248115 '[PAD248115]' type=5
+  248116 '[PAD248116]' type=5
+  248117 '[PAD248117]' type=5
+  248118 '[PAD248118]' type=5
+  248119 '[PAD248119]' type=5
+  248120 '[PAD248120]' type=5
+  248121 '[PAD248121]' type=5
+  248122 '[PAD248122]' type=5
+  248123 '[PAD248123]' type=5
+  248124 '[PAD248124]' type=5
+  248125 '[PAD248125]' type=5
+  248126 '[PAD248126]' type=5
+  248127 '[PAD248127]' type=5
+  248128 '[PAD248128]' type=5
+  248129 '[PAD248129]' type=5
+  248130 '[PAD248130]' type=5
+  248131 '[PAD248131]' type=5
+  248132 '[PAD248132]' type=5
+  248133 '[PAD248133]' type=5
+  248134 '[PAD248134]' type=5
+  248135 '[PAD248135]' type=5
+  248136 '[PAD248136]' type=5
+  248137 '[PAD248137]' type=5
+  248138 '[PAD248138]' type=5
+  248139 '[PAD248139]' type=5
+  248140 '[PAD248140]' type=5
+  248141 '[PAD248141]' type=5
+  248142 '[PAD248142]' type=5
+  248143 '[PAD248143]' type=5
+  248144 '[PAD248144]' type=5
+  248145 '[PAD248145]' type=5
+  248146 '[PAD248146]' type=5
+  248147 '[PAD248147]' type=5
+  248148 '[PAD248148]' type=5
+  248149 '[PAD248149]' type=5
+  248150 '[PAD248150]' type=5
+  248151 '[PAD248151]' type=5
+  248152 '[PAD248152]' type=5
+  248153 '[PAD248153]' type=5
+  248154 '[PAD248154]' type=5
+  248155 '[PAD248155]' type=5
+  248156 '[PAD248156]' type=5
+  248157 '[PAD248157]' type=5
+  248158 '[PAD248158]' type=5
+  248159 '[PAD248159]' type=5
+  248160 '[PAD248160]' type=5
+  248161 '[PAD248161]' type=5
+  248162 '[PAD248162]' type=5
+  248163 '[PAD248163]' type=5
+  248164 '[PAD248164]' type=5
+  248165 '[PAD248165]' type=5
+  248166 '[PAD248166]' type=5
+  248167 '[PAD248167]' type=5
+  248168 '[PAD248168]' type=5
+  248169 '[PAD248169]' type=5
+  248170 '[PAD248170]' type=5
+  248171 '[PAD248171]' type=5
+  248172 '[PAD248172]' type=5
+  248173 '[PAD248173]' type=5
+  248174 '[PAD248174]' type=5
+  248175 '[PAD248175]' type=5
+  248176 '[PAD248176]' type=5
+  248177 '[PAD248177]' type=5
+  248178 '[PAD248178]' type=5
+  248179 '[PAD248179]' type=5
+  248180 '[PAD248180]' type=5
+  248181 '[PAD248181]' type=5
+  248182 '[PAD248182]' type=5
+  248183 '[PAD248183]' type=5
+  248184 '[PAD248184]' type=5
+  248185 '[PAD248185]' type=5
+  248186 '[PAD248186]' type=5
+  248187 '[PAD248187]' type=5
+  248188 '[PAD248188]' type=5
+  248189 '[PAD248189]' type=5
+  248190 '[PAD248190]' type=5
+  248191 '[PAD248191]' type=5
+  248192 '[PAD248192]' type=5
+  248193 '[PAD248193]' type=5
+  248194 '[PAD248194]' type=5
+  248195 '[PAD248195]' type=5
+  248196 '[PAD248196]' type=5
+  248197 '[PAD248197]' type=5
+  248198 '[PAD248198]' type=5
+  248199 '[PAD248199]' type=5
+  248200 '[PAD248200]' type=5
+  248201 '[PAD248201]' type=5
+  248202 '[PAD248202]' type=5
+  248203 '[PAD248203]' type=5
+  248204 '[PAD248204]' type=5
+  248205 '[PAD248205]' type=5
+  248206 '[PAD248206]' type=5
+  248207 '[PAD248207]' type=5
+  248208 '[PAD248208]' type=5
+  248209 '[PAD248209]' type=5
+  248210 '[PAD248210]' type=5
+  248211 '[PAD248211]' type=5
+  248212 '[PAD248212]' type=5
+  248213 '[PAD248213]' type=5
+  248214 '[PAD248214]' type=5
+  248215 '[PAD248215]' type=5
+  248216 '[PAD248216]' type=5
+  248217 '[PAD248217]' type=5
+  248218 '[PAD248218]' type=5
+  248219 '[PAD248219]' type=5
+  248220 '[PAD248220]' type=5
+  248221 '[PAD248221]' type=5
+  248222 '[PAD248222]' type=5
+  248223 '[PAD248223]' type=5
+  248224 '[PAD248224]' type=5
+  248225 '[PAD248225]' type=5
+  248226 '[PAD248226]' type=5
+  248227 '[PAD248227]' type=5
+  248228 '[PAD248228]' type=5
+  248229 '[PAD248229]' type=5
+  248230 '[PAD248230]' type=5
+  248231 '[PAD248231]' type=5
+  248232 '[PAD248232]' type=5
+  248233 '[PAD248233]' type=5
+  248234 '[PAD248234]' type=5
+  248235 '[PAD248235]' type=5
+  248236 '[PAD248236]' type=5
+  248237 '[PAD248237]' type=5
+  248238 '[PAD248238]' type=5
+  248239 '[PAD248239]' type=5
+  248240 '[PAD248240]' type=5
+  248241 '[PAD248241]' type=5
+  248242 '[PAD248242]' type=5
+  248243 '[PAD248243]' type=5
+  248244 '[PAD248244]' type=5
+  248245 '[PAD248245]' type=5
+  248246 '[PAD248246]' type=5
+  248247 '[PAD248247]' type=5
+  248248 '[PAD248248]' type=5
+  248249 '[PAD248249]' type=5
+  248250 '[PAD248250]' type=5
+  248251 '[PAD248251]' type=5
+  248252 '[PAD248252]' type=5
+  248253 '[PAD248253]' type=5
+  248254 '[PAD248254]' type=5
+  248255 '[PAD248255]' type=5
+  248256 '[PAD248256]' type=5
+  248257 '[PAD248257]' type=5
+  248258 '[PAD248258]' type=5
+  248259 '[PAD248259]' type=5
+  248260 '[PAD248260]' type=5
+  248261 '[PAD248261]' type=5
+  248262 '[PAD248262]' type=5
+  248263 '[PAD248263]' type=5
+  248264 '[PAD248264]' type=5
+  248265 '[PAD248265]' type=5
+  248266 '[PAD248266]' type=5
+  248267 '[PAD248267]' type=5
+  248268 '[PAD248268]' type=5
+  248269 '[PAD248269]' type=5
+  248270 '[PAD248270]' type=5
+  248271 '[PAD248271]' type=5
+  248272 '[PAD248272]' type=5
+  248273 '[PAD248273]' type=5
+  248274 '[PAD248274]' type=5
+  248275 '[PAD248275]' type=5
+  248276 '[PAD248276]' type=5
+  248277 '[PAD248277]' type=5
+  248278 '[PAD248278]' type=5
+  248279 '[PAD248279]' type=5
+  248280 '[PAD248280]' type=5
+  248281 '[PAD248281]' type=5
+  248282 '[PAD248282]' type=5
+  248283 '[PAD248283]' type=5
+  248284 '[PAD248284]' type=5
+  248285 '[PAD248285]' type=5
+  248286 '[PAD248286]' type=5
+  248287 '[PAD248287]' type=5
+  248288 '[PAD248288]' type=5
+  248289 '[PAD248289]' type=5
+  248290 '[PAD248290]' type=5
+  248291 '[PAD248291]' type=5
+  248292 '[PAD248292]' type=5
+  248293 '[PAD248293]' type=5
+  248294 '[PAD248294]' type=5
+  248295 '[PAD248295]' type=5
+  248296 '[PAD248296]' type=5
+  248297 '[PAD248297]' type=5
+  248298 '[PAD248298]' type=5
+  248299 '[PAD248299]' type=5
+  248300 '[PAD248300]' type=5
+  248301 '[PAD248301]' type=5
+  248302 '[PAD248302]' type=5
+  248303 '[PAD248303]' type=5
+  248304 '[PAD248304]' type=5
+  248305 '[PAD248305]' type=5
+  248306 '[PAD248306]' type=5
+  248307 '[PAD248307]' type=5
+  248308 '[PAD248308]' type=5
+  248309 '[PAD248309]' type=5
+  248310 '[PAD248310]' type=5
+  248311 '[PAD248311]' type=5
+  248312 '[PAD248312]' type=5
+  248313 '[PAD248313]' type=5
+  248314 '[PAD248314]' type=5
+  248315 '[PAD248315]' type=5
+  248316 '[PAD248316]' type=5
+  248317 '[PAD248317]' type=5
+  248318 '[PAD248318]' type=5
+  248319 '[PAD248319]' type=5
+
+--- token_type census ---
+  {1: 248044, 3: 27, 4: 6, 5: 243}
+
+--- merges: first 10, last 10 ---
+  'Ġ Ġ'
+  'ĠĠ ĠĠ'
+  'i n'
+  'Ġ t'
+  'ĠĠĠĠ ĠĠĠĠ'
+  'e r'
+  'ĠĠ Ġ'
+  'o n'
+  'Ġ a'
+  'r e'
+  ...
+  'æīĭä½ľ ãĤĬ'
+  'é«ªãģ® æ¯Ľ'
+  'å¤© äºķ'
+  'è©Ĳ æ¬º'
+  'ãĥŀ ãĥĭãĥ¥ãĤ¢ãĥ«'
+  'æĻĤ ãĤĤ'
+  'æ¥½ãģĹ ãĤģãģ¾ãģĻ'
+  'ãĥĩ ãĥĥãĤŃ'
+  'èį· çī©'
+  'ãģĤãĤĬãģ¾ãģĻ ãģĭ'
+
+--- chat_template (whole thing) ---
+{%- set image_count = namespace(value=0) %}
+{%- set video_count = namespace(value=0) %}
+{%- macro render_content(content, do_vision_count, is_system_content=false) %}
+    {%- if content is string %}
+        {{- content }}
+    {%- elif content is iterable and content is not mapping %}
+        {%- for item in content %}
+            {%- if 'image' in item or 'image_url' in item or item.type == 'image' %}
+                {%- if is_system_content %}
+                    {{- raise_exception('System message cannot contain images.') }}
+                {%- endif %}
+                {%- if do_vision_count %}
+                    {%- set image_count.value = image_count.value + 1 %}
+                {%- endif %}
+                {%- if add_vision_id %}
+                    {{- 'Picture ' ~ image_count.value ~ ': ' }}
+                {%- endif %}
+                {{- '<|vision_start|><|image_pad|><|vision_end|>' }}
+            {%- elif 'video' in item or item.type == 'video' %}
+                {%- if is_system_content %}
+                    {{- raise_exception('System message cannot contain videos.') }}
+                {%- endif %}
+                {%- if do_vision_count %}
+                    {%- set video_count.value = video_count.value + 1 %}
+                {%- endif %}
+                {%- if add_vision_id %}
+                    {{- 'Video ' ~ video_count.value ~ ': ' }}
+                {%- endif %}
+                {{- '<|vision_start|><|video_pad|><|vision_end|>' }}
+            {%- elif 'text' in item %}
+                {{- item.text }}
+            {%- else %}
+                {{- raise_exception('Unexpected item type in content.') }}
+            {%- endif %}
+        {%- endfor %}
+    {%- elif content is none or content is undefined %}
+        {{- '' }}
+    {%- else %}
+        {{- raise_exception('Unexpected content type.') }}
+    {%- endif %}
+{%- endmacro %}
+{%- if not messages %}
+    {{- raise_exception('No messages provided.') }}
+{%- endif %}
+{%- if tools and tools is iterable and tools is not mapping %}
+    {{- '<|im_start|>system\n' }}
+    {{- "# Tools\n\nYou have access to the following functions:\n\n<tools>" }}
+    {%- for tool in tools %}
+        {{- "\n" }}
+        {{- tool | tojson }}
+    {%- endfor %}
+    {{- "\n</tools>" }}
+    {{- '\n\nIf you choose to call a function ONLY reply in the following format with NO suffix:\n\n<tool_call>\n<function=example_function_name>\n<parameter=example_parameter_1>\nvalue_1\n</parameter>\n<parameter=example_parameter_2>\nThis is the value for the second parameter\nthat can span\nmultiple lines\n</parameter>\n</function>\n</tool_call>\n\n<IMPORTANT>\nReminder:\n- Function calls MUST follow the specified format: an inner <function=...></function> block must be nested within <tool_call></tool_call> XML tags\n- Required parameters MUST be specified\n- You may provide optional reasoning for your function call in natural language BEFORE the function call, but NOT after\n- If there is no function call available, answer the question like normal with your current knowledge and do not tell the user about function calls\n</IMPORTANT>' }}
+    {%- if messages[0].role == 'system' %}
+        {%- set content = render_content(messages[0].content, false, true)|trim %}
+        {%- if content %}
+            {{- '\n\n' + content }}
+        {%- endif %}
+    {%- endif %}
+    {{- '<|im_end|>\n' }}
+{%- else %}
+    {%- if messages[0].role == 'system' %}
+        {%- set content = render_content(messages[0].content, false, true)|trim %}
+        {{- '<|im_start|>system\n' + content + '<|im_end|>\n' }}
+    {%- endif %}
+{%- endif %}
+{%- set ns = namespace(multi_step_tool=true, last_query_index=messages|length - 1) %}
+{%- for message in messages[::-1] %}
+    {%- set index = (messages|length - 1) - loop.index0 %}
+    {%- if ns.multi_step_tool and message.role == "user" %}
+        {%- set content = render_content(message.content, false)|trim %}
+        {%- if not(content.startswith('<tool_response>') and content.endswith('</tool_response>')) %}
+            {%- set ns.multi_step_tool = false %}
+            {%- set ns.last_query_index = index %}
+        {%- endif %}
+    {%- endif %}
+{%- endfor %}
+{%- if ns.multi_step_tool %}
+    {{- raise_exception('No user query found in messages.') }}
+{%- endif %}
+{%- for message in messages %}
+    {%- set content = render_content(message.content, true)|trim %}
+    {%- if message.role == "system" %}
+        {%- if not loop.first %}
+            {{- raise_exception('System message must be at the beginning.') }}
+        {%- endif %}
+    {%- elif message.role == "user" %}
+        {{- '<|im_start|>' + message.role + '\n' + content + '<|im_end|>' + '\n' }}
+    {%- elif message.role == "assistant" %}
+        {%- set reasoning_content = '' %}
+        {%- if message.reasoning_content is string %}
+            {%- set reasoning_content = message.reasoning_content %}
+        {%- else %}
+            {%- if '</think>' in content %}
+                {%- set reasoning_content = content.split('</think>')[0].rstrip('\n').split('<think>')[-1].lstrip('\n') %}
+                {%- set content = content.split('</think>')[-1].lstrip('\n') %}
+            {%- endif %}
+        {%- endif %}
+        {%- set reasoning_content = reasoning_content|trim %}
+        {%- if loop.index0 > ns.last_query_index %}
+            {{- '<|im_start|>' + message.role + '\n<think>\n' + reasoning_content + '\n</think>\n\n' + content }}
+        {%- else %}
+            {{- '<|im_start|>' + message.role + '\n' + content }}
+        {%- endif %}
+        {%- if message.tool_calls and message.tool_calls is iterable and message.tool_calls is not mapping %}
+            {%- for tool_call in message.tool_calls %}
+                {%- if tool_call.function is defined %}
+                    {%- set tool_call = tool_call.function %}
+                {%- endif %}
+                {%- if loop.first %}
+                    {%- if content|trim %}
+                        {{- '\n\n<tool_call>\n<function=' + tool_call.name + '>\n' }}
+                    {%- else %}
+                        {{- '<tool_call>\n<function=' + tool_call.name + '>\n' }}
+                    {%- endif %}
+                {%- else %}
+                    {{- '\n<tool_call>\n<function=' + tool_call.name + '>\n' }}
+                {%- endif %}
+                {%- if tool_call.arguments is defined %}
+                    {%- for args_name, args_value in tool_call.arguments|items %}
+                        {{- '<parameter=' + args_name + '>\n' }}
+                        {%- set args_value = args_value | tojson | safe if args_value is mapping or (args_value is sequence and args_value is not string) else args_value | string %}
+                        {{- args_value }}
+                        {{- '\n</parameter>\n' }}
+                    {%- endfor %}
+                {%- endif %}
+                {{- '</function>\n</tool_call>' }}
+            {%- endfor %}
+        {%- endif %}
+        {{- '<|im_end|>\n' }}
+    {%- elif message.role == "tool" %}
+        {%- if loop.previtem and loop.previtem.role != "tool" %}
+            {{- '<|im_start|>user' }}
+        {%- endif %}
+        {{- '\n<tool_response>\n' }}
+        {{- content }}
+        {{- '\n</tool_response>' }}
+        {%- if not loop.last and loop.nextitem.role != "tool" %}
+            {{- '<|im_end|>\n' }}
+        {%- elif loop.last %}
+            {{- '<|im_end|>\n' }}
+        {%- endif %}
+    {%- else %}
+        {{- raise_exception('Unexpected message role.') }}
+    {%- endif %}
+{%- endfor %}
+{%- if add_generation_prompt %}
+    {{- '<|im_start|>assistant\n' }}
+    {%- if enable_thinking is defined and enable_thinking is false %}
+        {{- '<think>\n\n</think>\n\n' }}
+    {%- else %}
+        {{- '<think>\n' }}
+    {%- endif %}
+{%- endif %}
+--- control-type tokens (token_type==3) ---
+  248044 '<|endoftext|>'
+  248045 '<|im_start|>'
+  248046 '<|im_end|>'
+  248047 '<|object_ref_start|>'
+  248048 '<|object_ref_end|>'
+  248049 '<|box_start|>'
+  248050 '<|box_end|>'
+  248051 '<|quad_start|>'
+  248052 '<|quad_end|>'
+  248053 '<|vision_start|>'
+  248054 '<|vision_end|>'
+  248055 '<|vision_pad|>'
+  248056 '<|image_pad|>'
+  248057 '<|video_pad|>'
+  248060 '<|fim_prefix|>'
+  248061 '<|fim_middle|>'
+  248062 '<|fim_suffix|>'
+  248063 '<|fim_pad|>'
+  248064 '<|repo_name|>'
+  248065 '<|file_sep|>'
+  248070 '<|audio_start|>'
+  248071 '<|audio_end|>'
+  248072 '<tts_pad>'
+  248073 '<tts_text_bos>'
+  248074 '<tts_text_eod>'
+  248075 '<tts_text_bos_single>'
+  248076 '<|audio_pad|>'
+
+--- tokens that are pure non-ascii sample (10) ---
+      94 '¡'
+      95 '¢'
+      96 '£'
+      97 '¤'
+      98 '¥'
+      99 '¦'
+     100 '§'
+     101 '¨'
+     102 '©'
+     103 'ª'

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Project Bonsai | 1.58-bit Engine</title>
+<style>
+/*__CSS__*/
+</style>
+</head>
+<body>
+
+<header id="hdr">
+  <button id="btn-new" class="hdr-btn" type="button" title="开始新对话 (Ctrl+Shift+O)">
+    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    <span>新对话</span>
+  </button>
+  <h1 id="hdr-title">Project Bonsai <span class="hdr-bar">|</span> <span class="hdr-sub">1.58-bit Engine</span></h1>
+  <div id="badge" aria-live="off" title="引擎状态">
+    <span id="badge-dot" class="dot"></span><span id="badge-text">connecting</span>
+  </div>
+</header>
+
+<main id="scroll">
+  <div id="thread">
+    <section id="empty">
+      <div id="empty-mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48" width="44" height="44" focusable="false"><path d="M24 43V22M24 22c0-7 5-12 12-12 0 7-5 12-12 12Zm0 4c0-6-4.5-10.5-10.5-10.5C13.5 23.5 18 28 24 28Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 43h18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </div>
+      <h2 id="empty-title">有什么可以帮你的？</h2>
+      <p id="empty-sub">本地推理 · 权重不出这台机器 · 无云端依赖</p>
+      <div id="chips">
+        <button class="chip" type="button" data-prompt="用三句话解释什么是三值量化（ternary quantization），并说明它为什么省显存。">解释三值量化</button>
+        <button class="chip" type="button" data-prompt="写一个 Python 函数，用 Vulkan 的 API 枚举本机所有支持 compute 的物理设备，只打印设备名。">写一段 Vulkan 代码</button>
+        <button class="chip" type="button" data-prompt="把下面这句话翻译成英文，并给出一个更口语化的版本：这张显卡只要一百块钱，但它能跑九十亿参数的大模型。">翻译一句话</button>
+      </div>
+    </section>
+    <div id="msgs" aria-live="polite" aria-relevant="additions text"></div>
+  </div>
+</main>
+
+<footer id="dock">
+  <form id="composer" autocomplete="off">
+    <textarea id="input" rows="1" placeholder="给 Bonsai 发消息…" aria-label="消息输入框"></textarea>
+    <button id="stop" class="pill-btn" type="button" title="停止生成" hidden>
+      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor"/></svg>
+    </button>
+    <button id="send" type="submit" title="发送 (Enter)" aria-label="发送" disabled>
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </form>
+  <p id="hint"><span class="key">Enter</span> 发送 · <span class="key">Shift+Enter</span> 换行 · <span id="ctx-note">内容由本地模型生成，请自行核对</span></p>
+</footer>
+
+<div id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+//__JS__
+</script>
+</body>
+</html>

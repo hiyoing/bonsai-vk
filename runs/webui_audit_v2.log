@@ -1,0 +1,10 @@
+File: runtime_vk\index.html
+Size: 97.2 KB
+WARN  accent value in JS near line 565; confirm it is only used for allowed semantics
+Accent usages:
+  OK   line 243 .md-link -> color: var(--terracotta)
+  OK   line 325 .caret -> background: var(--terracotta)
+  OK   line 409 #composer:focus-within -> border-color: var(--terracotta)
+  OK   line 445 #send -> background: var(--terracotta)
+  WARN line 565 [script] -> accent value in JS requires manual review
+Summary: 17 passed, 0 failed, 1 warning(s)

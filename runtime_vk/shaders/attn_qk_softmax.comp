@@ -1,0 +1,99 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "f16_rne.glslh"
+
+// attn_qk_softmax.comp - stage 2: scores, additive mask, softmax. The GPU twin of
+// attn_score_row() + attn_softmax_row() in attn_vk.h.
+//
+// What the dumps said, and what is therefore hard-coded here:
+//   * kq = K^T * Q carries NO scale. The scale lives in SOFT_MAX and measured 1/sqrt(head_dim)
+//     = 0.0625 exactly (tools/attn_softmax_check.py: free bisection fit 0.062501, and the wrong
+//     candidates 1/sqrt(128), 1/sqrt(64), 0.05, 0.08, 1.0 are 5.8e-2..5.2e-1 away).
+//   * the mask is ADDITIVE and broadcast over heads, with -INF in the dead slots; every
+//     causally-masked probability the official engine printed is exactly 0.0000. exp(-inf - max)
+//     = 0 is what reproduces that, so a masked lane must produce exactly zero, not "small".
+//   * softmax subtracts the max of the SCALED live scores before exp.
+//   * GQA: q head h reads kv head h/(nh/nkv) = h/4; 16 q heads share 4 kv heads.
+//
+// One workgroup per (token, q head). Lane j handles key position j (so cap <= 256, which align_attn
+// asserts): it computes the hd-term dot product in ascending d inside that lane, then lane 0 takes
+// the max and the sum serially in ascending j. Both choices exist so the CPU reference and the card
+// add the same numbers in the same order - the comparison is then bit-exact, not "within tolerance".
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly  buffer Q16   { uint  q16[]; };   // [seq][nh][hd/2]
+layout(binding = 1) readonly  buffer KC    { uint  kc[]; };    // [cap][nkv][hd/2] the K arena
+layout(binding = 2) readonly  buffer MASK  { float mask[]; };  // [seq][cap] additive, -INF = dead
+layout(binding = 3) readonly  buffer POS   { uint  pos[]; };   // [seq] absolute positions
+layout(binding = 4) writeonly buffer SCORE { float score[]; }; // [seq][nh][cap] raw kq
+layout(binding = 5) writeonly buffer PROB  { float prob[]; };  // [seq][nh][cap] f32 probabilities
+layout(binding = 6) writeonly buffer P16   { uint  p16[]; };   // [seq][nh][cap/2] the fp16 operand
+
+layout(push_constant) uniform Push {
+    uint seq, nh, nkv, hd, cap;
+    uint round_probs;          // 1 = PV sees fp16 probabilities (ggml's mixed-type cast)
+    float scale, pad0;
+} p;
+
+shared float sd[256];      // this row's dot products
+shared float sp[256];      // this row's probabilities
+
+void main() {
+    const uint w = gl_WorkGroupID.x;
+    const uint j = gl_LocalInvocationID.x;
+    const uint t = w / p.nh, h = w % p.nh;
+    const uint hw = p.hd / 2u;
+    const uint nfill = pos[t] + 1u;              // causal AND filled: live keys are 0..pos[t]
+    const uint kv = h / (p.nh / p.nkv);
+    const uint row = (t * p.nh + h) * p.cap;
+
+    // ---- one lane per key position: the 256-term dot product, halves unpacked, ascending order
+    if (j < nfill) {
+        const uint q1 = (t * p.nh + h) * hw;
+        const uint k1 = (j * p.nkv + kv) * hw;
+        float acc = 0.0;
+        for (uint d = 0u; d < hw; ++d) {
+            acc = acc + unpackHalf2x16(q16[q1 + d]).x * unpackHalf2x16(kc[k1 + d]).x;
+            acc = acc + unpackHalf2x16(q16[q1 + d]).y * unpackHalf2x16(kc[k1 + d]).y;
+        }
+        sd[j] = acc;
+        score[row + j] = acc;
+    } else if (j < p.cap) {
+        score[row + j] = 0.0;                    // never read: outside the filled prefix
+    }
+    barrier();
+
+    // ---- mask, max, exp, sum, divide - all in lane 0, in ascending j, so the order is the
+    // reference's order. Rows are <= 256 wide, so this is a serial tail, not a bottleneck of
+    // correctness. A -INF mask entry turns its probability into exactly 0.0.
+    if (j == 0u) {
+        float mx = uintBitsToFloat(0xFF800000u);
+        for (uint i = 0u; i < nfill; ++i) {
+            const float v = sd[i] * p.scale + mask[t * p.cap + i];
+            if (v > mx) mx = v;
+        }
+        float sum = 0.0;
+        for (uint i = 0u; i < nfill; ++i) {
+            const float v = sd[i] * p.scale + mask[t * p.cap + i];
+            sp[i] = exp(v - mx);
+            sum = sum + sp[i];
+        }
+        for (uint i = 0u; i < nfill; ++i) {
+            sp[i] = sp[i] / sum;
+            prob[row + i] = sp[i];
+        }
+        for (uint i = nfill; i < p.cap; ++i) {   // what a human reading the dump expects: zeros
+            sp[i] = 0.0;
+            prob[row + i] = 0.0;
+        }
+    }
+    barrier();
+
+    // ---- the fp16 view of the probabilities, i.e. the operand PV actually multiplies with under
+    // ggml's mixed-type contract. Packed even when round_probs == 0, so the readback always has a
+    // defined buffer; the host decides which one attn_pv.comp reads. RNE, for the same reason the
+    // arena is (see f16_rne.glslh) - the reference rounds to nearest, this driver does not.
+    if (j < p.cap / 2u)
+        p16[(t * p.nh + h) * (p.cap / 2u) + j] = pack2_rne(vec2(sp[2u * j], sp[2u * j + 1u]));
+}

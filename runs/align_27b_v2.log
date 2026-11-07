@@ -1,0 +1,63 @@
+model: blk.0.ffn_gate.weight K=100 is not a multiple of 128 - PTQ1_0 cannot tile it
+model: layer/rotation contract rejected: the declared attention layer count is 17 but the resolved typing gives 16
+model: layer/rotation contract rejected: prism.layer_types[5] = "sliding_attention": this runtime has no windowed/MoE layer path. Mapping it onto full attention would charge the right number of bytes and read keys outside the window, i.e. plausible garbage; mapping it onto the recurrent state would be worse. Refusing.
+model: layer/rotation contract rejected: hadamard.version = 2: this runtime implements version 1 - the normalized Sylvester-Walsh block transform - and NOTHING else. A new rotation contract is a new kernel plus a new alignment run, not a fallback
+align_27b - the 27B adapter, measured on the hardware that exists
+  model template : models/Ternary-Bonsai-2-9B-PTQ1_0.gguf
+  gpu legs       : ENABLED
+
+=== [1] PTQ1_0: 5 trits per byte, 128 weights per block, one fp16 scale per block ===
+  ok    trit extraction: 1280/1280 (256 bytes x 5 positions) agree between the runtime recurrence and floor(b*3^(t+1)/256) % 3; 13/256 byte values are outside the 3^5 = 243 legal pack space and are counted, not assumed absent
+  ok    element map is a total function over all 128 slots; bytes 0..15 carry elements 0..79 (5 trits each), 16..23 carry 80..119 (5 trits), 24..25 carry 120..127 (4 trits), and bytes 26..27 are reserved for the fp16 scale - no slot is read twice, none is missed
+  ok    decode triangulation: 65 536 fp16 scale patterns x 128 elements x 2 comparisons = 16777216 bit comparisons, max|err| = 0.00000 over every finite pair. ours-vs-official is bit-identical on all 8388608 of its own comparisons (128 elements x 65 536 scales); the arithmetic-free lookup form differs only in 1206272 sign-of-zero bits, 146252 NaN-payload bits and 77824 zero-times-non-finite-scale bits (the sweep holds 2046 NaN and 2 infinite scales). Subnormal and -0.0 scales are inside it, which is the class the official shader once disagreed with us on
+  ok    K % 128 rejection fires in model_plan_build (its message is above), so a row whose byte count is not K/128 blocks of 28 B cannot reach the loader or the GEMV at all
+  ok    real checkpoint scales: 299593 consecutive PTQ1_0 blocks of blk.0.ffn_gate.weight (8 MiB from data_start + off), 0 non-finite fp16 scales, 0 subnormal, 0 negative-zero, |d| range [0.00808716, 0.0397644] 实测 - so every scale this engine multiplies by in that stretch is finite and 1c's non-finite class cannot occur in the shipped file
+  derived  K = 4096, M = 12288 -> 393216 blocks x 28 B = 11010048 B; 1.7500 bit/weight (= 8*28/128, i.e. 1.75 exactly, scale included)
+
+=== [2] hybrid routing: 16 attention layers own the KV cache, 48 SSM layers own none ===
+  ok    9B regression: 32 blocks = 24 GDN + 8 softmax-attention (interval 4), hidden 4096, ffn 12288, vocab 248320, nkv 4 x hd 256
+  ok    9B rotation: version 1, block 4096, kernel hat4096.comp (the 9B's bit-frozen path), signs explicit
+  9B        blocks  32 =  8 attn + 24 ssm | KV/token    24.500 KiB, arena at cap   256 =      6.12 MiB | SSM state    50.25 MiB
+             KV/token is the sum over the 8 charged layers only, cross-checked against the plan's own per-token function
+             FORBIDDEN allocator (KV on all 32 blocks): 98.000 KiB/token = 4.0x the charged one; the invariant is worth 18.38 MiB at cap 256
+  ok    27B routing: explicit list prism.layer_types (== qwen35.full_attention_interval agreement)
+  map      ...A...A...A...A...A...A...A...A...A...A...A...A...A...A...A...A  (A = full attention, . = SSM/GDN)
+  ok    SSM KV charge is 0 by construction over all 48 recurrent blocks (sum of kv_bytes_per_layer() on non-attention layers)
+  27B       blocks  64 = 16 attn + 48 ssm | KV/token    49.000 KiB, arena at cap 32768 =   1568.00 MiB | SSM state   100.50 MiB
+             KV/token is the sum over the 16 charged layers only, cross-checked against the plan's own per-token function
+             FORBIDDEN allocator (KV on all 64 blocks): 196.000 KiB/token = 4.0x the charged one; the invariant is worth 4704.00 MiB at cap 32768
+             SYNTHETIC shape: the 9B's hidden/ffn/vocab with 64 blocks = 4.21 GiB of repacked weights. This tests the resolver, the charge and the kernel route; it is NOT Ternary-Bonsai-2-27B's 5.9 GB geometry, which this host cannot read.
+  route    version 1, block 1024, kernel hadamard_fwht.comp (FWHT, 1/sqrt(block)), signs explicit
+  ok    block_size 4096 on the same 64-block plan keeps hat4096.comp - the route is metadata, not a model-name lookup
+
+  -- negative control: count cross-check disagrees --
+  ok    refused as required
+
+  -- negative control: sliding_window in the list --
+  ok    refused as required
+
+  -- negative control: hadamard.version = 2 --
+  ok    refused as required
+
+model: layer/rotation contract rejected: prism.hadamard.block_size is absent while the rotation is active: the transform width cannot be defaulted to 4096, that is the 9B's answer not this file's
+  -- negative control: rotation active, block_size absent --
+  ok    refused as required
+
+=== [3] rotation: hadamard_fwht.comp on the card vs a host Sylvester FWHT ===
+  ok    orthogonality measured at N = 128: all 128 diagonal dot products are exactly 128 and all 16256 off-diagonal ones are exactly 0 (integer arithmetic, no tolerance involved)
+  ok    N =   16: max |H(H x) - N x| = 0.000e+00 over 16 lanes; 1/sqrt(N) = 0.25 is EXACT in binary
+  ok    N =   64: max |H(H x) - N x| = 0.000e+00 over 64 lanes; 1/sqrt(N) = 0.125 is EXACT in binary
+  ok    N =  256: max |H(H x) - N x| = 0.000e+00 over 256 lanes; 1/sqrt(N) = 0.0625 is EXACT in binary
+  ok    N = 1024: max |H(H x) - N x| = 9.766e-04 over 1024 lanes; 1/sqrt(N) = 0.03125 is EXACT in binary
+  ok    N = 4096: max |H(H x) - N x| = 9.766e-03 over 4096 lanes; 1/sqrt(N) = 0.015625 is EXACT in binary
+  gpu        Radeon RX 550X
+  ok    N =   16, 256 blocks: 4096 lanes BITWISE identical to the host FWHT (kernel reads X, writes Y - the out-of-place shape rotate() uses)
+  ok    N =   64, 64 blocks: 4096 lanes BITWISE identical to the host FWHT (kernel reads X, writes Y - the out-of-place shape rotate() uses)
+  ok    N =  256, 16 blocks: 4096 lanes BITWISE identical to the host FWHT (kernel reads X, writes Y - the out-of-place shape rotate() uses)
+  ok    N = 1024,  4 blocks: 4096 lanes BITWISE identical to the host FWHT (kernel reads X, writes Y - the out-of-place shape rotate() uses)
+  ok    N = 4096,  1 blocks: 4096 lanes BITWISE identical to the host FWHT (kernel reads X, writes Y - the out-of-place shape rotate() uses)
+  ok    1/sqrt(4096) == 1/64 bit-for-bit, so hadamard_fwht at block 4096 and hat4096.comp apply the same diagonal scale (the butterflies are the same operator; only the summation ORDER differs, which is why the 9B keeps its frozen kernel)
+             signs: the +-1 diagonal belongs to signs_mul.comp, not to this kernel - fold it into the FWHT and it gets applied twice, which is a permutation of the spectrum rather than a rounding. Forward order is signs->H for the 201 rotated weight tensors and H->signs for token_embd (the inverse sandwich); align_attn.exe owns that leg.
+
+=== verdict ===
+  ALL CHECKS PASSED (0 failure(s))

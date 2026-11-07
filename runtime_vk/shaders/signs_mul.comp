@@ -1,0 +1,55 @@
+#version 450
+// signs_mul.comp - y[i] = x[i] * s[i] with s a +-1 sign vector, vectorised by 4.
+//
+// ggml op it replaces: MUL(activation, prism.hadamard.signs.K). The dump shows exactly three of them
+// per the widths the metadata names (prism.hadamard.sign_widths = [4096, 12288]):
+//   model.input_embed = MUL(node_2_reshaped{4096,2}, prism.hadamard.signs.4096{4096,1,1,1})  (line 34)
+//   attn_norm-0       = MUL(norm-0{4096,2},        prism.hadamard.signs.4096)                (line 131)
+//   node_83           = MUL(ffn_swiglu-0{12288,2}, prism.hadamard.signs.12288)               (line 1082)
+// The arrays are NOT tensors in the GGUF tensor table: they are one flat i32 array in the metadata,
+// `prism.hadamard.sign_values`, 16384 entries = signs_4096 (4096) followed by signs_12288 (12288),
+// in that order - tools/oracle_signs.py establishes the split order by fingerprinting the printed
+// ratios against runs/dbg_full_real.log, and the first eight values are -1,-1,-1,1,1,-1,-1,1. The
+// engine reads that key at load time (bonsai_gguf.h stores a numeric array as decimal strings in
+// kv_a) and uploads it as int32; this kernel just multiplies, so which half is which is the engine's
+// business and is decided once, at load.
+//
+// ORDER, which the dump settles: the sign multiply happens AFTER the Hadamard, not before - line 18
+// is MUL_MAT(prism.hadamard.4096, emb) and line 34 is the MUL of THAT by signs.4096. So the
+// activation transform is y = S * (H x) = (S H) x, and the engine's sequence is
+//     gather -> hadamard_block -> signs_mul
+// not signs_mul -> hadamard_block. (For the weights the order is folded into the quantized matrix at
+// export time and is none of our business; prism.hadamard.axis = input-last-dimension is what tells
+// the engine which side of the matmul the transform belongs on.)
+//
+// Work per element: 1 float load + 1 int load + 1 multiply + 1 store. The multiply by +-1 is EXACT
+// (no rounding, including -0.0: x * -1.0 negates the sign bit, and 0.0 * -1.0 = -0.0, the same thing
+// the CPU reference does), so align_ops charges this kernel for bit-equality, not tolerance.
+//
+// Why the sign buffer is `int` and not `float`: it comes out of an i32 metadata array, and storing
+// it as int32 means the upload is a memcpy of the parsed values with no conversion step that could
+// disagree with the file. float(s) is exact for +-1.
+//
+// DISPATCH: gl_WorkGroupCount.x == ceil(n_vec4 / 256). n_vec4 = 1024 for 4096, 3072 for 12288, both
+// multiples of 4 by construction (that is what sign_widths being [4096, 12288] guarantees).
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly buffer X    { vec4 xb[]; };     // activations
+layout(binding = 1) readonly buffer SGN  { ivec4 sb[]; };    // +-1 as int32, 4 per word
+layout(binding = 2)       buffer Y       { vec4 yb[]; };
+
+layout(push_constant) uniform PC {
+    uint x_off;    // in vec4 units
+    uint s_off;    // in ivec4 units - the offset of signs_4096 or signs_12288 inside the 16384 array
+    uint y_off;    // in vec4 units (may equal x_off: in-place)
+    uint n_vec4;   // n_elements / 4
+    uint _p0, _p1, _p2, _p3;   // pad to 32 B
+};
+
+void main() {
+    const uint i = gl_WorkGroupID.x * 256u + gl_LocalInvocationID.x;
+    if (i >= n_vec4) { return; }
+    const ivec4 s = sb[s_off + i];
+    yb[y_off + i] = xb[x_off + i] * vec4(float(s.x), float(s.y), float(s.z), float(s.w));
+}

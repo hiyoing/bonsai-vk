@@ -1,0 +1,43 @@
+# shared_probe SPIR-V evidence - what each probe module DECLARES as workgroup memory.
+# 'Variable Workgroup' is SPIR-V's storage class for GLSL `shared`. Both sd and sp point at the
+# same array type (id 36 here), whose element count is the printed Constant, so the module asks
+# for 2 x n x 4 B of workgroup memory - the byte figure in each banner is derived from those two
+# numbers, the Constant/TypeArray/Workgroup lines are the primary evidence.
+# Generated with: glslang -V -H shaders/probe_shm_nNNNN.comp
+
+################ PROBE_N=3072 : sd+sp = 2 * 3072 * 4 B = 24576 B
+              35:      6(int) Constant 3072
+              36:             TypeArray 34(float) 35
+          38(sd):     37(ptr) Variable Workgroup
+          44(sp):     37(ptr) Variable Workgroup
+              89:    9(ivec3) ConstantComposite 51 88 88
+################ PROBE_N=4000 : sd+sp = 2 * 4000 * 4 B = 32000 B
+              35:      6(int) Constant 4000
+              36:             TypeArray 34(float) 35
+          38(sd):     37(ptr) Variable Workgroup
+          44(sp):     37(ptr) Variable Workgroup
+              89:    9(ivec3) ConstantComposite 51 88 88
+################ PROBE_N=4090 : sd+sp = 2 * 4090 * 4 B = 32720 B
+              35:      6(int) Constant 4090
+              36:             TypeArray 34(float) 35
+          38(sd):     37(ptr) Variable Workgroup
+          44(sp):     37(ptr) Variable Workgroup
+              89:    9(ivec3) ConstantComposite 51 88 88
+################ PROBE_N=4096 : sd+sp = 2 * 4096 * 4 B = 32768 B
+              35:      6(int) Constant 4096
+              36:             TypeArray 34(float) 35
+          38(sd):     37(ptr) Variable Workgroup
+          44(sp):     37(ptr) Variable Workgroup
+              89:    9(ivec3) ConstantComposite 51 88 88
+################ PROBE_N=4224 : sd+sp = 2 * 4224 * 4 B = 33792 B
+              35:      6(int) Constant 4224
+              36:             TypeArray 34(float) 35
+          38(sd):     37(ptr) Variable Workgroup
+          44(sp):     37(ptr) Variable Workgroup
+              89:    9(ivec3) ConstantComposite 51 88 88
+################ PROBE_N=4608 : sd+sp = 2 * 4608 * 4 B = 36864 B
+              35:      6(int) Constant 4608
+              36:             TypeArray 34(float) 35
+          38(sd):     37(ptr) Variable Workgroup
+          44(sp):     37(ptr) Variable Workgroup
+              89:    9(ivec3) ConstantComposite 51 88 88

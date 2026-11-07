@@ -1,0 +1,103 @@
+#version 450
+// rms_norm.comp - y[r][d] = x[r][d] * (1/sqrt(mean_d(x^2) + eps)) * w[d], one workgroup per row.
+//
+// ggml ops it replaces (runs/dbg_full_real.log, the official -fa off node dump):
+//   node_1  RMS_NORM(model.input_embed{4096,2,1,1})   -> line 42
+//   node_2  MUL(norm-0, blk.0.attn_norm.weight{4096}) -> line 50
+//   and the same pair for post_attention_norm / output_norm / ssm_norm, plus
+//   RMS_NORM(attn_output-0{128,32,2,1}) (line 715) = the GDN ssm_norm.weight{128} per-head norm,
+//   which is why n_cols is a push constant instead of 4096: this one kernel serves the hidden-4096
+//   rows AND the 128-wide per-head rows of the same layer.
+// The weight multiply is a SEPARATE ggml node, so the multiply order is (x*inv)*w - the same choice
+// attn_norm_rope.comp and attn_vk.h's attn_rms_norm() already make. use_weight=0 gives the bare
+// RMS_NORM node for the graphs where the weight is folded into the next matmul.
+//
+// eps comes from the GGUF: qwen35.attention.layer_norm_rms_epsilon = 9.999999974752427e-07, which is
+// the f64 print of float(1e-6f); the engine passes the f32 value it read, not a typed 1e-6.
+//
+// DISPATCH: gl_WorkGroupCount.x == n_rows. local_size 256, so hidden 4096 = 16 elements per lane and
+// a 128-wide row uses 128 of the 256 lanes (the idle lanes' partial is exactly +0.0, which cannot
+// move a sum).
+//
+// Work per element: 1 load, 1 multiply (materialised), 1 scale multiply, 1 weight multiply, 1 store.
+//
+// DETERMINISM: the sum of squares is a TWO-LEVEL block-ascending reduction - each lane adds its own
+// contiguous slice in ascending d, then lane 0 adds the 256 partials in ascending lane order. A pure
+// serial ascending sum of 4096 terms in one lane costs ~25 us per row and 192 rows/token is 5 ms, so
+// this is the price of determinism at hidden=4096. It is a DIFFERENT NUMBER from ggml's CPU order,
+// and it has to be said plainly: for a 4096-wide row ggml-cpu splits the row across threads with an
+// OpenMP reduction whose order is not reproducible at all, so "match the CPU bit for bit" was never
+// the bar here. The bar is (a) our order is fixed and documented, (b) the deviation from float64 is
+// ~1e-7 relative. align_ops.exe measures both and charges them separately.
+// x*x is STORED to shared memory before being added, exactly as in attn_norm_rope.comp: an inline
+// `ss += x*x` is contractable into an FMA, and an FMA adds the UNROUNDED product, i.e. another
+// number. The round trip through shared is the construct the compiler cannot fuse back.
+//
+// fp16 nowhere: this kernel stores f32. No packHalf2x16(), so the rounding-sensitive-store rule
+// (shaders/f16_rne.glslh) does not apply to it.
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly buffer X { float x[]; };   // [n_rows][n_cols] pre-norm activations
+layout(binding = 1) readonly buffer W { float w[]; };   // [n_cols] norm weight (ignored if use_w=0)
+layout(binding = 2)       buffer Y { float y[]; };      // [n_rows][n_cols] output
+
+layout(push_constant) uniform PC {
+    uint x_off;      // in float units
+    uint w_off;      // in float units
+    uint y_off;      // in float units
+    uint n_rows;     // workgroups
+    uint n_cols;     // row length, <= 4096 (the shared array size)
+    uint use_w;      // 1 = multiply by w[d]
+    float eps;       // float(1e-6f) for qwen35, read from the GGUF
+    uint _p0;        // pad to 32 B
+};
+
+const uint NW = 256u;
+shared float sq[4096];        // x*x, materialised
+shared float part[NW];        // one block partial per lane
+
+void main() {
+    const uint r = gl_WorkGroupID.x;
+    if (r >= n_rows) { return; }
+    const uint lane = gl_LocalInvocationID.x;
+    const uint row = r * n_cols;
+    const uint per = (n_cols + NW - 1u) / NW;             // 16 at n_cols=4096, 1 at 128
+
+    // ---- stage the squares of this lane's slice
+    for (uint i = 0u; i < per; ++i) {
+        const uint d = lane * per + i;
+        if (d < n_cols) {
+            const float v = x[x_off + row + d];
+            sq[d] = v * v;
+        }
+    }
+    barrier();
+
+    // ---- lane-local ascending sum of its own contiguous slice
+    float s = 0.0;
+    for (uint i = 0u; i < per; ++i) {
+        const uint d = lane * per + i;
+        if (d < n_cols) s = s + sq[d];
+    }
+    part[lane] = s;
+    barrier();
+
+    // ---- ascending merge of the block partials, then the norm constant, in lane 0 only
+    if (lane == 0u) {
+        float ss = 0.0;
+        for (uint l = 0u; l < NW; ++l) ss = ss + part[l];
+        part[0] = 1.0 / sqrt(ss / float(n_cols) + eps);
+    }
+    barrier();
+    const float inv = part[0];
+
+    // ---- y = (x*inv)*w, x re-read from global (L1-resident: this workgroup just touched it)
+    for (uint i = 0u; i < per; ++i) {
+        const uint d = lane * per + i;
+        if (d < n_cols) {
+            const float v = x[x_off + row + d] * inv;
+            y[y_off + row + d] = use_w != 0u ? v * w[w_off + d] : v;
+        }
+    }
+}

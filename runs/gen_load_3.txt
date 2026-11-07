@@ -1,0 +1,114 @@
+device: Radeon RX 550X | driver 2.0.279 | device-local heap 3840 MiB | timestampPeriod 40.000 ns
+  limits: maxComputeWorkGroupSize[0]=1024 maxComputeWorkGroupCount[0]=4294967295 bufferImageGranularity=1
+  compute queue = family 0, transfer-only queue = family 2
+
+=== weight plan, read from the tensor table (实测, not estimated) ===
+  tensors 427 = 202 PTQ1_0 + 225 f32   weights 8953803264 elems = 8.954 B
+  per-tensor shapes are K x M with K in {4096, 12288}; sign_widths says the same, so the
+  activation-side Hadamard has exactly two widths to cover.
+  checkpoint's own block form : 1957036032 B = 1.823 GiB  (1.75 bpw)
+  our 2-bit random-access form: 2516189184 B = 2.343 GiB  (codes 2.083 GiB + scales 0.260 GiB, 2.125 bpw)
+  f32 blob                    :  29411328 B = 28.049 MiB
+  LAYOUT COST = 0.521 GiB extra = 17064 tokens of KV at 32768 B/token
+
+=== the rest of the footprint ===
+  blocks: 24 GDN + 8 softmax-attention (full_attention_interval=4)
+  recurrent state, context-INDEPENDENT: 2097152 B/layer state + 98304 B/layer conv = 50.2 MiB over 24 layers
+  KV cache: 32768 B/token (32.0 MiB per 1k tokens), fp16, 8 layers
+  device-local heap: 0 MiB
+
+arena (single DEVICE_LOCAL allocation; sizes are the plan's, offsets are the driver's):
+  codes           2236612608 B  align 4    -> offset 0
+  scales           279576576 B  align 4    -> offset 2236612608
+  f32blob           29411328 B  align 4    -> offset 2516189184
+  ptq_scratch       33554432 B  align 4    -> offset 2545600512
+  x                    65536 B  align 4    -> offset 2579154944
+  xsum                  4096 B  align 4    -> offset 2579220480
+  out                8388608 B  align 4    -> offset 2579224576
+  arena committed 2.410 GiB, alignment padding 0 B
+
+=== weight load, measured on this card ===
+  SDMA    1866.4 MiB in   286.1 ms =  6.84 GB/s (transfer-only queue)
+  repack   1866.4 MiB -> 2399.6 MiB in   164.2 ms = 27.24 GB/s effective, 260 dispatches in 59 batches
+  f32blob     28.0 MiB   TOTAL 450.3 ms
+
+  plan+arena+pipelines 362.5 ms   weight load+repack 816.0 ms   TOTAL 1178.5 ms
+  the official fork took 16050 ms cold / 3680 ms warm for the same file; this is the
+  pure-blood engine's own cold path, disk -> SDMA -> repack in VRAM, measured above.
+  device-local footprint of the weights alone: 2.410 GiB
+
+=== byte-level layout proof (codes + scale read back from the arena) ===
+  output.weight            row 0       blk 0   bit-exact  scale 247c
+      gpu       w0 a4a04694 2562068a 81614840 a1262660  w1 61418528 544169a0 26a48984 09468519
+  output.weight            row 124160  blk 3   bit-exact  scale 23a2
+      gpu       w0 a84514a5 05a12944 121a04a1 2a991985  w1 810985a6 16a11258 142a26a4 184a005a
+  output.weight            row 248319  blk 31  bit-exact  scale 1ec2
+      gpu       w0 a41a0255 5a044892 10a85928 012661a5  w1 644a6466 82925159 10840aa4 6a424810
+  token_embd.weight        row 0       blk 0   bit-exact  scale 22bb
+      gpu       w0 aa0a9605 a0065460 66610456 00880929  w1 0aa66189 96456069 958806a4 99692211
+  token_embd.weight        row 124160  blk 3   bit-exact  scale 239d
+      gpu       w0 1a5aa056 61a2466a 19616615 9a828512  w1 9014a981 001021a4 6494a251 882a1058
+  token_embd.weight        row 248319  blk 31  bit-exact  scale 1b4e
+      gpu       w0 06a16019 509a8a95 96808559 1889a164  w1 12001a28 51450a80 124a419a 16a15810
+  blk.0.attn_qkv.weight    row 0       blk 0   bit-exact  scale 25a3
+      gpu       w0 4854a112 48606565 02240282 a4948a09  w1 88582900 01985946 60a8a164 95506664
+  blk.0.attn_qkv.weight    row 4096    blk 3   bit-exact  scale 240a
+      gpu       w0 95966510 22a50014 a90900a0 08a51640  w1 41524a59 651a9062 81a28684 92944089
+  blk.0.attn_qkv.weight    row 8191    blk 31  bit-exact  scale 253b
+      gpu       w0 6a09886a 4a24488a 45200918 62196815  w1 54544408 aa940665 246a9508 161a0426
+  blk.0.ffn_gate.weight    row 0       blk 0   bit-exact  scale 2328
+      gpu       w0 a6a664a1 49524a44 15921958 415a1a41  w1 95480922 a42a824a 2a152a40 869688a6
+  blk.0.ffn_gate.weight    row 6144    blk 3   bit-exact  scale 21fc
+      gpu       w0 0804a002 85806196 58a62516 52a11a05  w1 18686069 26604549 11499220 60a9a444
+  blk.0.ffn_gate.weight    row 12287   blk 31  bit-exact  scale 2324
+      gpu       w0 60a92465 40496152 84a6619a a1a81561  w1 21858a16 66298a9a 5929aa9a 612a106a
+  blk.31.ffn_down.weight   row 0       blk 0   bit-exact  scale 2232
+      gpu       w0 a4604982 88995410 42659898 5206194a  w1 42884121 01552104 5941aa60 a6aa1688
+  blk.31.ffn_down.weight   row 2048    blk 3   bit-exact  scale 220d
+      gpu       w0 81488642 05401660 90a64544 6a568159  w1 88a84a8a a6460480 68988655 64426229
+  blk.31.ffn_down.weight   row 4095    blk 95  bit-exact  scale 22fc
+      gpu       w0 4490a565 69288048 a2a6a519 1292556a  w1 89250111 41a00a28 6a001465 6909a648
+  blk.7.attn_k.weight      row 0       blk 0   bit-exact  scale 21ed
+      gpu       w0 549a82a9 01416922 28611a95 6a560281  w1 84199516 15a21045 aaa0a029 a28918a5
+  blk.7.attn_k.weight      row 512     blk 3   bit-exact  scale 209d
+      gpu       w0 999940aa a2865848 82a6119a 21014050  w1 49588869 55219a28 6918105a 46914620
+  blk.7.attn_k.weight      row 1023    blk 31  bit-exact  scale 2478
+      gpu       w0 01124284 05044258 92a59502 8122aa56  w1 18a04805 22151941 82646154 80900501
+  layout mismatches: 0
+
+=== f32 blob byte proof (head + tail of five representative tensors) ===
+  output_norm.weight       4096       x 1        16384 B  head exact  tail exact
+  blk.0.attn_norm.weight   4096       x 1        16384 B  head exact  tail exact
+  blk.0.ssm_alpha.weight   4096       x 32       524288 B  head exact  tail exact
+  blk.0.ssm_conv1d.weight  4          x 8192     131072 B  head exact  tail exact
+  blk.0.ssm_dt.bias        32         x 1        128 B  head exact  tail exact
+  blk.31.attn_q_norm.weight 256        x 1        1024 B  head exact  tail exact
+  f32 mismatches: 0
+
+=== engine GEMV on REAL weights vs CPU reference (ptq_decode, float64) ===
+  blk.0.attn_qkv.weight      row 3866    gpu=     -0.314870 ref=     -0.314870  abs=2.75e-08 rel=8.73e-08
+  blk.0.attn_qkv.weight      row 2566    gpu=     -0.488937 ref=     -0.488937  abs=6.75e-08 rel=1.38e-07
+  blk.0.attn_qkv.weight      M=8192 K=4096 splits=8
+  blk.0.ffn_gate.weight      row 192     gpu=     -0.170418 ref=     -0.170418  abs=1.70e-08 rel=9.97e-08
+  blk.0.ffn_gate.weight      row 10610   gpu=      0.001286 ref=      0.001286  abs=2.19e-08 rel=1.70e-05
+  blk.0.ffn_gate.weight      M=12288 K=4096 splits=4
+  blk.0.ffn_down.weight      row 2699    gpu=      1.184070 ref=      1.184070  abs=2.31e-07 rel=1.95e-07
+  blk.0.ffn_down.weight      row 1354    gpu=      0.271133 ref=      0.271133  abs=5.87e-08 rel=2.16e-07
+  blk.0.ffn_down.weight      M=4096 K=12288 splits=16
+  blk.0.ssm_out.weight       row 1048    gpu=      0.265928 ref=      0.265928  abs=2.26e-08 rel=8.49e-08
+  blk.0.ssm_out.weight       row 3173    gpu=      0.528327 ref=      0.528327  abs=3.07e-08 rel=5.82e-08
+  blk.0.ssm_out.weight       M=4096 K=4096 splits=16
+  blk.31.attn_output.weight  row 1221    gpu=     -2.013828 ref=     -2.013828  abs=2.03e-07 rel=1.01e-07
+  blk.31.attn_output.weight  row 516     gpu=      0.077857 ref=      0.077857  abs=2.33e-09 rel=2.99e-08
+  blk.31.attn_output.weight  M=4096 K=4096 splits=16
+  blk.7.attn_k.weight        row 666     gpu=      0.048505 ref=      0.048505  abs=2.75e-08 rel=5.66e-07
+  blk.7.attn_k.weight        row 162     gpu=      0.612940 ref=      0.612940  abs=3.45e-08 rel=5.62e-08
+  blk.7.attn_k.weight        M=1024 K=4096 splits=16
+  blk.0.attn_gate.weight     row 1713    gpu=      0.005973 ref=      0.005973  abs=2.37e-08 rel=3.98e-06
+  blk.0.attn_gate.weight     row 1882    gpu=     -0.926255 ref=     -0.926255  abs=3.03e-08 rel=3.27e-08
+  blk.0.attn_gate.weight     M=4096 K=4096 splits=16
+  blk.7.ffn_up.weight        row 6942    gpu=     -0.299210 ref=     -0.299210  abs=2.56e-08 rel=8.56e-08
+  blk.7.ffn_up.weight        row 5320    gpu=     -0.143910 ref=     -0.143910  abs=8.85e-09 rel=6.15e-08
+  blk.7.ffn_up.weight        M=12288 K=4096 splits=4
+
+verify: 16 rows compared, worst rel = 1.702e-05 (blk.0.ffn_gate.weight row 10610)

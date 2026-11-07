@@ -1,0 +1,7 @@
+// probe_shm_n4000.comp - shared-memory ceiling probe, PROBE_N = 4000.
+//
+//   sd[4000] + sp[4000] = 2 * 4000 * 4 B = 32000 B, declared in shared_mem_probe.glslh.
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#define PROBE_N 4000u
+#include "shared_mem_probe.glslh"

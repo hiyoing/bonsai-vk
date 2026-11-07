@@ -1,0 +1,33 @@
+=== bonsai_fleet ring 4 8 6, v3 = the definitive ring measurement (02:20 2026-11-05) ===
+  v1 (fleet_ring_v1.log): 6 phantom D2H mismatches + an impossible 56 GB/s batched rate.
+  v2 (fleet_ring_v2.log): the mismatches were a cursor bug (stage sequence vs payload count)
+      and the 56 GB/s was a fence that had not really waited; both now instrumented.
+  v3 (this run): the ring counts PAYLOADS, stamps a doorbell in the same CB as each copy, and
+      times fence vs doorbell vs queue-drain for every leg, plus a fresh-fence control.
+  build: 0 warnings (build_mingw.bat full tree, this TU re-verified with -Wall standalone).
+
+
+== fleet ring rig: depth 4 x 8 MiB slots, 6 microbatch(es) ==
+  card [0] Radeon RX 550X (DISCRETE_GPU) | compute family 0 | transfer-only family 2
+  arena type 0  DEVICE_LOCAL   24.0 MiB  [shared-heap=no cached=no]  <- discrete branch: first type carrying DEVICE_LOCAL, exactly the predicate every existing runs/ log was produced with
+  ring: 4 slot(s) x 8388608 B = 33554432 B, memory type 3 (host-visible, not on a unified heap)
+  pipelined run below moves each 8388608 B slot D2H out of PROD and H2D into CONS, so the
+  bytes cross the link twice per hop. NOT EXERCISABLE HERE: only one compute-capable device was opened, so the second card's H2D->compute overlap and the PCIe-to-PCIe path a two-card machine takes are untested, and the D2H->host->H2D round trip is what IS tested.
+
+  pipelined run: 12 stage(s), 6 hop(s) in 17.437 ms
+  per hop: wall 2906.2 us | host-visible waits: D2H fence 2.3 us, doorbell stamp 2445.4 us, back-pressure 3.2 us total over 2 wait(s), command-buffer recycle 16.5 us total over 8 wait(s)
+  completion signal audit: fence column 2.3 us/hop vs doorbell column 2445.4 us/hop, 6 stamped / 0 timeout(s) -> the fence signals EARLY on this driver; the stamp is the real completion
+  bytes across the ring: 50331648 B total, 8.00 MiB per hop; at the MEASURED 7.12 GB/s a 8388608 B slot is 1178.18 us of engine time per leg. Compare that with the doorbell column above: the hop is DMA-bound, not SYNC-bound - the earlier "sync-dominated" reading of this line was an artefact of timing a fence that returns before the copy retires (MEASURED submit+fence round trip 99.4 us)
+  back-pressure events: 2 at depth 4 (a depth-1 ring would take one wait per hop; D>1 is the mechanism, not a tuning knob)
+  ring cursors: produced 6, consumed 6 (equal, as they must be after the drain)
+  cursor cross-check: produced 6 vs hops 6 -> consistent
+  D2H arrival: 12 word(s) read through the ring mapping over 4 written slot(s) (0 untouched), 0 mismatch(es) -> PASS - the DMA put into the slot exactly what the producer's dispatch wrote into its window, and the publish happened after the fence
+  round trip slot1 -> CONS -> slot2: bytes intact (fence 0.8 / 0.8 us, + queue-idle 1204.3 / 1207.7 us; each leg is copy + one submit+fence round trip, MEASURED 99.4 us)
+  fenced D2H audit: the fence alone reported 0.7 us per hop, the queue-idle tail after it added 1202.0 us (a tail near zero means the fence IS the completion signal here)
+  fenced D2H  8 x 8388608 B on family 2: 1202.8 us per hop -> 6.97 GB/s wall = 98% of the MEASURED 7.15 GB/s ceiling, submit, fence AND the queue-drain tail included
+  fresh-fence control 8 x 8388608 B: fence 1263.6 us, queue-idle tail 0.8 us -> a FRESH fence blocks correctly, so the early signal above was our created-SIGNALED + reset + resubmit reuse pattern, not the driver: use one fence per in-flight leg or reset before submit
+  batched D2H 8 x 8388608 B in ONE submit: fence 0.9 us total, queue-idle tail 9400.8 us total -> 1175.2 us per copy, 7.14 GB/s end-to-end (MEASURED single-copy ceiling 7.15 GB/s; if the fence column alone exceeds it, the fence is not the completion signal and the SUM is the number to quote)
+
+  publish condition in force: the DOORBELL stamp, written in the same CB as the copy; a bare fence for a transfer-queue leg is adequate when the leg's own CB is not reused on this driver (see the fresh-fence control above)
+  device released. Whole command took 119 ms of GPU-touching time.
+rc_ring=0

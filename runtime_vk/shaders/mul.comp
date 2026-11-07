@@ -1,0 +1,39 @@
+#version 450
+// mul.comp - y = a * b, elementwise, vectorised by 4.
+//
+// ggml op it replaces: MUL. The engine's three users are
+//   MUL(norm-0, blk.N.attn_norm.weight)                  - the RMS norm weight (rms_norm.comp can do
+//                                                         this itself with use_w=1; this kernel is for
+//                                                         the graphs where the norm and the weight are
+//                                                         separate nodes, which is what the dump shows)
+//   MUL(a_softplus-0, blk.0.ssm_a{32})                   - the GDN log-decay (dump line 436)
+//   MUL(x, sign)                                         - see signs_mul.comp for the +-1 special case
+//
+// Work per element: 2 loads + 1 multiply + 1 store. No reduction and no order question: an fp
+// multiply is one IEEE operation, so card and CPU reference must agree BIT FOR BIT. align_ops.exe
+// asserts bit-equality, not a tolerance.
+//
+// Requires n % 4 == 0 (all engine vectors are 4096/8192/12288/248320); no scalar tail, for the same
+// reason add.comp states it.
+//
+// DISPATCH: gl_WorkGroupCount.x == ceil(n_vec4 / 256).
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly buffer A { vec4 ab[]; };
+layout(binding = 1) readonly buffer B { vec4 bb[]; };
+layout(binding = 2)       buffer Y { vec4 yb[]; };
+
+layout(push_constant) uniform PC {
+    uint a_off;    // in vec4 units
+    uint b_off;    // in vec4 units
+    uint y_off;    // in vec4 units
+    uint n_vec4;   // n_elements / 4
+    uint _p0, _p1, _p2, _p3;   // pad to 32 B
+};
+
+void main() {
+    const uint i = gl_WorkGroupID.x * 256u + gl_LocalInvocationID.x;
+    if (i >= n_vec4) { return; }
+    yb[y_off + i] = ab[a_off + i] * bb[b_off + i];
+}

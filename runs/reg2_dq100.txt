@@ -1,0 +1,31 @@
+[gguf] tensors=427  PTQ1_0(143)=202  data_start=11039616
+[dev]  Radeon RX 550X
+[feat] storageBuffer8Bit=1 storageBuffer16Bit=1 uniformAndStorage16Bit=1 shaderFloat16=0
+[gpu] nel=12800  blocks=100  local=256  groups=7 (7*2048 = 14336 >= 12800 weights)
+
+[blocks] 100 PTQ1_0 blocks (real, read from the checkpoint), 12800 weights compared
+[census] CPU-REF weights by class: -d 4224, 0 4194, +d 4382, NaN 0, Inf 0  (of 12800)
+[census] block scales: finite nonzero |d| in [0.0091095, 0.0519104]; d==0 0, subnormal 0, negative 0, non-finite 0
+[blocks] sample provenance (first 6 and last 2, so the bytes are re-derivable):
+   #  1  output.weight                      blk=7       file_off=11039812 d=0.0186005
+   #  2  blk.0.attn_gate.weight             blk=4103    file_off=456160324 d=0.0237427
+   #  3  blk.0.ffn_down.weight              blk=8199    file_off=467301444 d=0.013504
+   #  4  blk.0.ffn_up.weight                blk=12295   file_off=489436228 d=0.0116577
+   #  5  blk.1.attn_gate.weight             blk=16391   file_off=505427780 d=0.0195618
+   #  6  blk.1.ffn_down.weight              blk=20487   file_off=516568900 d=0.0117111
+   # 99  blk.31.attn_q.weight               blk=139271  file_off=1960081476 d=0.0176239
+   #100  blk.31.ffn_down.weight             blk=12295   file_off=1964784708 d=0.011528
+
+==== dequant fidelity (GPU-official-shader vs CPU-transcription vs our runtime) ====
+  max|GPU-REF - CPU-REF| = 0.00000  (over 12800 finite pairs, argmax weight 0)
+      bit-exact 12800/12800 (100.000%)   NaN/Inf-aware equal 12800/12800   non-finite mismatches 0
+  max|OURS    - CPU-REF| = 0.00000  (over 12800 finite pairs, argmax weight 0)
+      bit-exact 12800/12800 (100.000%)   NaN/Inf-aware equal 12800/12800   non-finite mismatches 0
+  max|OURS    - GPU-REF| = 0.00000  (over 12800 finite pairs, argmax weight 0)
+      bit-exact 12800/12800 (100.000%)   NaN/Inf-aware equal 12800/12800   non-finite mismatches 0
+  symbol agreement      = 12800/12800 weights, 0 disagreements (0 weights skipped: scale is 0/Inf/NaN, where w/d is not a symbol)
+  runtime dot form d*(cs-xs) vs sum(w_e*x_e): max abs 0.000e+00  max rel 0.000e+00  (100 blocks, 0 skipped for non-finite d)
+  (why this can be non-zero in principle: the folded form multiplies by d once per block
+   and the weight form multiplies per element, so a reassociation could show up in the
+   last bits. Measured 0.000e+00 here, which is what exactness requires: (trit-1) is
+   always -1/0/+1, so (trit-1)*d is representable and the two forms are the same number.)

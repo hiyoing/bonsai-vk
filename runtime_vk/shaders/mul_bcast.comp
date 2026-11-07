@@ -1,0 +1,36 @@
+#version 450
+// mul_bcast.comp - y[row][d] = x[row][d] * w[row % (nrow/wrow)][d], the ggml broadcast MUL.
+//
+// WHY IT EXISTS: blk.N.ssm_norm.weight is {128, 1, 1, 1} and the dump multiplies it into
+// norm-0{128, 32, 2} (runs/dbg_full_real.log line 232), i.e. the SAME 128 numbers times 32 rows.
+// A flat vec4 mul cannot express that with one offset, and pre-expanding the weight into 4096
+// floats would need an upload path for a tensor the f32 blob already carries. So the row index is
+// computed here instead: w_row = n_cols / w_cols repetitions, and row r uses w[(r % w_row) * w_cols].
+// For ssm_norm: n_cols=128, w_cols=128 -> w_row=1 -> every row uses w[0..127] (the plain case).
+// For a 4096-wide vector with a 128-wide weight it would be w_row=32; the formula covers both, which
+// is why nothing about this kernel is specific to one tensor.
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly buffer X { float x[]; };
+layout(binding = 1) readonly buffer W { float w[]; };
+layout(binding = 2)       buffer Y { float y[]; };
+
+layout(push_constant) uniform PC {
+    uint x_off;
+    uint w_off;
+    uint y_off;
+    uint n_rows;      // workgroups (gl_WorkGroupCount.x)
+    uint n_cols;      // row length, <= 256 * iters
+    uint w_cols;      // weight length; must divide n_cols
+    uint _p0, _p1;    // pad to 32 B
+};
+
+void main() {
+    const uint r = gl_WorkGroupID.x;
+    if (r >= n_rows) { return; }
+    const uint w_row = n_cols / w_cols;
+    const uint wbase = w_off + (r % w_row) * w_cols;
+    const uint row = r * n_cols;
+    for (uint d = gl_LocalInvocationID.x; d < n_cols; d += 256u)
+        y[y_off + row + d] = x[x_off + row + d] * w[wbase + d];
+}

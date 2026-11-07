@@ -1,0 +1,28 @@
+#version 450
+// set_pos.comp - write the absolute position vector the three attention shaders read.
+//
+// The attention kernels were validated standalone against the official dump and index POS[t] from
+// element 0; they take no position push constant, and rewriting a 0-error kernel to add one is a
+// bigger risk than spending 20 us on this dispatch. One workgroup, one lane, and the value comes
+// from the push constant, so the whole token stays inside a SINGLE command buffer and a single
+// submit - the per-token submit+fence cost measured on this card is 16.8 ms, which is 30 % of a
+// 54 ms token, so nothing extra may ever leave the buffer.
+//
+// Also carries the two scalars the graph needs that have no kernel of their own:
+//   gate_bias / nothing else - the f32 tensors (dt.bias, ssm_a, conv weight, norms) are read
+//   directly out of the f32 blob by their consumers, so no upload path is needed for them at all.
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) buffer P { uint pos[]; };
+
+layout(push_constant) uniform PC {
+    uint p0;          // POS[0] - the absolute position of this token
+    uint n;           // how many entries to write (1 for decode, seq for a batch)
+    uint base;        // float/uint units into the arena
+    uint stride;      // 0 = every entry is p0+base+i, i.e. a contiguous prefill range
+    uint _p0, _p1, _p2, _p3;
+};
+
+void main() {
+    for (uint i = 0u; i < n; ++i) pos[base + i] = p0 + (stride == 0u ? i : i * stride);
+}

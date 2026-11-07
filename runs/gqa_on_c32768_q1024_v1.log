@@ -1,0 +1,59 @@
+device: Radeon RX 550X | driver 2.0.279 | device-local heap 3840 MiB | timestampPeriod 40.000 ns
+  limits: maxComputeWorkGroupSize[0]=1024 maxComputeWorkGroupCount[0]=4294967295 bufferImageGranularity=1
+  limits: maxComputeSharedMemorySize=32768 B (= 32 KiB) maxComputeWorkGroupInvocations=1024
+  compute queue = family 0, transfer-only queue = family 2
+
+=== weight plan, read from the tensor table (实测, not estimated) ===
+  tensors 427 = 202 PTQ1_0 + 225 f32   weights 8953803264 elems = 8.954 B
+  per-tensor shapes are K x M with K in {4096, 12288}; sign_widths says the same, so the
+  activation-side Hadamard has exactly two widths to cover.
+  checkpoint's own block form : 1957036032 B = 1.823 GiB  (1.75 bpw)
+  our 2-bit random-access form: 2516189184 B = 2.343 GiB  (codes 2.083 GiB + scales 0.260 GiB, 2.125 bpw)
+  f32 blob                    :  29411328 B = 28.049 MiB
+  LAYOUT COST = 0.521 GiB extra = 17064 tokens of KV at 32768 B/token
+
+=== the rest of the footprint ===
+  blocks: 24 GDN + 8 softmax-attention (full_attention_interval=4)
+  recurrent state, context-INDEPENDENT: 2097152 B/layer state + 98304 B/layer conv = 50.2 MiB over 24 layers
+  KV cache: 32768 B/token (32.0 MiB per 1k tokens), fp16, 8 layers
+  device-local heap: 3840 MiB
+
+arena (single DEVICE_LOCAL allocation; sizes are the plan's, offsets are the driver's):
+  codes           2236612608 B  align 4    -> offset 0
+  scales           279576576 B  align 4    -> offset 2236612608
+  f32blob           29411328 B  align 4    -> offset 2516189184
+  ptq_scratch       33554432 B  align 4    -> offset 2545600512
+  x                    65536 B  align 4    -> offset 2579154944
+  xsum                  4096 B  align 4    -> offset 2579220480
+  out                8388608 B  align 4    -> offset 2579224576
+  arena committed 2.410 GiB, alignment padding 0 B
+  KV V representation: q8_0 blocks (32 elements + 1 fp16 scale) (BONSAI_KV_V_QUANT) | KF debug stream: off | KV block: 64 positions | spill watch: every 32 tokens, soft 32 / hard 64 MiB, growth run >= 3
+  spill thresholds are measured as GROWTH over the first decode sample (default; BONSAI_SPILL_ABS=1 for the absolute reading); the reference is the first decode sample and is printed with the curve
+  attention QK kernel: GQA-MERGED attn_qk_softmax_gqa_h4_q*.comp (cap 32768; narrow <= 256, wide <= 2048, tiled row <= 65536; force=0 tile=2048)
+    GQA merge: grid 16 -> 4 workgroups per layer (HPK = 4 query heads served by one K gather), QK reference = tiled, LDS 16416 B = 16.0 KiB per workgroup (HPK*4*QTILE + 8*HPK, QTILE = 1024)
+    V path: GQA-MERGED attn_pv_q8v_gqa.comp (one V word/scale unpack per key, shared by HPK heads)
+    tiled kernel LDS: 4*2048 + 4 = 8196 B = 8.0 KiB per workgroup (the wide kernel spends 16 KiB to address 2048 keys; this one spends 8.0 KiB and addresses an unbounded row)
+
+=== forward bring-up ===
+  driver: minStorageBufferOffsetAlignment = 4 B, maxStorageBufferRange = 4096.000 MiB
+  split-K scratch sized from the plan: 65536 floats (0.2 MiB) - max S*M over 202 PTQ tensors
+  KV geometry (derived from the kernel layout, not typed):
+    K  fp16             512 words/slot/layer =   2048 B   (never compressed)
+    V q8_0 data       256 words/slot/layer =   1024 B   (8 blocks of 32 per head row)
+    V q8_0 scales      16 words/slot/layer =     64 B   (1 fp16 per 32-element block)
+    per layer-slot     3136 B -> x8 attention layers = 25088 B/token = 24.50 KiB/token
+  arena invariants | KV span 205520896 == cap 32768 x 8 x 784 OK; ST 12582912 / CH 589824 are 24 GDN layers x per-layer state, cap-free OK
+  activation arena: 220531520 floats = 841.261 MiB (state 48.0 MiB + KV 784.0 MiB + logits 0.95 MiB)
+    P0 check | cap-proportional regions = SCORE+PROB+P16+MASK+POS (42 floats) + KF off (0) + KV 8 layers x 784 = 6314 floats/slot; GDN terms in it: 0 (ST = 12582912 floats total, independent of cap)
+  memory budget | device-local heap 3840.0 MiB, weights 2467.7 MiB already committed
+    activations at cap 32768 : 841.3 MiB = cap-independent 52.0 MiB + 32768 slots x 24.66 KiB/slot (q8_0-V + fp16-K arena 24.50 KiB + fp32 side 0.16 KiB)
+    headroom after this allocation: 531.0 MiB (= 22046 more slots of cap, but the widest VALIDATED row for the tiled QK kernel is 65536)
+  KV block hook: 32768 slots = 512 blocks of 64 positions, 1.53 MiB per block (24.50 KiB/slot x 8 layers x 64), ceiling 531.02 MiB, evict off
+  [spill] PDH Shared Usage counter added as \GPU Process Memory(*)\Shared Usage (sum of every instance whose name contains "pid_16960_")
+  dxgi budget LOCAL (VRAM)      : budget 3464.6 MiB, current usage 2471.6 MiB, available for reservation 1834.2 MiB, current reservation 0.0 MiB   (AUXILIARY: a reservation budget, not an eviction signal)
+  dxgi budget NON_LOCAL (system): budget 7461.9 MiB, current usage 40.8 MiB, available for reservation 3858.9 MiB, current reservation 0.0 MiB   (AUXILIARY: a reservation budget, not an eviction signal)
+  act              882126080 B  align 4    -> offset 0
+arena: vkAllocateMemory(841 MiB) FAILED (-2). This is the 4 GB wall:
+  the card's device-local heap minus the driver's reservation is the
+  whole budget for weights + state + activations + KV.
+act arena did not fit: the driver refused 841.3 MiB although the heap it reports still leaves 531.0 MiB free after the weights - the driver keeps a reservation inside that heap, so the real ceiling for this cap is LOWER than the budget table above. Lower BONSAI_CAP (each slot costs 24.66 KiB) and rerun.

@@ -1,0 +1,55 @@
+=== OOM budget + ignition re-verified on the FINAL binary (build_v15, 2026-11-04 14:05), Wed Nov  4 14:19:51     2026
+
+--- A: cap 2048, driver-reported heap, 48 tokens ---
+  attention QK kernel: WIDE  attn_qk_softmax_wide.comp (cap 2048; narrow covers <= 256, wide <= 2048; force=0)
+  memory budget | device-local heap 3840.0 MiB, weights 2467.7 MiB already committed
+    activations at cap 2048 : 124.3 MiB = cap-independent 52.0 MiB + 2048 slots x 36.16 KiB/slot (fp16 K/V 32.00 + fp32 q/k+score/prob 4.16)
+    headroom after this allocation: 1247.9 MiB (= 35335 more slots of cap, but the widest VALIDATED attention row is 2048)
+  device-local total: weights 2.410 GiB + activations 124.339 MiB
+=== pure-blood token rate (measured, this card) ===
+  48 generated tokens in 3484.3 ms  ->  13.78 tok/s
+  first generated token (prefill+1): 71.9 ms; steady-state: 72.6 ms/token
+exit_A=0
+
+--- B: cap 2048, heap clamped to 2580 MiB (KV shortage) ---
+=== forward bring-up ===
+  driver: minStorageBufferOffsetAlignment = 4 B, maxStorageBufferRange = 4096.000 MiB
+  split-K scratch sized from the plan: 65536 floats (0.2 MiB) - max S*M over 202 PTQ tensors
+  activation arena: 32594720 floats = 124.339 MiB (state 48.0 MiB + KV 64.0 MiB + logits 0.95 MiB)
+  [TEST KNOB] BONSAI_HEAP_LIMIT_MIB=2580 -> budget clamped to 2580.0 MiB (driver reports 3840.0 MiB)
+  memory budget | device-local heap 2580.0 MiB, weights 2467.7 MiB already committed
+    activations at cap 2048 : 124.3 MiB = cap-independent 52.0 MiB + 2048 slots x 36.16 KiB/slot (fp16 K/V 32.00 + fp32 q/k+score/prob 4.16)
+  OOM FALLBACK - this cap does not fit, and NOTHING WAS DISPATCHED (no half-built state).
+    short by          : 12.1 MiB
+    heap - weights    : 112.3 MiB available for activations + KV
+    cap-independent   : 52.0 MiB (state, logits, scratch, fixed regions)
+    left for the KV   : 60.2 MiB, at 36.16 KiB per slot -> 1704 slots
+    widest VALIDATED attention row (attn_qk_softmax_wide MAXCAP) : 2048 slots
+    so the usable cap here is 1704; rerun with BONSAI_CAP=1704 (even, or lower).
+exit_B=4
+
+--- C: cap 256, heap clamped to 2500 MiB (no cap fits) ---
+  activation arena: 16004384 floats = 61.052 MiB (state 48.0 MiB + KV 8.0 MiB + logits 0.95 MiB)
+  [TEST KNOB] BONSAI_HEAP_LIMIT_MIB=2500 -> budget clamped to 2500.0 MiB (driver reports 3840.0 MiB)
+  memory budget | device-local heap 2500.0 MiB, weights 2467.7 MiB already committed
+    activations at cap 256 : 61.1 MiB = cap-independent 52.0 MiB + 256 slots x 36.16 KiB/slot (fp16 K/V 32.00 + fp32 q/k+score/prob 4.16)
+  OOM FALLBACK - no cap fits at all, and NOTHING WAS DISPATCHED.
+    device-local heap        : 2500.0 MiB
+    weights already resident : 2467.7 MiB
+    cap-INDEPENDENT activity : 52.0 MiB (recurrent state + logits + split-K scratch + the fixed regions)
+    this model therefore needs at least 2519.8 MiB of device-local memory; it cannot run in 2500.0 MiB.
+    options: free the GPU (other processes hold device-local memory too), or run the CPU fallback, or use a smaller checkpoint.
+exit_C=4
+
+--- D: ignition on the final binary, default cap 256, 48 tokens ---
+  attention QK kernel: NARROW attn_qk_softmax.comp (cap 256; narrow covers <= 256, wide <= 2048; force=0)
+  memory budget | device-local heap 3840.0 MiB, weights 2467.7 MiB already committed
+    activations at cap 256 : 61.1 MiB = cap-independent 52.0 MiB + 256 slots x 36.16 KiB/slot (fp16 K/V 32.00 + fp32 q/k+score/prob 4.16)
+    headroom after this allocation: 1311.2 MiB (= 37127 more slots of cap, but the widest VALIDATED attention row is 2048)
+  chat template: thinking=on  system=(none) user=30 chars -> 16 tokens, id paths (encode vs assembled) IDENTICAL
+  prompt 16 tokens: 248045 846 198 95826 110827 98682 95986 96326 103725 248046 198 248045 74455 198 248068 198
+=== pure-blood token rate (measured, this card) ===
+  48 generated tokens in 3416.8 ms  ->  14.05 tok/s
+  first generated token (prefill+1): 70.8 ms; steady-state: 71.2 ms/token
+  gdn_mode=0 gdn_gmap=0 l2_mode=1 round_probs=1 cap=256
+exit_D=0

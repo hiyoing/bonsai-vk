@@ -1,0 +1,34 @@
+# Build products of the local toolchain are SHIPPING artifacts here (the project's deliverable is a
+# binary + its SPIR-V on a machine with no package manager), so *.exe / *.spv are deliberately NOT
+# ignored. What is ignored is anything that is not source, not a measurement, and not a product:
+__pycache__/
+*.pyc
+.venv/
+
+# The reference checkpoints used by the alignment tools. They are downloads, not work products, and one
+# of them is 41 MiB; the reports cite their SHA and the logs they produced, which is what belongs here.
+runs/*.gguf
+runs/*.safetensors
+
+# Model weights are tens of GB and are NEVER a work product, anywhere in the tree (the engine is pointed
+# at them at run time). Block them globally, plus the conventional local weights / toolchain directories.
+*.gguf
+*.safetensors
+models/
+toolchain/
+
+# The frozen pre-P1 snapshot binary. It is kept on disk only because runs/diff_pre_p1_v2.txt was measured
+# against it; it is NOT rebuilt from current source, NOT shipped in dist, and predates the relative-path
+# desensitisation, so it must never be committed. (*.exe is otherwise a shipping artifact, see top.)
+runtime_vk/bonsai_vk_baseline_v1.exe
+
+# Live serve-daemon stdout/stderr: operational logs of a running server, not measurement evidence. They
+# grow while the server runs and record the run-time model path argument, so they stay local.
+runs/serve_daemon_*.log
+
+# Stray build logs from a batch-script bug (uncited, superseded by runs/build_release_v1.log).
+runtime_vk/..runsbuild_*.log
+
+# Editor / OS droppings.
+Thumbs.db
+Desktop.ini

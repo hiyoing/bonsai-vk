@@ -1,0 +1,14 @@
+kvfx_c2048_q1024             rc=0  steady-state: 98.6 ms/token
+kvfx_c2048_q2048             rc=0  steady-state: 98.3 ms/token
+kvfx_c2048_q4096             rc=0  steady-state: 98.4 ms/token
+kvfx_c4096_q1024             rc=0  steady-state: 127.6 ms/token
+kvfx_c4096_q2048             rc=0  steady-state: 127.4 ms/token
+kvfx_c4096_q4096             rc=0  steady-state: 127.2 ms/token
+kvfx_c8192_q1024             rc=0  steady-state: 185.7 ms/token
+kvfx_c8192_q2048             rc=0  steady-state: 185.8 ms/token
+kvfx_c8192_q4096             rc=0  steady-state: 185.5 ms/token
+kvfx_c16384_q1024            rc=0  steady-state: 301.6 ms/token
+kvfx_c16384_q2048            rc=0  steady-state: 301.4 ms/token
+kvfx_c16384_q4096            rc=0  steady-state: 301.2 ms/token
+kvfx_wide_c2048              rc=0  steady-state: 100.7 ms/token
+kvfx_wide_x1816              rc=0  steady-state: 97.3 ms/token

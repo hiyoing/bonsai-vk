@@ -1,0 +1,65 @@
+// shared_mem_bench.glslh - body of the occupancy half of shared_probe.exe.
+//
+// shared_mem_probe.glslh answered "does this driver CREATE and RUN a pipeline whose static shared
+// allocation is exactly maxComputeSharedMemorySize" - yes (runs/shared_probe_v1.log). That leaves the
+// question that actually decides whether the engine may raise MAXCAP from 2048 to 4096:
+//
+//   a wide attention workgroup is 256 lanes; two different shared sizes at the SAME instruction
+//   stream take different numbers of resident workgroups per CU, because gfx803 has 64 KiB of LDS
+//   per compute unit. 16 KiB (MAXCAP 2048) leaves room for several; 32 KiB (MAXCAP 4096) leaves room
+//   for at most two, and only if nothing at all is reserved.
+//
+// So this shader holds the WORK constant and varies only the shared declaration. Every lane touches
+// exactly its own element on the way in and then reads `iters` pairs of elements at an index that
+// depends on the loop counter, so:
+//   * the instruction stream is identical for every PROBE_N (no loop bound depends on PROBE_N),
+//   * the reads cannot be hoisted out of the loop (the index moves) and cannot be constant-folded,
+//   * the accumulator is stored unconditionally, so the loop cannot be dead-code eliminated.
+// Duration difference between the two sizes is therefore an occupancy effect, not a work effect.
+//
+// NOT part of the engine. The three validated attention kernels are untouched; this is a separate
+// module that exists to produce a number.
+
+#ifndef PROBE_N
+#define PROBE_N 4096u
+#endif
+#ifndef PROBE_LOCALS
+#define PROBE_LOCALS 256u
+#endif
+
+layout(local_size_x = PROBE_LOCALS, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) writeonly buffer RES { float res[]; };    // one value per workgroup
+// (the block instance is named RES, not OUT: OUT is a reserved keyword in GLSL.)
+
+layout(push_constant) uniform Push {
+    uint iters;                 // loop trip count, identical for every size
+    uint n;                     // == PROBE_N; kept in the push so the modulo is not a constant fold
+    uint pad0, pad1;
+} p;
+
+shared float sd[PROBE_N];
+shared float sp[PROBE_N];
+
+void main() {
+    const uint lane = gl_LocalInvocationID.x;
+    // Initialise the WHOLE array, not just the first 256 elements: the read indices run to n-1, and
+    // uninitialized workgroup memory is whatever the previous wave left there - it can be Inf or NaN,
+    // which would make the timed loop's checksum meaningless (it did exactly that in the first run).
+    // This adds ceil(n/256) iterations against an iters of 20000, i.e. <= 0.08 % of the work, and it
+    // is the same loop for every size.
+    for (uint k = lane; k < p.n; k += PROBE_LOCALS) {
+        sd[k] = float(k % 256u) * 0.5f;
+        sp[k] = 1.0f + float(k % 128u) * 0.25f;
+    }
+    barrier();
+
+    float acc = 0.0f;
+    for (uint i = 0u; i < p.iters; ++i) {
+        const uint a = (lane * 7u + i * 13u) % p.n;
+        const uint b = (lane * 3u + i * 17u) % p.n;
+        acc += sd[a] * sp[b];
+    }
+    // Stored for every workgroup. acc depends on the loop, so the loop survives to hardware.
+    res[gl_WorkGroupID.x] = acc;
+}

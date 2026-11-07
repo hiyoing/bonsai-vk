@@ -1,0 +1,43 @@
+#version 450
+// add.comp - y = a + b, elementwise, vectorised by 4.
+//
+// ggml op it replaces: ADD, which in the official dump is the residual add
+//   ADD(attn_output-0, model.input_embed) / ADD(attn_residual, post_attn_norm.weight-path) and the
+//   three GDN scalars that come in as ADD(alpha-0, blk.0.ssm_dt.bias{32}) (runs/dbg_full_real.log
+//   line 420). Every vector length the engine adds is a multiple of 4 (hidden 4096, inner 8192,
+//   ffn 12288, vocab-projection 32), so this kernel takes n_vec4 and requires the caller to assert
+//   n % 4 == 0 - it does NOT handle a scalar tail, because a half-implemented tail is how a silent
+//   3-element corruption reaches the 32nd layer.
+//
+// Work per element: 2 loads + 1 add + 1 store, i.e. 16 B read + 16 B written per lane. At the
+// measured 69-79 GB/s this is bandwidth-only: 2*4096*4 B per residual add = ~0.5 us.
+//
+// DETERMINISM: fp addition is a single IEEE operation, so there is no order to disagree about - the
+// card and the CPU reference must agree BIT FOR BIT, and align_ops asserts exactly that (not a
+// tolerance). No reduction, no atomics.
+//
+// DISPATCH: gl_WorkGroupCount.x == ceil(n_vec4 / 256).
+// Buffers are uint-arena float vec4s; every offset is in vec4 ELEMENT units like gemv_ternary.comp's
+// codes_off, so the engine can pack several tensors into one arena binding at arbitrary word offsets.
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly buffer A { vec4 ab[]; };
+layout(binding = 1) readonly buffer B { vec4 bb[]; };
+layout(binding = 2)       buffer Y { vec4 yb[]; };   // may alias A (the in-place residual case)
+
+layout(push_constant) uniform PC {
+    uint a_off;    // in vec4 units
+    uint b_off;    // in vec4 units
+    uint y_off;    // in vec4 units
+    uint n_vec4;   // n_elements / 4
+    uint _p0, _p1, _p2, _p3;   // pad to 32 B
+};
+
+void main() {
+    const uint i = gl_WorkGroupID.x * 256u + gl_LocalInvocationID.x;
+    if (i >= n_vec4) { return; }          // uniform-in-workgroup only if n_vec4 >= count*256; the
+                                          // guard is per-lane, but there is no barrier in this
+                                          // kernel, so an early return cannot strand a lane.
+    yb[y_off + i] = ab[a_off + i] + bb[b_off + i];
+}

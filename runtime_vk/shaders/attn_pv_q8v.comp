@@ -1,0 +1,113 @@
+#version 450
+
+// attn_pv_q8v.comp - stage 3 with the V operand read as q8_0 blocks, UNPACKED INSIDE THE ACCUMULATE
+// LOOP. Twin of attn_pv.comp (the validated kernel, left byte-frozen because align_attn.cpp:549 loads
+// shaders/attn_pv.spv with its own PVPush); everything outside the V operand is the same code.
+//
+// The one hard rule this file exists to satisfy: the q8_0 bytes are converted to float in the
+// accumulator's own registers and never touch global memory. A separate "dequantise the V arena into
+// a scratch buffer, then run the ordinary fp16 kernel" pass would add a per-token global write+read
+// (4 KiB per slot per layer at hd=256, twice through the bus) and would make the q8_0 cache cost MORE
+// bandwidth than the fp16 one it was introduced to save. Here the only global traffic is: read one
+// uint of packed probabilities, read one uint of packed V bytes, read one uint of scale - per key, per
+// lane, and the V bytes word is shared by 4 lanes so it is a broadcast within that quad.
+//
+// ---------------------------------------------------------------- the unpack instruction, and the two
+// candidates that were on the table
+//   A (this file):  bitfieldExtract(int(word), shift, 8) -> int -> float()   [exact q8_0 semantics]
+//                   (spelled that way because this glslang has no bitfieldSExtract at all - see the
+//                    note at the instruction itself; the emitted opcode IS OpBitFieldSExtract)
+//   B (rejected):   unpackSnorm4x8(word) -> 4 normalized floats          [1 op for 4 values]
+// B is cheaper but is NOT the same number: OpUnpackSnorm4x8 divides the byte by 127.0 in fp and
+// multiplies back an SIGNED scale that has to be premultiplied by 127, so the value the model sees is
+// (q * d) computed as (q/127) * (127*d_half) - a second rounding through the /127 and a 127*d_half
+// product that overflows fp16 near d ~ 6, and it costs ~4.9e-4 relative error against A on measured
+// V magnitudes. A costs one extra ALU op per element (the byte is BFE'd, not unpacked as four) and
+// BFE is single-instruction on GCN. A also keeps the stored fp16 scale as the only quantisation the
+// reconstruction sees, which is what a q8_0 checkpoint on disk means.
+//   f16 arithmetic is NOT used anywhere in this loop and cannot be: this driver reports
+// shaderFloat16 = 0 (runs/dq_synth.txt:1-2, and the same measurement is the reason f16_rne.glslh
+// exists), so float16_t / f16vec2 are illegal in SPIR-V here. The requirement is met in the only way
+// this card allows - unpack to FP32 in registers, accumulate in fp32, and keep the packing cost at the
+// store side where pack2_rne already lives.
+//
+// ---------------------------------------------------------------- register pressure and loop shape
+// Per lane the whole state across the j-loop is: acc (1), the loop counters and addresses (5 uint),
+// the probability operand (1), and three loop-INVARIANT values (byte shift, scale-half select,
+// per-row base addresses). No array, no vec4 temporaries, nothing cached between iterations - the
+// block/scale bookkeeping is recomputed by index arithmetic instead of stored, per the rule.
+// The two per-iteration increments are uint adds of a loop-invariant stride, so the loop body has NO
+// 32-bit integer multiply: (d & 3)*8 and d/4 are computed once outside it, and because hd % 4 == 0
+// and (hd/32) % 2 == 0 the byte position and the scale half do not depend on j at all. That parity
+// condition is what makes the address math additive, and fwd_init asserts it on the plan's own hd.
+// The accumulation stays `acc = acc + pv * v` over ascending j, exactly the reference order; the
+// materialised multiply is the same trick attn_norm_rope.comp uses to stop an FMA from silently
+// changing the number, so the fp16 and q8_0 caches differ only in what v IS, not in how it is summed.
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly  buffer P32   { float p32[]; };     // [seq][nh][cap] f32 probabilities
+layout(binding = 1) readonly  buffer P16   { uint  p16[]; };     // [seq][nh][cap/2] fp16 operand
+layout(binding = 2) readonly  buffer VD    { uint  vd[]; };      // [cap][nkv][hd/4] q8_0 V data words
+layout(binding = 3) readonly  buffer VS    { uint  vs[]; };      // [cap][nkv][hd/64] q8_0 V scale words
+layout(binding = 4) readonly  buffer POS   { uint  pos[]; };     // [seq]
+layout(binding = 5) readonly  buffer GATE  { float gate[]; };    // [seq][nh][hd] pre-sigmoid gate
+layout(binding = 6) writeonly buffer PGATE { float pregate[]; }; // [seq][nh][hd] attention result
+layout(binding = 7) writeonly buffer GOUT  { float gated[]; };   // [seq][nh][hd] after the gate
+
+// Identical to attn_pv.comp's block, so the engine pushes the same 8 words to either kernel and the
+// A/B of the two V representations cannot be confounded by a differing push.
+layout(push_constant) uniform Push {
+    uint seq, nh, nkv, hd, cap;
+    uint round_probs;           // 1 = read p16 (official mixed-type cast), 0 = read p32
+    float pad0, pad1;
+} p;
+
+void main() {
+    const uint w = gl_WorkGroupID.x;
+    const uint d = gl_LocalInvocationID.x;
+    const uint t = w / p.nh, h = w % p.nh;
+    const uint hw = p.hd / 2u;
+    const uint nfill = pos[t] + 1u;
+    const uint kv = h / (p.nh / p.nkv);
+
+    // ---- loop invariants (computed once per lane; none of them depend on j)
+    const uint nblk_row = p.hd / 32u;                    // q8_0 blocks per head row
+    const uint vdw_row  = p.nkv * p.hd / 4u;             // data words  per key slot
+    const uint vsw_row  = p.nkv * nblk_row / 2u;         // scale words per key slot
+    const uint vbase    = kv * (p.hd / 4u) + d / 4u;     // word holding this lane's element at j = 0
+    const uint sh       = (d & 3u) * 8u;                 // byte of this lane's element inside that word
+    const uint sbase    = (kv * nblk_row + d / 32u) / 2u;  // scale word for this lane's block at j = 0
+    const bool shi      = ((d / 32u) & 1u) != 0u;        // low or high half of the scale word (fixed)
+    const uint prow16   = (t * p.nh + h) * (p.cap / 2u);
+    const uint prow32   = (t * p.nh + h) * p.cap;
+
+    float acc = 0.0;
+    uint va = vbase, sa = sbase;                          // loop-carried: uint adds, no multiplies
+    for (uint j = 0u; j < nfill; ++j) {
+        float pv;
+        if (p.round_probs != 0u) {
+            const uint word = p16[prow16 + (j >> 1u)];
+            pv = (j & 1u) == 0u ? unpackHalf2x16(word).x : unpackHalf2x16(word).y;
+        } else {
+            pv = p32[prow32 + j];
+        }
+        // MEASURED, not assumed: this glslang (11:16.6.0) has NO bitfieldSExtract / bitfieldUExtract /
+        // findLSB in its Vulkan-mode builtin table ("no matching overloaded function found" even for
+        // bitfieldSExtract(1,1,1)), so the spec's canonical spelling of variant A does not compile
+        // here. bitfieldExtract(value, offset, count) does, and with an INT base it is defined to
+        // sign-extend - verified by `glslang -V -H` on a probe, whose dump is
+        //     41: 21(int) BitFieldSExtract 32 39 40
+        // i.e. the same OpBitFieldSExtract, one instruction, which is what lowers to V_BFE_U32 signed
+        // on GCN. uint->int is a bit-pattern reinterpretation, so nothing is converted on the way in.
+        const float q  = float(bitfieldExtract(int(vd[va]), int(sh), 8));  // BFE + I2F, in registers
+        const uint  sw = vs[sa];                                          // one of 2 fp16 scales
+        const float v  = (shi ? unpackHalf2x16(sw).y : unpackHalf2x16(sw).x) * q;
+        acc = acc + pv * v;
+        va += vdw_row; sa += vsw_row;
+    }
+
+    const uint o = (t * p.nh + h) * p.hd + d;
+    pregate[o] = acc;
+    gated[o] = acc * (1.0 / (1.0 + exp(-gate[o])));
+}

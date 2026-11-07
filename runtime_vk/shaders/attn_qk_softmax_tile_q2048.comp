@@ -1,0 +1,10 @@
+// attn_qk_softmax_tile_q2048.comp - tiled stage-2 kernel, tile = 2048 keys.
+//
+//   LDS = sd[2048] (8192 B) + s_sum (4 B) = 8200 B, i.e. HALF the wide kernel's 16 KiB at the same
+//   MAXCAP, because the row no longer lives in shared memory twice. Bench (runs/shared_probe_v3.log):
+//   8 KiB vs 16 KiB on an identical instruction stream is +1.5%, so this is the cheap end of the curve.
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "f16_rne.glslh"
+#define QTILE 2048u
+#include "attn_qk_softmax_tile.glslh"

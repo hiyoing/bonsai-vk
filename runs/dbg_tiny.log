@@ -1,0 +1,2 @@
+0.01.535.372 I cmn          init: llama threadpool init, n_threads = 6
+<ci>/llama.cpp\llama.cpp\ggml\src\ggml-backend.cpp:194: GGML_ASSERT(buffer) failed

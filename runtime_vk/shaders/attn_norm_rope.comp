@@ -1,0 +1,133 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "f16_rne.glslh"
+
+// attn_norm_rope.comp - stage 1 of our attention: per-head RMS norm, its weight MUL, half-split
+// RoPE, and the fp16 KV arena write. This is the GPU twin of attn_rms_norm() + attn_rope() in
+// attn_vk.h, and every number in it is the measured official semantics (see that header for the
+// evidence): layers 3,7,... of qwen35 norm EACH HEAD over head_dim=256 with float(1e-6f), multiply
+// by blk.N.attn_q_norm / attn_k_norm as a separate step, rotate only the first n_rot=64 dims in
+// pairs (p, p+32) with theta_p = freq_base^(-2p/64), and store the cache in fp16.
+//
+// Two kinds of workgroup row, both of 256 lanes (one lane per dim):
+//   w <  seq*nh          -> a Q head row:  norm, rope, pack to q16. NOT cached (the graph never
+//                            puts Q in the cache) but it is the fp16 operand of kq, so it is packed.
+//   w >= seq*nh          -> a (K and V) head row: K gets norm+rope -> kc, V gets packed straight
+//                            through -> vc. The dump showed SET_ROWS writing V with no norm and no
+//                            rope, so the second half of this row is deliberately the boring one.
+//
+// The sum of squares is accumulated by lane 0 in ascending d, in fp32, because that is what the CPU
+// reference does - the bit-exactness of align_attn depends on it. It is NOT fast; speed is a
+// separate pass over this kernel.
+//
+// fp16 packing goes through pack2_rne() from f16_rne.glslh, NOT packHalf2x16(): stage F measured this
+// driver's instruction to be round-TOWARD-ZERO, while the reference engine's fp16 cache is built with
+// round-to-nearest-even. Word w holds elements 2w (low half) and 2w+1 (high half), and the arena is a
+// plain uint buffer - no storageBuffer16BitAccess feature and no float16_t storage buffers at all.
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly  buffer QIN  { float q_in[]; };   // [seq][nh ][hd] pre-norm
+layout(binding = 1) readonly  buffer KIN  { float k_in[]; };   // [seq][nkv][hd] pre-norm
+layout(binding = 2) readonly  buffer VIN  { float v_in[]; };   // [seq][nkv][hd]
+layout(binding = 3) readonly  buffer QNW  { float qn_w[]; };   // [hd] real GGUF weights
+layout(binding = 4) readonly  buffer KNW  { float kn_w[]; };   // [hd]
+layout(binding = 5) readonly  buffer POS  { uint  pos[]; };    // [seq] absolute positions
+layout(binding = 6) writeonly buffer KC   { uint  kc[]; };     // [cap][nkv][hd/2] the K arena
+layout(binding = 7) writeonly buffer VC   { uint  vc[]; };     // [cap][nkv][hd/2] the V arena
+layout(binding = 8) writeonly buffer Q16  { uint  q16[]; };    // [seq][nh ][hd/2] fp16 Q operand
+// Two DEBUG outputs, fp32 and BEFORE the pack. They exist because the arena only shows the rounded
+// result: when q16 disagrees with the mirror by one bit it is impossible to tell from the arena alone
+// whether the two fp32 values were equal and the packers disagreed (they do not - stage F closes that),
+// whether they differed by 1e-7 (the transcendentals, stage T), or by 1e-3 (an algebra bug). align_attn
+// stage R measures the fp32 gap directly and sorts it by dimension. No engine buffer is involved: the
+// real kernel writes these two words per lane and nothing reads them back.
+layout(binding = 9) writeonly buffer QF   { float qf[]; };     // [seq][nh ][hd] post-rope fp32
+layout(binding = 10) writeonly buffer KF  { float kf[]; };     // [cap][nkv][hd] post-rope fp32
+
+layout(push_constant) uniform Push {
+    uint seq, nh, nkv, hd, nrot, cap;
+    float eps, freq_base;
+} p;
+
+shared float sh[256];      // the normed row (input of rope)
+shared float sy[256];      // the roped row (input of the pack)
+shared float sq[256];      // x*x, materialised - see the sum-of-squares comment below
+shared float sinv[1];      // 1/sqrt(mean(x^2)+eps), lane 0 only
+
+// the norm weight for this row: Q rows use qn_w, K rows use kn_w
+float wref(uint d, bool is_q) { return is_q ? qn_w[d] : kn_w[d]; }
+
+void main() {
+    const uint w = gl_WorkGroupID.x;
+    const uint d = gl_LocalInvocationID.x;
+    // No early return here on purpose: barrier() below must not be inside divergent control flow.
+    // align_attn asserts hd <= 256 and cap <= 256 before dispatching, which is what makes the local
+    // size and this row shape line up.
+    const uint hw   = p.hd / 2u;
+    const uint nq   = p.seq * p.nh;
+    const bool is_q = w < nq;
+
+    uint t, h;
+    if (is_q) { t = w / p.nh; h = w % p.nh; }
+    else      { const uint k = w - nq; t = k / p.nkv; h = k % p.nkv; }
+
+    const uint position = pos[t];
+    const uint row = is_q ? (t * p.nh + h) * p.hd : (t * p.nkv + h) * p.hd;
+    const float  x = (is_q ? q_in[row + d] : k_in[row + d]);
+    sh[d] = x;
+    // THE SQUARE IS WRITTEN OUT AND NOT ADDED IN-PLACE, and that is a numerical decision, not style:
+    // `ss = ss + sh[i] * sh[i]` is exactly the expression an optimizing compiler turns into an FMA, and
+    // an FMA is a DIFFERENT NUMBER (it adds the unrounded product). The CPU reference rounds every x*x
+    // to fp32 before adding it, and ggml's CPU RMS_NORM does the same, so the multiply has to be
+    // materialised - a store to shared memory plus a barrier is the one construct the compiler cannot
+    // fuse back into the add. leg T measured this driver's sqrt and division at 1 fp32 ulp from libm, so
+    // the sum is the only remaining way for inv - which multiplies into EVERY dim of the row, including
+    // the pass-through dims that contain no transcendental at all - to be off by more than that.
+    sq[d] = x * x;
+    barrier();
+
+    // ---- RMS norm: lane 0 sums in ascending order so the shader and the CPU reference agree
+    if (d == 0u) {
+        float ss = 0.0;
+        for (uint i = 0u; i < p.hd; ++i) ss = ss + sq[i];
+        sinv[0] = 1.0 / sqrt(ss / float(p.hd) + p.eps);
+    }
+    barrier();
+
+    // ---- y = (x * inv) * w, then the half-split rotation inside the first n_rot dims.
+    // The partner value is recomputed from sh[] rather than read from sy[], so a lane never depends
+    // on another lane having finished - the order of evaluation cannot leak into the result.
+    const float inv = sinv[0];
+    float y = (x * inv) * wref(d, is_q);
+    if (d < p.nrot) {
+        const uint nhalf = p.nrot / 2u;               // 'half' is a reserved word in GLSL
+        const bool low   = d < nhalf;
+        const uint pi    = low ? d : d - nhalf;
+        const uint pd    = low ? d + nhalf : d - nhalf;
+        const float th   = pow(p.freq_base, -2.0f * float(pi) / float(p.nrot));
+        const float a    = float(position) * th;
+        const float c    = cos(a), s = sin(a);
+        const float xp   = (sh[pd] * inv) * wref(pd, is_q);
+        y = low ? (y * c - xp * s) : (y * c + xp * s);
+    }
+    sy[d] = y;
+    // the fp32 debug stream, indexed exactly like the fp16 one it precedes
+    if (is_q) qf[row + d] = y;
+    else      kf[(position * p.nkv + h) * p.hd + d] = y;
+    barrier();
+
+    // ---- pack to fp16 and write. Q -> q16[token,head];  K -> kc[position,head];  V -> vc[...].
+    if (d < hw) {
+        const uint wq = 2u * d;
+        if (is_q) {
+            q16[(t * p.nh + h) * hw + d] = pack2_rne(vec2(sy[wq], sy[wq + 1u]));
+        } else {
+            kc[(position * p.nkv + h) * hw + d] = pack2_rne(vec2(sy[wq], sy[wq + 1u]));
+            // V: no norm, no rope, straight from the projection into the arena (measured)
+            const uint vrow = (t * p.nkv + h) * p.hd;
+            vc[(position * p.nkv + h) * hw + d] =
+                pack2_rne(vec2(v_in[vrow + wq], v_in[vrow + wq + 1u]));
+        }
+    }
+}

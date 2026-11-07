@@ -1,0 +1,29 @@
+#version 450
+// reduce.comp - sum the K-split partials written by a GEMV and put the result WHERE THE CONSUMER
+// looks for it.
+//
+// One extra dispatch per split-K GEMV, over n_splits * M floats: for M=4096, splits=8 that is
+// 128 KB read + 16 KB write = ~0.003 ms at the measured 69-79 GB/s, i.e. under 1% of the
+// 0.35 ms it saves on a narrow-M matrix (probe 13).
+//
+// dst_off is a separate push constant from src_off because the forward gives every GEMV the SAME
+// partial scratch region (PART) - two GEMVs whose results must both stay live, ffn_gate and ffn_up,
+// cannot share it - and then reduces into different destinations. Reducing in place would have made
+// the whole activation arena one single-occupancy pipeline.
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) buffer OUT { float outb[]; };
+
+layout(push_constant) uniform PC {
+    uint m_rows; uint n_splits; uint src_off; uint dst_off, _pad1, _pad2, _pad3, _pad4;
+};
+
+void main() {
+    const uint row = gl_WorkGroupID.x * 64u + gl_LocalInvocationID.x;
+    if (row >= m_rows) { return; }
+    float s = outb[src_off + row];
+    for (uint i = 1u; i < n_splits; ++i) {
+        s += outb[src_off + i * m_rows + row];
+    }
+    outb[dst_off + row] = s;
+}

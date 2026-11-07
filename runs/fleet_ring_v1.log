@@ -1,0 +1,50 @@
+=== bonsai_fleet ring 4 8 6 (01:50 2026-11-05, build_v39 = 0 warnings) ===
+  context: the first -O2 run of this command segfaulted inside amdvlk64.dll at make_arena_buf
+  (bonsai_fleet.cpp:392). Cause: uint32_t fams[2] declared inside the if-block that sets the
+  sharing mode, so bi.pQueueFamilyIndices dangled by the time vkCreateBuffer read it. -O0 passed
+  because the dead frame still held the values. Same bug found and fixed at 4 sites:
+  bonsai_weights.h:318 (the ENGINE's host staging buffer), bonsai_fleet.cpp:388,
+  gpu_fleet.h ring view + gpu_fleet.h import-side buffer.
+
+
+== fleet ring rig: depth 4 x 8 MiB slots, 6 microbatch(es) ==
+  card [0] Radeon RX 550X (DISCRETE_GPU) | compute family 0 | transfer-only family 2
+  arena type 0  DEVICE_LOCAL   24.0 MiB  [shared-heap=no cached=no]  <- discrete branch: first type carrying DEVICE_LOCAL, exactly the predicate every existing runs/ log was produced with
+  ring: 4 slot(s) x 8388608 B = 33554432 B, memory type 3 (host-visible, not on a unified heap)
+  pipelined run below moves each 8388608 B slot D2H out of PROD and H2D into CONS, so the
+  bytes cross the link twice per hop. NOT EXERCISABLE HERE: only one compute-capable device was opened, so the second card's H2D->compute overlap and the PCIe-to-PCIe path a two-card machine takes are untested, and the D2H->host->H2D round trip is what IS tested.
+
+  pipelined run: 12 stage(s), 6 hop(s) in 21.403 ms
+  per hop: wall 3567.2 us | host-visible waits: D2H fence 2.5 us, back-pressure 5.0 us total over 2 wait(s), command-buffer recycle 6191.9 us total over 8 wait(s)
+  bytes across the ring: 50331648 B total, 8.00 MiB per hop; at the MEASURED 7.12 GB/s a 8388608 B slot is 1178.18 us of engine time per leg, so a hop is SYNC-dominated (MEASURED submit+fence round trip 99.4 us)
+  back-pressure events: 2 at depth 4 (a depth-1 ring would take one wait per hop; D>1 is the mechanism, not a tuning knob)
+  ring cursors: produced 6, consumed 6 (equal, as they must be after the drain)
+  cursor cross-check: produced 6 vs hops 6 -> consistent
+  D2H arrival: 12 word(s) read through the ring mapping over 4 written slot(s) (0 untouched), 0 mismatch(es) -> PASS - the DMA put into the slot exactly what the producer's dispatch wrote into its window, and the publish happened after the fence
+  round trip slot1 -> CONS -> slot2: BYTES WRONG (H2D leg 1.2 us, D2H leg 1217.6 us; each is copy + one submit+fence round trip, MEASURED 99.4 us)
+  fenced D2H  8 x 8388608 B on family 2: 1153.8 us per hop -> 7.27 GB/s wall = 102% of the MEASURED 7.15 GB/s ceiling, submit and fence included
+  batched D2H 8 x 8388608 B in ONE submit: 148.0 us per copy -> 56.67 GB/s engine-side. That is the 7.15 GB/s regime; the fenced line above is what one hop actually pays.
+  device released. Whole command took 118 ms of GPU-touching time.
+rc_ring=1
+
+=== ring 2 1 12 (depth-2 ring, 1 MiB slots = the real hidden-state payload size x64) ===
+
+== fleet ring rig: depth 2 x 1 MiB slots, 12 microbatch(es) ==
+  card [0] Radeon RX 550X (DISCRETE_GPU) | compute family 0 | transfer-only family 2
+  arena type 0  DEVICE_LOCAL   3.0 MiB  [shared-heap=no cached=no]  <- discrete branch: first type carrying DEVICE_LOCAL, exactly the predicate every existing runs/ log was produced with
+  ring: 2 slot(s) x 1048576 B = 2097152 B, memory type 3 (host-visible, not on a unified heap)
+  pipelined run below moves each 1048576 B slot D2H out of PROD and H2D into CONS, so the
+  bytes cross the link twice per hop. NOT EXERCISABLE HERE: only one compute-capable device was opened, so the second card's H2D->compute overlap and the PCIe-to-PCIe path a two-card machine takes are untested, and the D2H->host->H2D round trip is what IS tested.
+
+  pipelined run: 24 stage(s), 12 hop(s) in 6.536 ms
+  per hop: wall 544.7 us | host-visible waits: D2H fence 1.5 us, back-pressure 18.2 us total over 10 wait(s), command-buffer recycle 3934.2 us total over 22 wait(s)
+  bytes across the ring: 12582912 B total, 1.00 MiB per hop; at the MEASURED 7.12 GB/s a 1048576 B slot is 147.27 us of engine time per leg, so a hop is SYNC-dominated (MEASURED submit+fence round trip 99.4 us)
+  back-pressure events: 10 at depth 2 (a depth-1 ring would take one wait per hop; D>1 is the mechanism, not a tuning knob)
+  ring cursors: produced 12, consumed 12 (equal, as they must be after the drain)
+  cursor cross-check: produced 12 vs hops 12 -> consistent
+  D2H arrival: 6 word(s) read through the ring mapping over 2 written slot(s) (0 untouched), 0 mismatch(es) -> PASS - the DMA put into the slot exactly what the producer's dispatch wrote into its window, and the publish happened after the fence
+  round trip slot1 -> CONS -> slot0: BYTES WRONG (H2D leg 1.2 us, D2H leg 165.1 us; each is copy + one submit+fence round trip, MEASURED 99.4 us)
+  fenced D2H  32 x 1048576 B on family 2: 141.9 us per hop -> 7.39 GB/s wall = 103% of the MEASURED 7.15 GB/s ceiling, submit and fence included
+  batched D2H 16 x 1048576 B in ONE submit: 8.9 us per copy -> 117.98 GB/s engine-side. That is the 7.15 GB/s regime; the fenced line above is what one hop actually pays.
+  device released. Whole command took 74 ms of GPU-touching time.
+rc_ring2=1

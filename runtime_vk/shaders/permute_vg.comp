@@ -1,0 +1,42 @@
+#version 450
+// permute_vg.comp - the GDN output's v-grouped head reorder, read off the graph, not guessed.
+//
+// THE NODES (runs/dbg_full_real.log lines 236-240, block 0):
+//   final_output-0            = SWIGLU(z, normed o)                        {128, 32, 2}
+//   (reshaped)                = RESHAPE -> {128, 16, 2, 2}                 dim, q-head, v-group, tok
+//   (permuted)                = PERMUTE -> {128, 2, 16, 2}
+//   (cont) -> (reshaped)      = {4096, 2}   -> then MUL signs.4096 -> H -> ssm_out
+// prism.hadamard.gdn_v_grouped = 1 in the metadata is the same fact from the other side.
+//
+// PERMUTE swaps ggml dims 1 and 2, so with source index (d, i, j), i in [0,16), j in [0,2):
+//     src = d + dim*(i + nq*j)      dst = d + dim*(j + sub*i),   sub = nh/nq = 2
+// eliminating i,j in favour of the destination head h = j + sub*i (integer div/mod):
+//     i = h / sub,  j = h % sub  =>  y[d + dim*h] = x[d + dim*(h/sub + nq*(h%sub))]
+// which is exactly the mapping this kernel applies, with the head counts taken from push constants
+// so a different sub doesn't need a new shader.
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly buffer X { float x[]; };
+layout(binding = 1)       buffer Y { float y[]; };
+
+layout(push_constant) uniform PC {
+    uint dim;         // 128 = state_size
+    uint nh;          // 32 = the v-head count = inner/dim
+    uint nq;          // 16 = the q/k-head count = group_count
+    uint n_rows;      // tokens (1 for decode) - the head block is repeated per row
+    uint x_off;       // float units
+    uint y_off;       // float units
+    uint _p0, _p1;    // pad to 32 B
+};
+
+void main() {
+    const uint r  = gl_WorkGroupID.y;                 // token index
+    const uint i0 = gl_WorkGroupID.x * 256u + gl_LocalInvocationID.x;
+    const uint n  = nh * dim;
+    if (r >= n_rows || i0 >= n) { return; }
+    const uint sub = nh / nq;
+    const uint h   = i0 / dim;
+    const uint d   = i0 - h * dim;
+    const uint src = d + dim * (h / sub + nq * (h % sub));
+    y[y_off + r * n + i0] = x[x_off + r * n + src];
+}

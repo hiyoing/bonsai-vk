@@ -1,0 +1,8 @@
+// bench_shm_n2048.comp - occupancy bench, PROBE_N = 2048.
+//
+//   sd[2048] + sp[2048] = 2 * 2048 * 4 B = 16384 B of workgroup memory per 256-lane workgroup.
+//   Same instruction stream as the other bench sizes; only this declaration differs.
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#define PROBE_N 2048u
+#include "shared_mem_bench.glslh"

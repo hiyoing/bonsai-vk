@@ -1,0 +1,153 @@
+#version 450
+#extension GL_EXT_control_flow_attributes : require   // for [[unroll]]; compile-time only - the
+//                                                    emitted SPIR-V carries no extension dependency
+// repack_ptq1_0.comp - one-time GPU conversion of llama.cpp/PrismML PTQ1_0 blocks into the
+// random-access 2-bit layout that the measured ternary GEMV wants:
+//
+//   codes  : vec4<u32>[] indexed as  (k/64) * M + row   -> 64 codes per 16 B word, 2 bits/code
+//   scales : uint[] (f16 in low half) indexed by        (k/128) * M + row
+//
+// Source layout is taken verbatim from the PrismML fork's own kernel comments
+// (ggml/src/ggml-vulkan/vulkan-shaders/mul_mat_vec_ptq1_0.comp + ptq1_0.glsl):
+// a block is 128 weights in 7 x 32-bit words = 28 B = 1.75 bpw:
+//   words 0..3 : qs[0..15]  byte j, trit t -> element 16*t + j        (5 trits/byte)
+//   words 4..5 : qs[16..23] byte j, trit t -> element 80 + 8*t + (j-16)(5 trits/byte)
+//   word  6    : qh[0],qh[1] (4 trits each) -> element 120 + 2*t + h, plus d (f16) in bits16..31
+// Trits come out of a byte by the base-3 fixed-point recurrence the fork uses:
+//   trit = (3*v) >> 8 ; v = (3*v) & 255
+// which is exact because v is treated as the 8-bit fraction v/256 and only v < 243 is valid.
+//
+// Why repack at all (all numbers measured on this card, see STAGE2_CUSTOM.md):
+//   * decode cost: llama.cpp's base-3 branch measured 43.3 Gop/s weighted (probe 15 = a WGSL port of
+//     their mul_mat_vec_ptq1_0.comp, checked to relerr 3-8e-07), which on this card's 451.1
+//     G lane-op/s issue roof works out to ~10.4 source-instruction equivalents per code. This
+//     layout plus gemv_ternary.comp measures 135.8 Gop/s weighted = 3 code instructions per weight,
+//     folding to 1.65 issue slots (probe_alu). Same harness, same shapes.
+//   * weights become directly addressable, so a K-split / batch>1 kernel can index them
+//     without walking a block.
+//   * cost: 1.75 -> 2.125 bpw (+21% bytes) and a one-time ~150-250 ms pass. Bandwidth is NOT
+//     the constraint here (69-79 GB/s measured available, kernel uses 30-38), so this is a
+//     good trade; the price is VRAM, which is the real knob (see report part 3).
+//
+// Row-major source, column-block destination: within one workgroup we write M-strided words,
+// so we stage a 64x64 code tile in shared memory and emit coalesced vec4 stores.
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly buffer SRC { uint src[]; };          // PTQ1_0 blocks, [M][K/128][7]
+layout(binding = 1) writeonly buffer DST { uvec4 codes[]; };      // [K/64][M]
+layout(binding = 2) writeonly buffer SCL { uint scales[]; };      // [K/128][M]
+
+layout(push_constant) uniform PC {
+    uint m_rows;      // M (output rows)
+    uint k_cols;      // K (input dim), multiple of 128
+    uint n_layer_blk; // number of 128-element blocks along K = k_cols/128
+    uint src_word0;   // word offset of this tensor inside SRC
+    uint dst_word0;   // word offset of this tensor inside DST (vec4 units)
+    uint scl_word0;   // word offset of this tensor inside SCL
+    uint row0;        // first row of this launch. Added so the engine can repack one tensor in
+                      // row chunks through a small VRAM scratch instead of paying for a scratch
+                      // big enough for output.weight (222511104 B = 212 MiB, which on a 4 GB card
+                      // is 6664 tokens of KV cache thrown away). The source is row-major
+                      // ([M][K/128][7 words]), so a row range is contiguous in the file AND in the
+                      // scratch, and both destinations index row explicitly - a chunk is legal.
+    uint row_end;     // one past the last row of this launch (m_rows stays the STRIDE, because
+                      // codes/scales are [K/64][M] and M is the tensor's full row count)
+};
+
+// one byte -> 5 trits, base-3 fixed point (identical arithmetic to the fork's kernel)
+void trits5(uint b, out uint t0, out uint t1, out uint t2, out uint t3, out uint t4) {
+    uint v = b;
+    uint m = v * 3u; t0 = m >> 8u; v = m & 0xFFu;
+    m = v * 3u;      t1 = m >> 8u; v = m & 0xFFu;
+    m = v * 3u;      t2 = m >> 8u; v = m & 0xFFu;
+    m = v * 3u;      t3 = m >> 8u; v = m & 0xFFu;
+    m = v * 3u;      t4 = m >> 8u;
+}
+
+// 32 codes of one row segment, packed into 8 u32 (2 bits each) - held in a workgroup tile
+shared uint tile[64][8];
+shared bool row_valid[64];
+
+void main() {
+    // workgroup = one K-block column strip (128 codes) x 64 rows
+    const uint blk  = gl_WorkGroupID.x;              // which 128-code group along K
+    const uint r0   = gl_WorkGroupID.y * 64u + row0; // first row of this tile, in tensor coordinates
+    const uint tid  = gl_LocalInvocationID.x;
+    const uint row  = r0 + tid;
+    const bool ok   = row < row_end;                 // row_end <= m_rows; m_rows stays the stride
+    row_valid[tid] = ok;
+
+    if (ok) {
+        // 7 words per block. SRC is the CHUNK, so its row index is chunk-local (row - row0) while
+        // the two destinations are whole-tensor arrays and must use the absolute row. Getting this
+        // wrong is what the first real-weight load caught: rows past a tensor's first chunk read
+        // 200 MB past the end of a 32 MB scratch, and the GEMV then saw garbage codes - which is
+        // invisible in a one-tensor benchmark, where row0 is always 0.
+        const uint w = src_word0 + ((row - row0) * n_layer_blk + blk) * 7u;
+        const uint w0 = src[w], w1 = src[w+1u], w2 = src[w+2u], w3 = src[w+3u];
+        const uint w4 = src[w+4u], w5 = src[w+5u], w6 = src[w+6u];
+
+        // 120 trits from qs (24 bytes x 5) + 8 trits from qh (2 bytes x 4)
+        // accumulate into 8 u32 (32 codes each) for the 128-code block.
+        uint c[8];
+        [[unroll]] for (int i = 0; i < 8; ++i) c[i] = 0u;
+
+        // words 0..3 : bytes j = 0..15, element = 16*t + j  -> trit lands at element index e
+        uint words[4] = uint[4](w0, w1, w2, w3);
+        [[unroll]] for (int k = 0; k < 4; ++k) {
+            [[unroll]] for (int b = 0; b < 4; ++b) {
+                uint byte_v = (words[k] >> (uint(b) * 8u)) & 0xFFu;
+                uint t0, t1, t2, t3, t4;
+                trits5(byte_v, t0, t1, t2, t3, t4);
+                uint j = uint(k) * 4u + uint(b);          // 0..15
+                uint ts[5] = uint[5](t0, t1, t2, t3, t4);
+                [[unroll]] for (int t = 0; t < 5; ++t) {
+                    uint e = 16u * uint(t) + j;           // 0..79
+                    c[e >> 4u] |= ts[t] << ((e & 15u) * 2u);
+                }
+            }
+        }
+        // words 4..5 : bytes j = 0..7, element = 80 + 8*t + j
+        uint words45[2] = uint[2](w4, w5);
+        [[unroll]] for (int k = 0; k < 2; ++k) {
+            [[unroll]] for (int b = 0; b < 4; ++b) {
+                uint byte_v = (words45[k] >> (uint(b) * 8u)) & 0xFFu;
+                uint t0, t1, t2, t3, t4;
+                trits5(byte_v, t0, t1, t2, t3, t4);
+                uint j = uint(k) * 4u + uint(b);          // 0..7
+                uint ts[5] = uint[5](t0, t1, t2, t3, t4);
+                [[unroll]] for (int t = 0; t < 5; ++t) {
+                    uint e = 80u + 8u * uint(t) + j;      // 80..119
+                    c[e >> 4u] |= ts[t] << ((e & 15u) * 2u);
+                }
+            }
+        }
+        // word 6 : qh[0],qh[1] -> element 120 + 2*t + h ; d in bits 16..31
+        uint xx = (w6 & 0xFFu) | ((w6 >> 8u) & 0xFFu) << 16u;   // two 8-bit lanes
+        [[unroll]] for (int t = 0; t < 4; ++t) {
+            uint mm = xx * 3u;
+            uint tr0 = (mm >> 8u) & 3u;
+            uint tr1 = ((mm >> 8u) >> 16u) & 3u;
+            xx = mm & 0x00FF00FFu;
+            uint e = 120u + 2u * uint(t);
+            c[e >> 4u] |= tr0 << ((e & 15u) * 2u);
+            c[(e+1u) >> 4u] |= tr1 << (((e+1u) & 15u) * 2u);
+        }
+        [[unroll]] for (int i = 0; i < 8; ++i) tile[tid][i] = c[i];
+
+        // one f16 scale per 128-code block, stored as [K/128][M] with the f16 bits in the low half,
+        // which is exactly what gemv_ternary.comp's unpackHalf2x16(scale[b*m_rows+row]).x reads.
+        scales[scl_word0 + blk * m_rows + row] = w6 >> 16u;
+    }
+    barrier();
+
+    // coalesced store: lane tid owns row r0+tid, writes both 64-code words of this strip
+    const uint kword = blk * 2u;
+    if (ok) {
+        codes[dst_word0 + (kword + 0u) * m_rows + row] =
+            uvec4(tile[tid][0], tile[tid][1], tile[tid][2], tile[tid][3]);
+        codes[dst_word0 + (kword + 1u) * m_rows + row] =
+            uvec4(tile[tid][4], tile[tid][5], tile[tid][6], tile[tid][7]);
+    }
+}

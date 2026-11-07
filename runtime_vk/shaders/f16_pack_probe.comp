@@ -1,0 +1,50 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "f16_rne.glslh"
+
+// f16_pack_probe.comp - does this card's packHalf2x16() round the same way our host
+// f32_to_f16_bits() does? The KV arena is a plain uint buffer, and the CPU mirror packs the same
+// vectors by hand, so if the two packers disagreed the "kernel == reference" statement would be a
+// statement about our packer, not about attention.
+//
+// Three outputs, because the answer turned out to need three columns (run 2026-11-01, RX 550X):
+//   RAW[i]   what the hardware instruction produces, bit for bit
+//   RNE[i]   what pack2_rne() from f16_rne.glslh produces - the semantics the reference engine has
+//   BACK[i]  the round trip RAW -> unpackHalf2x16 -> float, compared against f16_to_f32() (which
+//            align_f16 closed over all 65536 patterns)
+// align_attn stage F demands host-RNE == GLSL-RNE (0 mismatches) and characterises host-RTZ == RAW,
+// so the truncation this driver does is a measured fact with a number attached, not a rumour.
+//
+// Word i holds elements 2i (low half) and 2i+1 (high half). Nothing else lives here on purpose: it is
+// a probe, not a kernel.
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly  buffer F    { float f[]; };
+layout(binding = 1) writeonly buffer RAW  { uint  raw[]; };
+layout(binding = 2) writeonly buffer RNE  { uint  rne[]; };
+layout(binding = 3) writeonly buffer BACK { float back[]; };
+
+layout(push_constant) uniform Push {
+    uint n;                     // number of floats (even)
+    uint pad0, pad1, pad2;
+} p;
+
+void main() {
+    const uint i = gl_GlobalInvocationID.x;
+    if (2u * i + 1u >= p.n) return;
+    const vec2 v = vec2(f[2u * i], f[2u * i + 1u]);
+    const uint word = packHalf2x16(v);
+    raw[i] = word;
+    rne[i] = pack2_rne(v);
+    // NOT unpackHalf2x16(word): measured on this card (runs/attn_run4.txt, leg F) the driver folds
+    // unpack(pack(x)) back to x, so that expression returns the ORIGINAL fp32 input and the probe
+    // "discovers" a difference that is not there. Reading the stored word out of memory, with a
+    // barrier between the store and the load, is the only way to ask the question that was intended:
+    // does this card's unpackHalf2x16 convert a half exactly? The kernels never pack and unpack the
+    // same value in one expression, so they were never affected by the fold.
+    memoryBarrier();
+    const vec2 u = unpackHalf2x16(raw[i]);
+    back[2u * i] = u.x;
+    back[2u * i + 1u] = u.y;
+}

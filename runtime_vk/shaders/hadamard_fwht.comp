@@ -1,0 +1,91 @@
+#version 450
+// hadamard_fwht.comp - the FAST WALSH-HADAMARD TRANSFORM of a block whose size comes from the
+// CHECKPOINT, not from this file: prism.hadamard.block_size, pushed as a constant, 16..4096, power
+// of two. Normalized by 1/sqrt(block), i.e. the same operator as hat4096.comp for block 4096.
+//
+// WHY THIS EXISTS AND hat4096.comp STAYS UNTOUCHED
+//   hat4096.comp is bit-frozen: the measurement reports (BENCHMARK.md, FAITHFUL_REPRO.md,
+//   END_TO_END_MEASURED.md, KV_P0P1P2_MEASURED.md and the
+//   runs/*.log they cite) quote numbers produced by its specific 12-stage ascending-h summation
+//   order, and fp32 addition is not associative, so a different order is a DIFFERENT - though
+//   equally valid - transform. The 9B therefore keeps its kernel. A checkpoint whose block size is
+//   not 4096 (a 27B export, say) cannot use a 4096-wide kernel at all, and 16 KB of static shared
+//   memory per workgroup is not something a 4 GB APU wants to reserve for a 256-wide block. So:
+//   the engine picks between the two from metadata (ModelPlan::hat_use_fwht) and NEVER runs both.
+//
+// THE MATH, AND WHY IT IS THE SAME OPERATOR
+//   H_N[i][j] = (-1)^popcount(i&j) with N = 2^k is Sylvester-Walsh, and the FWHT recursion
+//   H_{2M} = [[H_M, H_M], [H_M, -H_M]] computed in place with the pair rule
+//   (a, b) -> (a + b, a - b) at stride h = 1, 2, 4, ... N/2 produces exactly that matrix. It is the
+//   same construction hat4096.comp uses (see its ascending-h comment: "what produces the Sylvester
+//   (Hadamard-ordered, not sequency) matrix"), only with the block size as a loop bound instead of
+//   a literal. align_27b.exe proves the equivalence numerically against a CPU mirror for every
+//   block size this kernel accepts - BITWISE, on the card - and separately proves that at 4096 this
+//   kernel and hat4096.comp apply the same diagonal scale (1/sqrt(4096) == 1/64 exactly). It does
+//   NOT claim the two agree bit for bit at 4096: the butterflies are the same operator, the addition
+//   order is not, so "same operator, different summation order" is what the run leaves standing.
+//
+// COST: log2(block) stages x block/2 pairs. At block = 4096 that is the identical 49152 lane-ops of
+// hat4096.comp; at block = 256 it is 1024 lane-ops and 1 KB of shared memory. Either way it is
+// invisible in a profile.
+//
+// WORKGROUP LAYOUT: one workgroup per block, gl_DispatchX == n_blocks == row_width / block, exactly
+// the shape hat4096.comp's caller already builds (n_blocks = K/block). Shared memory is the full
+// 4096-float array so the SAME compiled kernel serves every accepted block size; a smaller block
+// uses a smaller prefix of it and only runs log2(block) stages.
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly buffer X { float x[]; };
+layout(binding = 1)       buffer Y { float y[]; };
+
+layout(push_constant) uniform PC {
+    uint  x_off;      // float units into the arena region, must be a multiple of 4 (as elsewhere)
+    uint  y_off;      // float units
+    uint  n_blk;      // number of blocks = gl_WorkGroupCount.x = row_width / block
+    uint  block;      // prism.hadamard.block_size, 16..4096, power of two (checked on the host)
+    float inv_norm;   // 1/sqrt(block), COMPUTED ON THE HOST AND PASSED IN, see below
+    uint  _p0, _p1, _p2;   // pad to 32 B
+};
+
+shared float s[4096];
+
+void main() {
+    // The host gate (model_plan_contract) already refused anything that is not a power of two in
+    // [16, 4096]; this guard is a no-op for a legal dispatch and exists so a wild push constant
+    // cannot walk off the shared array. Writing the refusal in the shader rather than trusting a
+    // C++ assert is deliberate: on WDDM an out-of-range shared index is not a validation error, it
+    // is somebody else's data.
+    if (block < 16u || block > 4096u || (block & (block - 1u)) != 0u) return;
+
+    const uint b = gl_WorkGroupID.x;
+    const uint lane = gl_LocalInvocationID.x;
+    const uint base = b * block;
+
+    for (uint i = lane; i < block; i += 256u) s[i] = x[x_off + base + i];
+    barrier();
+
+    // h = 1, 2, 4, ..., block/2: the Sylvester recursion, one level per stage. The pair
+    // enumeration j = ((i & ~(h-1)) << 1) | (i & (h-1)) visits each of the block/2 pairs at
+    // distance h exactly once - the same formula hat4096.comp uses, with 2048 replaced by block/2.
+    for (uint h = 1u; h < block; h <<= 1u) {
+        for (uint i = lane; i < (block >> 1u); i += 256u) {
+            const uint j = ((i & ~(h - 1u)) << 1u) | (i & (h - 1u));
+            const float a = s[j], c = s[j + h];
+            s[j] = a + c;
+            s[j + h] = a - c;
+        }
+        barrier();
+    }
+
+    // The normalization. NOT sqrt(block) in here: GLSL's sqrt/inversesqrt are not guaranteed
+    // correctly-rounded by the spec, so a shader-computed scale cannot be bit-compared with the host
+    // reference (this kernel was named fwht.comp until the rename that made the two rotators
+    // distinguishable in a log line; hat4096.comp sidesteps the problem entirely by having
+    // the literal 1/64 baked in). The host computes float(1.0 / sqrt(double(block))) once, which for
+    // every EVEN power of two in range - 16, 64, 256, 1024, 4096 - is exactly representable, and for
+    // the odd ones is the same correctly-rounded double the CPU mirror uses. float() of that value is
+    // the one place the two sides could differ, so align_27b.exe compares the shader's output against
+    // the mirror at 4096 (where hat4096's literal and this constant are the same number) and at the
+    // other sizes, and the run is the evidence rather than this paragraph.
+    for (uint i = lane; i < block; i += 256u) y[y_off + base + i] = s[i] * inv_norm;
+}

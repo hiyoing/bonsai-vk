@@ -1,0 +1,63 @@
+device: Radeon RX 550X | driver 2.0.279 | device-local heap 3840 MiB | timestampPeriod 40.000 ns
+  limits: maxComputeWorkGroupSize[0]=1024 maxComputeWorkGroupCount[0]=4294967295 bufferImageGranularity=1
+  compute queue = family 0, transfer-only queue = family 2
+
+=== weight plan, read from the tensor table (实测, not estimated) ===
+  tensors 427 = 202 PTQ1_0 + 225 f32   weights 8953803264 elems = 8.954 B
+  per-tensor shapes are K x M with K in {4096, 12288}; sign_widths says the same, so the
+  activation-side Hadamard has exactly two widths to cover.
+  checkpoint's own block form : 1957036032 B = 1.823 GiB  (1.75 bpw)
+  our 2-bit random-access form: 2516189184 B = 2.343 GiB  (codes 2.083 GiB + scales 0.260 GiB, 2.125 bpw)
+  f32 blob                    :  29411328 B = 28.049 MiB
+  LAYOUT COST = 0.521 GiB extra = 17064 tokens of KV at 32768 B/token
+
+=== the rest of the footprint ===
+  blocks: 24 GDN + 8 softmax-attention (full_attention_interval=4)
+  recurrent state, context-INDEPENDENT: 2097152 B/layer state + 98304 B/layer conv = 50.2 MiB over 24 layers
+  KV cache: 32768 B/token (32.0 MiB per 1k tokens), fp16, 8 layers
+  device-local heap: 0 MiB
+
+arena (single DEVICE_LOCAL allocation; sizes are the plan's, offsets are the driver's):
+  codes           2236612608 B  align 4    -> offset 0
+  scales           279576576 B  align 4    -> offset 2236612608
+  f32blob           29411328 B  align 4    -> offset 2516189184
+  ptq_scratch       33554432 B  align 4    -> offset 2545600512
+  x                    16384 B  align 4    -> offset 2579154944
+  xsum                  4096 B  align 4    -> offset 2579171328
+  out                8388608 B  align 4    -> offset 2579175424
+  arena committed 2.410 GiB, alignment padding 0 B
+
+=== weight load, measured on this card ===
+  SDMA    1866.4 MiB in    12.5 ms = 156.56 GB/s (transfer-only queue)
+  repack   1866.4 MiB -> 2399.6 MiB in   551.5 ms =  8.11 GB/s effective, 260 dispatches in 59 batches
+  f32blob     28.0 MiB   TOTAL 564.0 ms
+
+  plan+arena+pipelines 879.2 ms   weight load+repack 13951.3 ms   TOTAL 14830.5 ms
+  the official fork took 16050 ms cold / 3680 ms warm for the same file; this is the
+  pure-blood engine's own cold path, disk -> SDMA -> repack in VRAM, measured above.
+  device-local footprint of the weights alone: 2.410 GiB
+
+=== engine GEMV on REAL weights vs CPU reference (ptq_decode, float64) ===
+  blk.0.attn_qkv.weight      row 3866    gpu=     -0.063445 ref=     -0.314870  abs=2.51e-01 rel=7.99e-01
+  blk.0.attn_qkv.weight      row 2566    gpu=     -0.414415 ref=     -0.488937  abs=7.45e-02 rel=1.52e-01
+  blk.0.attn_qkv.weight      M=8192 K=4096 splits=8
+  blk.0.ffn_gate.weight      row 192     gpu=     -0.788605 ref=     -0.170418  abs=6.18e-01 rel=3.63e+00
+  blk.0.ffn_gate.weight      row 10610   gpu=      0.098236 ref=      0.001286  abs=9.70e-02 rel=7.54e+01
+  blk.0.ffn_gate.weight      M=12288 K=4096 splits=4
+  blk.0.ffn_down.weight      row 2699    gpu=      0.277405 ref=      1.184070  abs=9.07e-01 rel=7.66e-01
+  blk.0.ffn_down.weight      row 1354    gpu=     -0.442627 ref=      0.271133  abs=7.14e-01 rel=2.63e+00
+  blk.0.ffn_down.weight      M=4096 K=12288 splits=16
+  blk.0.ssm_out.weight       row 1048    gpu=      0.777710 ref=      0.265928  abs=5.12e-01 rel=1.92e+00
+  blk.0.ssm_out.weight       row 3173    gpu=      0.149861 ref=      0.528327  abs=3.78e-01 rel=7.16e-01
+  blk.0.ssm_out.weight       M=4096 K=4096 splits=16
+  blk.31.attn_output.weight  row 1221    gpu=      0.197174 ref=     -2.013828  abs=2.21e+00 rel=1.10e+00
+  blk.31.attn_output.weight  row 516     gpu=     -0.981049 ref=      0.077857  abs=1.06e+00 rel=1.36e+01
+  blk.31.attn_output.weight  M=4096 K=4096 splits=16
+  blk.0.attn_gate.weight     row 2666    gpu=     -0.614574 ref=     -0.518416  abs=9.62e-02 rel=1.85e-01
+  blk.0.attn_gate.weight     row 648     gpu=     -0.333527 ref=      0.635858  abs=9.69e-01 rel=1.52e+00
+  blk.0.attn_gate.weight     M=4096 K=4096 splits=16
+  blk.7.ffn_up.weight        row 5140    gpu=     -0.577026 ref=     -0.309127  abs=2.68e-01 rel=8.67e-01
+  blk.7.ffn_up.weight        row 5646    gpu=     -0.576782 ref=     -0.260307  abs=3.16e-01 rel=1.22e+00
+  blk.7.ffn_up.weight        M=12288 K=4096 splits=4
+
+verify: 14 rows compared, worst rel = 7.539e+01 (blk.0.ffn_gate.weight row 10610)

@@ -1,0 +1,48 @@
+[probe 1/7] 10 bytes
+[probe 2/7] 7 bytes
+[probe 3/7] 19 bytes
+[probe 4/7] 15 bytes
+[probe 5/7] 28 bytes
+[probe 6/7] 7 bytes
+[probe 7/7] 26 bytes
+[hdr] GGUF v3  tensors=427  data_start=11039616  vocab=248320  merges=247587
+[hdr] model=gpt2  pre=qwen35  add_bos=0  bos=248044  eos=248046
+[bpe] vocab=248320  ranks=247587  specials=33  unk=0  eos=248046
+[ref] 7 reference probes loaded from ../runs/tok_ref_kr.jsonl
+
+probe  1  bytes=10  text=과 한국
+  OURS ( 2): [51879, 159140]
+  REF  ( 2): [51879, 159140]
+  MATCH 1:1
+
+probe  2  bytes=7  text=한 국
+  OURS ( 2): [22836, 149289]
+  REF  ( 2): [22836, 149289]
+  MATCH 1:1
+
+probe  3  bytes=19  text=한국어 텍스트
+  OURS ( 3): [174675, 30061, 225287]
+  REF  ( 3): [174675, 30061, 225287]
+  MATCH 1:1
+
+probe  4  bytes=15  text=テキスト과
+  OURS ( 2): [210342, 51879]
+  REF  ( 2): [210342, 51879]
+  MATCH 1:1
+
+probe  5  bytes=28  text=のテキスト과 한국어
+  OURS ( 4): [15303, 210342, 51879, 190925]
+  REF  ( 4): [15303, 210342, 51879, 190925]
+  MATCH 1:1
+
+probe  6  bytes=7  text=일 어
+  OURS ( 2): [31020, 148816]
+  REF  ( 2): [31020, 148816]
+  MATCH 1:1
+
+probe  7  bytes=26  text=テキスト と 한국어
+  OURS ( 3): [210342, 152665, 190925]
+  REF  ( 3): [210342, 152665, 190925]
+  MATCH 1:1
+
+==== tokenizer alignment: 7/7 probes byte-identical ====

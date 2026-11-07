@@ -1,0 +1,35 @@
+#version 450
+
+// f16_map.comp - exhaustive half -> float conversion probe, used by align_f16.exe.
+//
+// It contains exactly the two expressions this project uses to turn an fp16 block scale into a
+// float, and nothing else:
+//   binding 1:  float(float16_t)                      <- official dequant_ptq1_0.comp's
+//                                                        `const float d = float(data_a[ib].d)`
+//   binding 3:  float(unpackHalf2x16(word).x)         <- OUR gemv_ternary.comp, where repack puts
+//                                                        the f16 bits in the low half of a u32
+// Feeding both all 65536 bit patterns turns "our f16_to_f32 agrees with the shader" from a
+// 15-pattern sample into a closed statement about the whole fp16 domain, which is what 层2 needs
+// before it can be called 封死. The second expression matters more than the first: it is the one
+// that produces the numbers bonsai_vk.exe actually multiplies by.
+
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly  buffer H { float16_t h[]; };
+layout(binding = 1) writeonly buffer F { float v[]; };
+layout(binding = 2) readonly  buffer W { uint word[]; };
+layout(binding = 3) writeonly buffer U { float u[]; };
+
+layout(push_constant) uniform Push {
+    uint n;                     // number of half values to convert
+    uint pad0, pad1, pad2, pad3;
+} p;
+
+void main() {
+    const uint i = gl_GlobalInvocationID.x;
+    if (i >= p.n) return;
+    v[i] = float(h[i]);
+    u[i] = float(unpackHalf2x16(word[i]).x);
+}

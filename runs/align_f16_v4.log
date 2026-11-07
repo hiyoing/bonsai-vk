@@ -1,0 +1,17 @@
+[cpu] f16_to_f32 vs IEEE-754 definition: 0/65536 wrong numbers, 2045/65536 different bit patterns (+-0 and NaN payloads are counted here, not as errors), max 0 ulp
+[dev]  Radeon RX 550X
+[feat] storageBuffer16Bit=1 uniformAndStorage16Bit=1
+
+==== all 65536 patterns, five ways ====
+  GPU float(f16)             vs IEEE-754 definition        :    0/65536 wrong numbers, 2045/65536 different bit patterns (2045 of them payload-only), max 0 ulp
+  GPU unpackHalf2x16(.x)     vs IEEE-754 definition        :    0/65536 wrong numbers, 2045/65536 different bit patterns (2045 of them payload-only), max 0 ulp
+  GPU float(f16)             vs OURS f16_to_f32            :    0/65536 wrong numbers,    0/65536 different bit patterns (0 of them payload-only), max 0 ulp
+  GPU unpackHalf2x16(.x)     vs OURS f16_to_f32            :    0/65536 wrong numbers,    0/65536 different bit patterns (0 of them payload-only), max 0 ulp
+  GPU float(f16)             vs GPU unpackHalf2x16         :    0/65536 wrong numbers,    0/65536 different bit patterns (0 of them payload-only), max 0 ulp
+   (every one of the 65536 patterns agrees everywhere)
+
+==== verdict ====
+  our f16_to_f32 is exact over the whole binary16 domain:  YES (0 wrong numbers)
+  card's float(float16_t)  is IEEE-exact:                   YES (0 wrong, 2045 bit-diff)
+  card's float(unpackHalf2x16(x).x) is IEEE-exact:          YES (0 wrong, 2045 bit-diff)
+  BOTH shader expressions == our host conversion, bit for bit:  YES (0 / 0 bit-diff)

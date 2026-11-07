@@ -1,0 +1,49 @@
+#version 450
+// conv_silu.comp - the GDN short depthwise causal conv, fused with its SILU, and the history
+// shift the next token needs. One dispatch per layer per token, 8192 channels.
+//
+// THE GRAPH (runs/dbg_full_real.log lines 192, 278, 286):
+//   conv_input-0      = CONCAT(conv_states_reshaped-0{3,8192}, qkv_transposed{2,8192}) = {5,8192}
+//   conv_output_raw-0 = SSM_CONV(conv_input-0{5,8192}, blk.0.ssm_conv1d.weight{4,8192}) = {8192,2}
+//   conv_output_silu-0= SILU(conv_output_raw-0)
+// 5 in, kernel 4, 2 out => out[j] = sum_k w[k]*in[j+k], so out[0] = w0*s0+w1*s1+w2*s2+w3*x_new.
+// There is NO bias add in this graph (the tensor table has no ssm_conv1d.bias, and no ADD node
+// between SSM_CONV and SILU), even though the fork can fuse SSM_CONV_BIAS_SILU for other models.
+// The history after the token is (s1, s2, x_new) - the state is a 3-deep shift register of the
+// PRE-conv values, which is why the store below writes the raw x, not y.
+//
+// LAYOUTS, both read off the dump's shapes and the GGUF ne[] order (ne[0] is fastest):
+//   weight  (tap, c)  at tap + 4*c          ne {4, 8192}
+//   state   (t,   c)  at t + 3*c            cache_r_l is a flat 24576 viewed as {3, 8192}
+//   x / y   c                                 one token, channel contiguous
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly buffer X  { float x[]; };    // this token's qkv (8192 channels)
+layout(binding = 1)       buffer Y  { float y[]; };       // conv+silu output
+layout(binding = 2)       buffer ST { float st[]; };      // the layer's 3x8192 history
+layout(binding = 3) readonly buffer W  { float w[]; };    // f32 blob: blk.N.ssm_conv1d.weight
+
+layout(push_constant) uniform PC {
+    uint n_chan;      // 8192
+    uint x_off;       // float units into the activation arena
+    uint y_off;
+    uint st_off;      // float units into the conv-history arena (this layer's base)
+    uint w_off;       // float units into the f32 blob
+    uint _p0, _p1, _p2;   // pad to 32 B
+};
+
+void main() {
+    const uint c = gl_WorkGroupID.x * 256u + gl_LocalInvocationID.x;
+    if (c >= n_chan) { return; }
+    const uint wb = c * 4u;
+    const uint sb = st_off + c * 3u;
+    const float xnew = x[x_off + c];
+    const float s0 = st[sb], s1 = st[sb + 1u], s2 = st[sb + 2u];
+    float acc = w[w_off + wb] * s0 + w[w_off + wb + 1u] * s1
+              + w[w_off + wb + 2u] * s2 + w[w_off + wb + 3u] * xnew;
+    // ggml's SILU is x/(1+exp(-x)); the same form silu.comp uses, so the reference stays one
+    // expression rather than two.
+    acc = acc / (1.0 + exp(-acc));
+    y[y_off + c] = acc;
+    st[sb] = s1; st[sb + 1u] = s2; st[sb + 2u] = xnew;
+}

@@ -1,0 +1,8 @@
+{
+ "prefix_chars": 57,
+ "prefix_words": 7,
+ "ours_chars": 431,
+ "oracle_chars": 367,
+ "ours_head": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   Task: Define/explain what a \"ternary\" means in the context of a specific context ",
+ "oracle_head": "Thinking Process:\n\n1.  **Analyze the Request:**\n    *   Topic: Ternary model.\n    *   Constraint: Explain in one sentence.\n\n2.  **Define "
+}

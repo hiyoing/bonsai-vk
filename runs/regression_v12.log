@@ -1,0 +1,24 @@
+=== regression suite on the OOM-fallback binary, Wed Nov  4 13:57:37     2026 ===
+--- align_tokenizer (3 args: gguf probes ref) ---
+  REF  (19): [49, 20, 220, 18, 21, 15, 15, 478, 27255, 220, 20, 20, 15, 55, 283, 38171, 23, 15, 18]
+  MATCH 1:1
+
+==== tokenizer alignment: 32/32 probes byte-identical ====
+--- align_dequant ---
+[gpu] nel=12800  blocks=100  local=256  groups=7 (7*2048 = 14336 >= 12800 weights)
+[blocks] 100 PTQ1_0 blocks (real, read from the checkpoint), 12800 weights compared
+[blocks] sample provenance (first 6 and last 2, so the bytes are re-derivable):
+  runtime dot form d*(cs-xs) vs sum(w_e*x_e): max abs 0.000e+00  max rel 0.000e+00  (100 blocks, 0 skipped for non-finite d)
+--- align_f16 ---
+  GPU float(f16)             vs GPU unpackHalf2x16         :    0/65536 wrong numbers,    0/65536 different bit patterns (0 of them payload-only), max 0 ulp
+  card's float(float16_t)  is IEEE-exact:                   YES (0 wrong, 2045 bit-diff)
+  card's float(unpackHalf2x16(x).x) is IEEE-exact:          YES (0 wrong, 2045 bit-diff)
+  BOTH shader expressions == our host conversion, bit for bit:  YES (0 / 0 bit-diff)
+--- align_attn ---
+  V. verdict - card vs mirror against the format's own floor:
+     card vs mirror   score=6.695e-04 (=6.40e-06 of |kq|max)  prob=2.205e-06  context=0.000e+00  layer-out=1.192e-07 (=1.01e-07 of |gated|max)
+     ratio our/format = 0.000 -> our divergence is SMALLER than the error the official fp16 cache imposes; the remaining card/host difference is the last fp32 bits of a transcendental, not a term the official engine gets right and we get wrong
+
+--- align_tokenizer, the kr probe set (the 39-probe baseline of HANDOVER 6.2) ---
+
+==== tokenizer alignment: 7/7 probes byte-identical ====

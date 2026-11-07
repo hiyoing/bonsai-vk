@@ -1,0 +1,34 @@
+PASS | badge is live after mock status
+screenshot: webui\shots\ui-01-empty-1440.png
+FAIL | a real chip click started a streaming turn | {"pending":0,"status":"done","shown":371,"len":371}
+FAIL | the typewriter is mid-reveal (caret state) | {"pending":0,"status":"done","shown":371,"len":371}
+screenshot: webui\shots\ui-02-streaming-1440.png
+PASS | the reply finished and drained
+PASS | markdown produced a table in the real DOM
+PASS | markdown produced a fenced code block
+PASS | the caret is gone when done
+screenshot: webui\shots\ui-03-done-1440.png
+PASS | header and composer do not overlap | hdr.bottom=56 dock.y=795.25
+PASS | column <= 768px | w=768
+PASS | column centred
+PASS | no horizontal overflow
+PASS | newest reply not hidden behind composer | msg.bottom=706.40625 dock.y=795.25
+PASS | reasoning expands on a real click
+PASS | reasoning toggle reports expanded
+screenshot: webui\shots\ui-04-reasoning-1440.png
+PASS | reasoning collapses on a second real click
+PASS | copy button reacts to a real click | 复制 -> 已复制
+PASS | typing enables send
+PASS | Shift+Enter does not send
+PASS | Enter sends a second turn
+screenshot: webui\shots\ui-05-two-turns-1440.png
+PASS | new chat clears the transcript
+PASS | new chat restores the empty state
+PASS | narrow: no horizontal overflow
+PASS | narrow: header and dock do not overlap
+PASS | narrow: column fits the viewport | {"x":0,"y":16,"w":420,"h":912.15625,"bottom":928.15625,"right":420}
+screenshot: webui\shots\ui-06-narrow-420.png
+exceptions: 0
+consoleErrors: 0
+logErrors: 0
+ui-drive: 22/24 passed

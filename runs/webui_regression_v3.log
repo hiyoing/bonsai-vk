@@ -1,0 +1,753 @@
+=== post-WebUI / post-cross-platform regression, Sun Nov  8 02:09:36     2026 ===
+--- binary: 650996 B
+--- align_tokenizer 32 probes
+[probe 1/32] 33 bytes
+[probe 2/32] 39 bytes
+[probe 3/32] 61 bytes
+[probe 4/32] 40 bytes
+[probe 5/32] 99 bytes
+[probe 6/32] 30 bytes
+[probe 7/32] 25 bytes
+[probe 8/32] 29 bytes
+[probe 9/32] 22 bytes
+[probe 10/32] 70 bytes
+[probe 11/32] 44 bytes
+[probe 12/32] 35 bytes
+[probe 13/32] 39 bytes
+[probe 14/32] 69 bytes
+[hdr] GGUF v3  tensors=427  data_start=11039616  vocab=248320  merges=247587
+[hdr] model=gpt2  pre=qwen35  add_bos=0  bos=248044  eos=248046
+[bpe] vocab=248320  ranks=247587  specials=33  unk=0  eos=248046
+[ref] 32 reference probes loaded from ../runs/tok_ref_32.jsonl
+
+probe  1  bytes=33  text=用一句话解释三值模型。
+  OURS ( 7): [95826, 110827, 98682, 95986, 96326, 103725, 1710]
+  REF  ( 7): [95826, 110827, 98682, 95986, 96326, 103725, 1710]
+  MATCH 1:1
+
+probe  2  bytes=39  text=用一句话解释什么是三值模型
+  OURS ( 7): [95826, 110827, 98682, 108829, 95986, 96326, 103725]
+  REF  ( 7): [95826, 110827, 98682, 108829, 95986, 96326, 103725]
+  MATCH 1:1
+
+probe  3  bytes=61  text=Hello world, this is a test of the 2026 emergency number 123.
+  OURS (21): [9419, 1814, 11, 411, 369, 264, 1228, 314, 279, 220, 17, 15, 17, 21, 12483, 1324, 220, 16, 17, 18, 13]
+  REF  (21): [9419, 1814, 11, 411, 369, 264, 1228, 314, 279, 220, 17, 15, 17, 21, 12483, 1324, 220, 16, 17, 18, 13]
+  MATCH 1:1
+
+probe  4  bytes=40  text=三值模型 = ternary model (-1, 0, +1)
+  OURS (16): [95986, 96326, 103725, 283, 69184, 640, 1558, 9987, 16, 11, 220, 15, 11, 478, 16, 8]
+  REF  (16): [95986, 96326, 103725, 283, 69184, 640, 1558, 9987, 16, 11, 220, 15, 11, 478, 16, 8]
+  MATCH 1:1
+
+probe  5  bytes=99  text=它是指除了真和假之外，还包含第三种状态（如不确�
+  OURS (20): [96540, 103722, 99921, 96196, 95793, 96798, 103718, 3709, 96079, 99516, 136515, 98822, 9616, 96031, 105249, 7313, 138061, 100593, 103725, 1710]
+  REF  (20): [96540, 103722, 99921, 96196, 95793, 96798, 103718, 3709, 96079, 99516, 136515, 98822, 9616, 96031, 105249, 7313, 138061, 100593, 103725, 1710]
+  MATCH 1:1
+
+probe  6  bytes=30  text=I don't know - 3.14 x 2 = 6.28
+  OURS (19): [40, 1459, 914, 1366, 471, 220, 18, 13, 16, 19, 830, 220, 17, 283, 220, 21, 13, 17, 23]
+  REF  (19): [40, 1459, 914, 1366, 471, 220, 18, 13, 16, 19, 830, 220, 17, 283, 220, 21, 13, 17, 23]
+  MATCH 1:1
+
+probe  7  bytes=25  text=中文English混排123abc
+  OURS ( 8): [99986, 21874, 97518, 96428, 16, 17, 18, 13290]
+  REF  ( 8): [99986, 21874, 97518, 96428, 16, 17, 18, 13290]
+  MATCH 1:1
+
+probe  8  bytes=29  text=Multiple   spaces	and	tabbed	
+  OURS ( 7): [31032, 256, 12258, 50711, 56196, 2634, 197]
+  REF  ( 7): [31032, 256, 12258, 50711, 56196, 2634, 197]
+  MATCH 1:1
+
+probe  9  bytes=22  text=Line1
+Line2
+
+trailing
+
+  OURS ( 9): [2380, 16, 198, 2380, 17, 271, 371, 13868, 198]
+  REF  ( 9): [2380, 16, 198, 2380, 17, 271, 371, 13868, 198]
+  MATCH 1:1
+
+probe 10  bytes=70  text=请解释 KV cache 的显存占用：4096 tokens x 32 KiB = 128 MiB。
+  OURS (29): [96220, 98682, 81726, 6297, 220, 95726, 96547, 96458, 110790, 4960, 19, 15, 24, 21, 10885, 830, 220, 18, 17, 28497, 33, 283, 220, 16, 17, 23, 20112, 33, 1710]
+  REF  (29): [96220, 98682, 81726, 6297, 220, 95726, 96547, 96458, 110790, 4960, 19, 15, 24, 21, 10885, 830, 220, 18, 17, 28497, 33, 283, 220, 16, 17, 23, 20112, 33, 1710]
+  MATCH 1:1
+
+probe 11  bytes=44  text=The quick brown fox jumps over the lazy dog.
+  OURS (10): [760, 3841, 13477, 37550, 33075, 888, 279, 15217, 5388, 13]
+  REF  (10): [760, 3841, 13477, 37550, 33075, 888, 279, 15217, 5388, 13]
+  MATCH 1:1
+
+probe 12  bytes=35  text=100% sure, 50/50 maybe; 3.14, 2026.
+  OURS (26): [16, 15, 15, 4, 2617, 11, 220, 20, 15, 14, 20, 15, 6970, 26, 220, 18, 13, 16, 19, 11, 220, 17, 15, 17, 21, 13]
+  REF  (26): [16, 15, 15, 4, 2617, 11, 220, 20, 15, 14, 20, 15, 6970, 26, 220, 18, 13, 16, 19, 11, 220, 17, 15, 17, 21, 13]
+  MATCH 1:1
+
+probe 13  bytes=39  text=。！？，、；：（）《》【】
+  OURS (12): [1710, 190500, 3709, 5205, 24178, 4960, 9616, 7313, 26076, 24273, 10586, 10638]
+  REF  (12): [1710, 190500, 3709, 5205, 24178, 4960, 9616, 7313, 26076, 24273, 10586, 10638]
+  MATCH 1:1
+
+probe 14  bytes=69  text=三值模型是允许变量取 -1/0/+1 三种状态的量化方案。
+  OURS (19): [95986, 96326, 103725, 95761, 100697, 104201, 96284, 471, 16, 14, 15, 59571, 16, 220, 102218, 122245, 105258, 97791, 1710]
+  REF  (19): [95986, 96326, 103725, 95761, 100697, 104201, 9628[probe 15/32] 19 bytes
+[probe 16/32] 46 bytes
+[probe 17/32] 38 bytes
+[probe 18/32] 31 bytes
+[probe 19/32] 47 bytes
+[probe 20/32] 33 bytes
+[probe 21/32] 47 bytes
+[probe 22/32] 55 bytes
+[probe 23/32] 3 bytes
+[probe 24/32] 9 bytes
+[probe 25/32] 12 bytes
+[probe 26/32] 6 bytes
+[probe 27/32] 12 bytes
+[probe 28/32] 6 bytes
+[probe 29/32] 4 bytes
+[probe 30/32] 10 bytes
+[probe 31/32] 12 bytes
+[probe 32/32] 26 bytes
+4, 471, 16, 14, 15, 59571, 16, 220, 102218, 122245, 105258, 97791, 1710]
+  MATCH 1:1
+
+probe 15  bytes=19  text=aaa   bbb ccc   ddd
+  OURS ( 9): [31564, 256, 292, 5876, 272, 620, 256, 293, 613]
+  REF  ( 9): [31564, 256, 292, 5876, 272, 620, 256, 293, 613]
+  MATCH 1:1
+
+probe 16  bytes=46  text=权重 1.75 bpw 三值(-1/0/+1)，group 128。
+  OURS (24): [113726, 220, 16, 13, 22, 20, 25833, 86, 220, 95986, 96326, 3944, 16, 14, 15, 59571, 16, 67161, 3938, 220, 16, 17, 23, 1710]
+  REF  (24): [113726, 220, 16, 13, 22, 20, 25833, 86, 220, 95986, 96326, 3944, 16, 14, 15, 59571, 16, 67161, 3938, 220, 16, 17, 23, 1710]
+  MATCH 1:1
+
+probe 17  bytes=38  text=He said: "use the runtime", then left.
+  OURS (11): [1465, 1018, 25, 328, 784, 279, 15135, 487, 1179, 2047, 13]
+  REF  (11): [1465, 1018, 25, 328, 784, 279, 15135, 487, 1179, 2047, 13]
+  MATCH 1:1
+
+probe 18  bytes=31  text=  leading and trailing spaces  
+  OURS ( 6): [220, 6187, 321, 26849, 12258, 256]
+  REF  ( 6): [220, 6187, 321, 26849, 12258, 256]
+  MATCH 1:1
+
+probe 19  bytes=47  text=日本語のテキスト과 한국어 텍스트
+  OURS ( 6): [247359, 15303, 210342, 51879, 190925, 225287]
+  REF  ( 6): [247359, 15303, 210342, 51879, 190925, 225287]
+  MATCH 1:1
+
+probe 20  bytes=33  text=Price is $1,000.00 (USD) in 2026.
+  OURS (21): [6755, 369, 393, 16, 11, 15, 15, 15, 13, 15, 15, 318, 25895, 8, 303, 220, 17, 15, 17, 21, 13]
+  REF  (21): [6755, 369, 393, 16, 11, 15, 15, 15, 13, 15, 15, 318, 25895, 8, 303, 220, 17, 15, 17, 21, 13]
+  MATCH 1:1
+
+probe 21  bytes=47  text=Thinking Process:
+
+1.  **Analyze the Request:**
+  OURS (13): [90700, 8340, 25, 271, 16, 13, 220, 2972, 2014, 53983, 279, 5952, 64700]
+  REF  (13): [90700, 8340, 25, 271, 16, 13, 220, 2972, 2014, 53983, 279, 5952, 64700]
+  MATCH 1:1
+
+probe 22  bytes=55  text=端到端 decode tok/s = 4.417 t/s（50 token 真跑）
+  OURS (22): [148114, 96768, 16401, 9341, 2600, 283, 220, 19, 13, 19, 16, 22, 259, 2600, 9616, 20, 15, 3817, 220, 96196, 97300, 7313]
+  REF  (22): [148114, 96768, 16401, 9341, 2600, 283, 220, 19, 13, 19, 16, 22, 259, 2600, 9616, 20, 15, 3817, 220, 96196, 97300, 7313]
+  MATCH 1:1
+
+probe 23  bytes=3  text=用
+  OURS ( 1): [95826]
+  REF  ( 1): [95826]
+  MATCH 1:1
+
+probe 24  bytes=9  text=一句话
+  OURS ( 1): [110827]
+  REF  ( 1): [110827]
+  MATCH 1:1
+
+probe 25  bytes=12  text=用一句话
+  OURS ( 2): [95826, 110827]
+  REF  ( 2): [95826, 110827]
+  MATCH 1:1
+
+probe 26  bytes=6  text=模型
+  OURS ( 1): [103725]
+  REF  ( 1): [103725]
+  MATCH 1:1
+
+probe 27  bytes=12  text=三值模型
+  OURS ( 3): [95986, 96326, 103725]
+  REF  ( 3): [95986, 96326, 103725]
+  MATCH 1:1
+
+probe 28  bytes=6  text=。用
+  OURS ( 2): [1710, 95826]
+  REF  ( 2): [1710, 95826]
+  MATCH 1:1
+
+probe 29  bytes=4  text= 用
+  OURS ( 2): [220, 95826]
+  REF  ( 2): [220, 95826]
+  MATCH 1:1
+
+probe 30  bytes=10  text=1234567890
+  OURS (10): [16, 17, 18, 19, 20, 21, 22, 23, 24, 15]
+  REF  (10): [16, 17, 18, 19, 20, 21, 22, 23, 24, 15]
+  MATCH 1:1
+
+probe 31  bytes=12  text=０１２３
+  OURS ( 4): [25191, 19496, 24128, 32405]
+  REF  ( 4): [25191, 19496, 24128, 32405]
+  MATCH 1:1
+
+probe 32  bytes=26  text=R5 3600 + RX 550X = gfx803
+  OURS (19): [49, 20, 220, 18, 21, 15, 15, 478, 27255, 220, 20, 20, 15, 55, 283, 38171, 23, 15, 18]
+  REF  (19): [49, 20, 220, 18, 21, 15, 15, 478, 27255, 220, 20, 20, 15, 55, 283, 38171, 23, 15, 18]
+  MATCH 1:1
+
+==== tokenizer alignment: 32/32 probes byte-identical ====
+rc=0
+--- align_tokenizer kr set
+[probe 1/7] 10 bytes
+[probe 2/7] 7 bytes
+[probe 3/7] 19 bytes
+[probe 4/7] 15 bytes
+[probe 5/7] 28 bytes
+[probe 6/7] 7 bytes
+[probe 7/7] 26 bytes
+[hdr] GGUF v3  tensors=427  data_start=11039616  vocab=248320  merges=247587
+[hdr] model=gpt2  pre=qwen35  add_bos=0  bos=248044  eos=248046
+[bpe] vocab=248320  ranks=247587  specials=33  unk=0  eos=248046
+[ref] 7 reference probes loaded from ../runs/tok_ref_kr.jsonl
+
+probe  1  bytes=10  text=과 한국
+  OURS ( 2): [51879, 159140]
+  REF  ( 2): [51879, 159140]
+  MATCH 1:1
+
+probe  2  bytes=7  text=한 국
+  OURS ( 2): [22836, 149289]
+  REF  ( 2): [22836, 149289]
+  MATCH 1:1
+
+probe  3  bytes=19  text=한국어 텍스트
+  OURS ( 3): [174675, 30061, 225287]
+  REF  ( 3): [174675, 30061, 225287]
+  MATCH 1:1
+
+probe  4  bytes=15  text=テキスト과
+  OURS ( 2): [210342, 51879]
+  REF  ( 2): [210342, 51879]
+  MATCH 1:1
+
+probe  5  bytes=28  text=のテキスト과 한국어
+  OURS ( 4): [15303, 210342, 51879, 190925]
+  REF  ( 4): [15303, 210342, 51879, 190925]
+  MATCH 1:1
+
+probe  6  bytes=7  text=일 어
+  OURS ( 2): [31020, 148816]
+  REF  ( 2): [31020, 148816]
+  MATCH 1:1
+
+probe  7  bytes=26  text=テキスト と 한국어
+  OURS ( 3): [210342, 152665, 190925]
+  REF  ( 3): [210342, 152665, 190925]
+  MATCH 1:1
+
+==== tokenizer alignment: 7/7 probes byte-identical ====
+rc=0
+--- align_dequant: 1000 real blocks = 128000 weights (regression_v14's count, NOT the 100 default)
+[gguf] tensors=427  PTQ1_0(143)=202  data_start=11039616
+[dev]  Radeon RX 550X
+[feat] storageBuffer8Bit=1 storageBuffer16Bit=1 uniformAndStorage16Bit=1 shaderFloat16=0
+[gpu] nel=128000  blocks=1000  local=256  groups=63 (63*2048 = 129024 >= 128000 weights)
+
+[blocks] 1000 PTQ1_0 blocks (real, read from the checkpoint), 128000 weights compared
+[census] CPU-REF weights by class: -d 42990, 0 41916, +d 43094, NaN 0, Inf 0  (of 128000)
+[census] block scales: finite nonzero |d| in [0.00477982, 0.0565796]; d==0 0, subnormal 0, negative 0, non-finite 0
+[blocks] sample provenance (first 6 and last 2, so the bytes are re-derivable):
+   #  1  output.weight                      blk=7       file_off=11039812 d=0.0186005
+   #  2  output.weight                      blk=4103    file_off=11154500 d=0.0158844
+   #  3  output.weight                      blk=8199    file_off=11269188 d=0.0170135
+   #  4  output.weight                      blk=12295   file_off=11383876 d=0.017746
+   #  5  output.weight                      blk=16391   file_off=11498564 d=0.01828
+   #  6  token_embd.weight                  blk=20487   file_off=234124356 d=0.0149918
+   #999  blk.31.ffn_up.weight               blk=155655  file_off=1990818884 d=0.0146103
+   #1000  blk.31.ffn_up.weight               blk=159751  file_off=1990933572 d=0.0144196
+
+==== dequant fidelity (GPU-official-shader vs CPU-transcription vs our runtime) ====
+  max|GPU-REF - CPU-REF| = 0.00000  (over 128000 finite pairs, argmax weight 0)
+      bit-exact 128000/128000 (100.000%)   NaN/Inf-aware equal 128000/128000   non-finite mismatches 0
+  max|OURS    - CPU-REF| = 0.00000  (over 128000 finite pairs, argmax weight 0)
+      bit-exact 128000/128000 (100.000%)   NaN/Inf-aware equal 128000/128000   non-finite mismatches 0
+  max|OURS    - GPU-REF| = 0.00000  (over 128000 finite pairs, argmax weight 0)
+      bit-exact 128000/128000 (100.000%)   NaN/Inf-aware equal 128000/128000   non-finite mismatches 0
+  symbol agreement      = 128000/128000 weights, 0 disagreements (0 weights skipped: scale is 0/Inf/NaN, where w/d is not a symbol)
+  runtime dot form d*(cs-xs) vs sum(w_e*x_e): max abs 0.000e+00  max rel 0.000e+00  (1000 blocks, 0 skipped for non-finite d)
+  (why this can be non-zero in principle: the folded form multiplies by d once per block
+   and the weight form multiplies per element, so a reassociation could show up in the
+   last bits. Measured 0.000e+00 here, which is what exactness requires: (trit-1) is
+   always -1/0/+1, so (trit-1)*d is representable and the two forms are the same number.)
+rc=0
+--- align_f16
+[cpu] f16_to_f32 vs IEEE-754 definition: 0/65536 wrong numbers, 2045/65536 different bit patterns (+-0 and NaN payloads are counted here, not as errors), max 0 ulp
+[dev]  Radeon RX 550X
+[feat] storageBuffer16Bit=1 uniformAndStorage16Bit=1
+
+==== all 65536 patterns, five ways ====
+  GPU float(f16)             vs IEEE-754 definition        :    0/65536 wrong numbers, 2045/65536 different bit patterns (2045 of them payload-only), max 0 ulp
+  GPU unpackHalf2x16(.x)     vs IEEE-754 definition        :    0/65536 wrong numbers, 2045/65536 different bit patterns (2045 of them payload-only), max 0 ulp
+  GPU float(f16)             vs OURS f16_to_f32            :    0/65536 wrong numbers,    0/65536 different bit patterns (0 of them payload-only), max 0 ulp
+  GPU unpackHalf2x16(.x)     vs OURS f16_to_f32            :    0/65536 wrong numbers,    0/65536 different bit patterns (0 of them payload-only), max 0 ulp
+  GPU float(f16)             vs GPU unpackHalf2x16         :    0/65536 wrong numbers,    0/65536 different bit patterns (0 of them payload-only), max 0 ulp
+   (every one of the 65536 patterns agrees everywhere)
+
+==== verdict ====
+  our f16_to_f32 is exact over the whole binary16 domain:  YES (0 wrong numbers)
+  card's float(float16_t)  is IEEE-exact:                   YES (0 wrong, 2045 bit-diff)
+  card's float(unpackHalf2x16(x).x) is IEEE-exact:          YES (0 wrong, 2045 bit-diff)
+  BOTH shader expressions == our host conversion, bit for bit:  YES (0 / 0 bit-diff)
+rc=0
+--- align_attn 64 256 (the regression_v14 parameters, not the defaults)
+[cfg]  seq=64 cap=256  model=models/Ternary-Bonsai-2-9B-PTQ1_0.gguf
+[gguf] head_dim=256 n_head=16 n_head_kv=4 n_rot=64 eps=9.99999997e-07 freq_base=1e+07  scale=1/sqrt(hd)=0.062500
+[w]    blk.3.attn_q_norm/attn_k_norm loaded from the file: qn range 0.7383..2.0234, qn[0]=1.328125 kn[0]=1.396484
+[dev]  Radeon RX 550X
+
+== F. the fp16 packer: the card's packHalf2x16() vs RNE, four columns ==
+  4096 floats -> 2048 words  [0.089 ms]
+  host f32_to_f16_bits() vs GLSL pack2_rne():     0/2048 mismatching words (want 0)
+  host f32_to_f16_bits() vs packHalf2x16():       1366/2048 (66.6992%)
+  host f32_to_f16_bits_rtz() vs packHalf2x16():   0/2048 (want 0 - it truncates)
+  direction of every disagreement: 1366 never increase |value|, 0 do  (RTZ means the second number is 0)
+    word 2: host RNE 3B8FD015  card 3B8ED015  f[2k]=-32.664299 (f32 bits C202A83E, dropped 13 bits of mantissa = 2110)
+  the card's unpackHalf2x16() vs our f16_to_f32(): 0/4096 halves differ (want 0); RNE round-trip error vs the instruction's: max|err|=0.25000000 at i=24
+
+== A. GPU kernels vs the fp32 mirror (attn_forward<true>), real layer-3 shapes ==
+  q16  (fp16 Q operand)   words=131072   bit-exact=131004  mismatches=68
+  kc   (the fp16 K arena) words=131072   bit-exact=131055  mismatches=17
+  vc   (the fp16 V arena) words=131072   bit-exact=131072  mismatches=0
+  p16  (fp16 probs)       words=131072   bit-exact=130918  mismatches=154
+  score (raw kq)         n=262144    max|err|=0.00356674  at=173070    bit-exact=98.6824%  max rel=3.678e-02  hard=0  =3.159e-05 of full scale (112.895)
+  prob (f32)             n=262144    max|err|=0.00002487  at=170261    bit-exact=88.9397%  max rel=2.309e-04  hard=0  =2.487e-05 of full scale (1.000)
+  pregate (context)      n=262144    max|err|=0.00041044  at=190838    bit-exact=88.9217%  max rel=2.254e+00  hard=0  =2.196e-04 of full scale (1.869)
+  gated (layer out)      n=262144    max|err|=0.00025550  at=190913    bit-exact=76.3798%  max rel=2.254e+00  hard=0  =1.983e-04 of full scale (1.289)
+  worst score[t=42][h=4][j=14] (kv head 1): mirror=-2.943592 card=-2.940025  differing q words=0 k words=1  sum|term err|=0.003567
+    word  88: q B7E7434E (3.652344,-0.493896) -> B7E7434E (3.652344,-0.493896)   k 3E0C3C94 (1.144531,1.511719) -> 3E0C3C95 (1.145508,1.511719)   term err 0.003567
+  [time] norm_rope 0.749 ms   qk_softmax 2.155 ms   pv+gate 1.404 ms  (submit + kernel + fence, seq=64)
+  magnitudes: |kq|max=112.895  |context|max=1.869  |gated|max=1.289   max|sum(p)-1|=3.516e-07 (and every dead slot is exactly 0.0)
+
+== A2. stages 2+3 fed the MIRROR's own fp16 arena (stage 1 taken out of the loop) ==
+  p16 (fp16 probs)   words=131072   bit-exact=131068   mismatches=4
+  score (fed arena)      n=262144    max|err|=0.00000000  at=0         bit-exact=100.0000%  max rel=0.000e+00  hard=0  =0.000e+00 of full scale (112.895)
+  prob  (fed arena)      n=262144    max|err|=0.00000012  at=34309     bit-exact=91.0004%  max rel=6.248e-07  hard=0  =1.192e-07 of full scale (1.000)
+  pregate(fed arena)     n=262144    max|err|=0.00000712  at=72445     bit-exact=99.6212%  max rel=1.730e-02  hard=0  =3.807e-06 of full scale (1.869)
+  gated (fed arena)      n=262144    max|err|=0.00000358  at=72388     bit-exact=85.5412%  max rel=1.730e-02  hard=0  =2.778e-06 of full scale (1.289)
+  [time] qk_softmax 2.030 ms   pv+gate 0.482 ms, operands identical by construction
+
+== T. the card's pow/cos/sin/exp vs the C library's, on the arguments attention uses ==
+  [round-trip] the card's copy of the argument buffer differs from the host array in 0/297504 words (want 0; anything else makes every number below a statement about the harness, not about the card)
+  pow (theta)    n=32     bit-differ=27     (84.375%)  max|abs|=2.980e-08  max|rel|=8.796e-07
+  cos (angle)    n=2048   bit-differ=1020   (49.805%)  max|abs|=4.664e-06  max|rel|=2.185e-04
+  sin (angle)    n=2048   bit-differ=1839   (89.795%)  max|abs|=4.590e-06  max|rel|=2.186e-04
+  exp (softmax)  n=33280  bit-differ=22029  (66.193%)  max|abs|=5.960e-08  max|rel|=5.504e-07
+  exp (sigmoid)  n=262144 bit-differ=34577  (13.190%)  max|abs|=4.768e-07  max|rel|=1.302e-07
+  sqrt           n=297504 bit-differ=45252  (15.211%)  max|abs|=4.768e-07  max|rel|=1.192e-07
+  1/sqrt (norm inv) n=297504 bit-differ=85067  (28.594%)  max|abs|=1.221e-04  max|rel|=1.382e-07
+  1/x (div)      n=297504 bit-differ=31815  (10.694%)  max|abs|=6.250e-02  max|rel|=1.192e-07
+  [297504 indices, 0.345 ms] in fp32 ulp at |x|~1: pow max|abs| = 0.25 ulp (relative 7.38 ulp - theta spans 1e-07..1, so relative is the honest unit there), cos 39.12 ulp, sin 38.50 ulp (ABSOLUTE, because |cos|,|sin| <= 1; the largest angle this run feeds in is 63.0 rad, and argument reduction at that size is what puts the gap at tens of ulp, not a few), exp(softmax) 0.50 ulp absolute / 4.62 ulp relative. The arena rounds at 2^-11, so a flip needs an fp32 value that lands within that band of a halfway point: leg R measures the band, leg A counts the actual flips.
+  and the RMS-norm path, which has NO transcendental in it at all: sqrt and a division are the only arithmetic in it, so a difference there reaches EVERY dim of the row, the pass-through ones included. Judged on the arguments this run actually contains:
+     sqrt(x)           band: max|rel| =     1.00 fp32 ulp over 296436 samples | worst x=0.250002: host 0.50000149 card 0.50000155 | 1068 samples outside the band (edge arguments), max|rel| there 1.112e-07
+     1/sqrt(x)=inv     band: max|rel| =     1.16 fp32 ulp over 296436 samples | worst x=0.335866: host 1.7255093 card 1.725509 | 1068 samples outside the band (edge arguments), max|rel| there 9.034e-08
+     1/x               band: max|rel| =     1.00 fp32 ulp over 296436 samples | worst x=0.124977: host 8.0014935 card 8.0014944 | 1068 samples outside the band (edge arguments), max|rel| there 0.000e+00
+     leg R2 takes the next step and tests it per row: it moves the mirror's inv by k ulps for k in [-4,+4] and asks whether the card's pass-through dims come out bit-identical.
+
+== R. stage 1 BEFORE the pack: the fp32 gap behind leg A's flipped bits ==
+  Q: 66413/262144 fp32 values differ bit for bit (34898 inside dims<n_rot, 31515 pass-through), max|err|=1.371e-05 at 213536
+  K: 17332/262144 fp32 values differ (8944 rotated, 8388 pass-through), max|err|=1.192e-05 at 55072
+  rotated Q mismatches by pair index p: p0=1871 p1=1783 p2=1791 p3=1847 p4=1527 p5=1560 p6=1416 p7=1262  p8..31=21841
+  arena flips caused by that fp32 band: Q 68/262144 halves, K 17/262144 halves; the largest pattern delta is 11 fp16 ulp, and 0 flips land on a binade edge where the fp16 exponent field itself changes (that is legal rounding: 0.9995 becomes 1.000)
+    t=47 h=12 dim=35  mirror 0.000128537 vs card 0.000127226: gap 1.311e-06 = 11.000 of one fp16 cell; tie distance 0.2500 (side -1) vs 0.2500 (side -1) -> half 0836 becomes 082B = 11 fp16 ulp
+    t=45 h=9  dim=32  mirror -0.00146943 vs card -0.00147229: gap 2.861e-06 = 3.000 of one fp16 cell; tie distance 0.3125 (side -1) vs 0.3125 (side -1) -> half 9605 becomes 9608 = 3 fp16 ulp
+    t=29 h=10 dim=4   mirror -0.000452518 vs card -0.000451803: gap 7.153e-07 = 3.000 of one fp16 cell; tie distance 0.5000 (side -1) vs 0.5000 (side -1) -> half 8F6A becomes 8F67 = 3 fp16 ulp
+    t=56 h=0  dim=36  mirror 0.000884116 vs card 0.000885367: gap 1.252e-06 = 2.625 of one fp16 cell; tie distance 0.3750 (side -1) vs 0.2500 (side +1) -> half 133E becomes 1341 = 3 fp16 ulp
+    t=57 h=3  dim=2   mirror -0.00118512 vs card -0.0011875: gap 2.384e-06 = 2.500 of one fp16 cell; tie distance 0.1875 (side -1) vs 0.3125 (side +1) -> half 94DB becomes 94DD = 2 fp16 ulp
+    t=36 h=6  dim=33  mirror 0.0014559 vs card 0.00145793: gap 2.027e-06 = 2.125 of one fp16 cell; tie distance 0.1250 (side +1) vs 0.2500 (side +1) -> half 15F7 becomes 15F9 = 2 fp16 ulp
+    t=36 h=0  dim=0   mirror 0.0053187 vs card 0.00532573: gap 7.033e-06 = 1.844 of one fp16 cell; tie distance 0.2344 (side -1) vs 0.3906 (side -1) -> half 1D72 becomes 1D74 = 2 fp16 ulp
+    t=45 h=2  dim=3   mirror -0.00183594 vs card -0.00183761: gap 1.669e-06 = 1.750 of one fp16 cell; tie distance 0.3750 (side +1) vs 0.3750 (side -1) -> half 9785 becomes 9787 = 2 fp16 ulp
+  verdict: of the 85 flips, 65 have the two fp32 values on strictly OPPOSITE sides of the cell boundary and 8 have one side sitting EXACTLY on it (a true RNE tie, decided by the even-mantissa rule). No flip disagrees by more than 11 fp16 ulp for a reason that is not rounding: the ABSOLUTE disagreement peaks at 1.058e-05, inside leg R's own fp32 band of 1.371e-05, and the widest ulp counts belong to dims where the rotation nearly cancelled (small value, small cell). 85 of 524288 halves = 0.0162%.
+  the angle at pair p is position * 1e7^(-p/32): p0=1 p1=0.604296 p2=0.365174 p3=0.220673 and by p8 it is 1.8e-02, i.e. cos=1.000000 and sin=angle exactly in fp32 for every position we run. So a mismatch at large p is an algebra bug, and one confined to small p is the transcendental gap of leg T.
+
+== R2. one scalar per row: can an ulp shift of the norm constant explain the card? ==
+  Q: 1024 rows - 846 have bit-clean pass-through dims at the host's inv, 178 become clean only when inv moves by 1..4 ulp, 0 are NOT reproducible by ANY inv in [host-4ulp, host+4ulp]
+     best-shift histogram: k-4=0 k-3=0 k-2=0 k-1=123 k+1=55 k+2=0 k+3=0 k+4=0 
+     pass-through mismatches at the host inv: 31515/50331648 (0.063%), of which 31515 (100.0%) sit in rows a single scalar shift reproduces EXACTLY
+     after that shift the residual is 29921 mismatches: 29921 in dims<n_rot (cos/sin, leg T's band) + 0 in pass-through dims (want 0). 834 rows are already clean on pass-through and differ ONLY in the rotation.
+  K: 256 rows - 209 have bit-clean pass-through dims at the host's inv, 47 become clean only when inv moves by 1..4 ulp, 0 are NOT reproducible by ANY inv in [host-4ulp, host+4ulp]
+     best-shift histogram: k-4=0 k-3=0 k-2=0 k-1=36 k+1=11 k+2=0 k+3=0 k+4=0 
+     pass-through mismatches at the host inv: 8388/50331648 (0.017%), of which 8388 (100.0%) sit in rows a single scalar shift reproduces EXACTLY
+     after that shift the residual is 7545 mismatches: 7545 in dims<n_rot (cos/sin, leg T's band) + 0 in pass-through dims (want 0). 207 rows are already clean on pass-through and differ ONLY in the rotation.
+
+== B. causal prefix and the -INF fill value ==
+  live slots=33280  dead slots that are NOT exactly 0.00000000: 0
+  GPU dead-slot zeros agree with the mirror: max|err| over the whole prob tensor = 0.00002487
+  -INF in the live prefix: 63 rows tested, GPU wrote a non-zero probability in 0 of them
+  masked-row probabilities vs the mirror: max|err|=0.00002526 at 170261, bit-exact=89.2715%
+  after the kill, the row still sums to 1: max|sum-1| = 2.556e-07
+
+== C. rope: position 0, pass-through dims, and the frequency expression ==
+  position 0, kv head 0: the cached row differs from the norm-only value in 0/128 words (want 0)
+  dims 64..255 pass through: 3/24576 fp16 words differ (want 0)
+  powf(base,-2p/nrot) vs the fork's powf(powf(base,-2/nrot),p): max|d theta| = 1.490e-08 at p=3 (2.362e-07 relative)
+  propagated into a rotated row: max|err| = 2.980e-06 at token*hd+dim = 13571, i.e. 2.980e-06 of the value - the fp16 operand quantum here is ~6e-4, so the two forms cannot be told apart once cached
+
+== D. GQA: 16 q heads reading 4 kv heads ==
+  identical Q in all 16 heads: 1536 head pairs share a kv head, 6144 do not
+  pairs that SHARE a kv head and disagree: 0 (want 0)
+  pairs on DIFFERENT kv heads that agree:  0 (want 0 - they must read different K)
+
+== E. the KV arena: one prefill pass vs a token-at-a-time decode, bit for bit ==
+  64 decode steps against the same prefill: 0 head-rows differ in the gated output, 0 probability slots differ (want 0 and 0)
+  largest prefill/decode disagreement: 0.00000000 (token 0)
+
+== G. what each fp16 rounding costs (float64 ideal legs, same ascending order) ==
+  ideal(fp64, nothing rounded) -> +fp16 arena : max|err|=4.6188e-04 at 163426
+                               -> +fp16 Q     : max|err|=4.7433e-04 at 55847
+                               -> +fp16 probs : max|err|=3.3428e-04 at 53128
+  the fp32 mirror vs the all-fp16 ideal       : max|err|=2.9401e-04 at 45854  (float32 accumulation, not a layout error)
+  |gated|max = 1.289, so the whole fp16+fp32 chain costs at most 1.564e-03 absolute (1.214e-03 relative)
+
+  V. verdict - card vs mirror against the format's own floor:
+     card vs mirror   score=3.567e-03 (=3.16e-05 of |kq|max)  prob=2.487e-05  context=4.104e-04  layer-out=2.555e-04 (=1.98e-04 of |gated|max)
+     fp16 layout cost  arena=4.619e-04  Q=4.743e-04  probs=3.343e-04  sum=1.564e-03  (= the SAME tensor space the engine cannot opt out of)
+     ratio our/format = 0.262 -> our divergence is SMALLER than the error the official fp16 cache imposes; the remaining card/host difference is the last fp32 bits of a transcendental, not a term the official engine gets right and we get wrong
+
+[done]
+rc=0
+--- align_27b
+model: blk.0.ffn_gate.weight K=100 is not a multiple of 128 - PTQ1_0 cannot tile it
+model: layer/rotation contract rejected: the declared attention layer count is 17 but the resolved typing gives 16
+model: layer/rotation contract rejected: prism.layer_types[5] = "sliding_attention": this runtime has no windowed/MoE layer path. Mapping it onto full attention would charge the right number of bytes and read keys outside the window, i.e. plausible garbage; mapping it onto the recurrent state would be worse. Refusing.
+model: layer/rotation contract rejected: hadamard.version = 2: this runtime implements version 1 - the normalized Sylvester-Walsh block transform - and NOTHING else. A new rotation contract is a new kernel plus a new alignment run, not a fallback
+align_27b - the 27B adapter, measured on the hardware that exists
+  model template : models/Ternary-Bonsai-2-9B-PTQ1_0.gguf
+  gpu legs       : ENABLED
+
+=== [1] PTQ1_0: 5 trits per byte, 128 weights per block, one fp16 scale per block ===
+  ok    trit extraction: 1280/1280 (256 bytes x 5 positions) agree between the runtime recurrence and floor(b*3^(t+1)/256) % 3; 13/256 byte values are outside the 3^5 = 243 legal pack space and are counted, not assumed absent
+  ok    element map is a total function over all 128 slots; bytes 0..15 carry elements 0..79 (5 trits each), 16..23 carry 80..119 (5 trits), 24..25 carry 120..127 (4 trits), and bytes 26..27 are reserved for the fp16 scale - no slot is read twice, none is missed
+  ok    decode triangulation: 65 536 fp16 scale patterns x 128 elements x 2 comparisons = 16777216 bit comparisons, max|err| = 0.00000 over every finite pair. ours-vs-official is bit-identical on all 8388608 of its own comparisons (128 elements x 65 536 scales); the arithmetic-free lookup form differs only in 1206272 sign-of-zero bits, 146252 NaN-payload bits and 77824 zero-times-non-finite-scale bits (the sweep holds 2046 NaN and 2 infinite scales). Subnormal and -0.0 scales are inside it, which is the class the official shader once disagreed with us on
+  ok    K % 128 rejection fires in model_plan_build (its message is above), so a row whose byte count is not K/128 blocks of 28 B cannot reach the loader or the GEMV at all
+  ok    real checkpoint scales: 299593 consecutive PTQ1_0 blocks of blk.0.ffn_gate.weight (8 MiB from data_start + off), 0 non-finite fp16 scales, 0 subnormal, 0 negative-zero, |d| range [0.00808716, 0.0397644] 实测 - so every scale this engine multiplies by in that stretch is finite and 1c's non-finite class cannot occur in the shipped file
+  derived  K = 4096, M = 12288 -> 393216 blocks x 28 B = 11010048 B; 1.7500 bit/weight (= 8*28/128, i.e. 1.75 exactly, scale included)
+
+=== [2] hybrid routing: 16 attention layers own the KV cache, 48 SSM layers own none ===
+  ok    9B regression: 32 blocks = 24 GDN + 8 softmax-attention (interval 4), hidden 4096, ffn 12288, vocab 248320, nkv 4 x hd 256
+  ok    9B rotation: version 1, block 4096, kernel hat4096.comp (the 9B's bit-frozen path), signs explicit
+  9B        blocks  32 =  8 attn + 24 ssm | KV/token    24.500 KiB, arena at cap   256 =      6.12 MiB | SSM state    50.25 MiB
+             KV/token is the sum over the 8 charged layers only, cross-checked against the plan's own per-token function
+             FORBIDDEN allocator (KV on all 32 blocks): 98.000 KiB/token = 4.0x the charged one; the invariant is worth 18.38 MiB at cap 256
+  ok    27B routing: explicit list prism.layer_types (== qwen35.full_attention_interval agreement)
+  map      ...A...A...A...A...A...A...A...A...A...A...A...A...A...A...A...A  (A = full attention, . = SSM/GDN)
+  ok    SSM KV charge is 0 by construction over all 48 recurrent blocks (sum of kv_bytes_per_layer() on non-attention layers)
+  27B       blocks  64 = 16 attn + 48 ssm | KV/token    49.000 KiB, arena at cap 32768 =   1568.00 MiB | SSM state   100.50 MiB
+             KV/token is the sum over the 16 charged layers only, cross-checked against the plan's own per-token function
+             FORBIDDEN allocator (KV on all 64 blocks): 196.000 KiB/token = 4.0x the charged one; the invariant is worth 4704.00 MiB at cap 32768
+             SYNTHETIC shape: the 9B's hidden/ffn/vocab with 64 blocks = 4.21 GiB of repacked weights. This tests the resolver, the charge and the kernel route; it is NOT Ternary-Bonsai-2-27B's 5.9 GB geometry, which this host cannot read.
+  route    version 1, block 1024, kernel hadamard_fwht.comp (FWHT, 1/sqrt(block)), signs explicit
+  ok    block_size 4096 on the same 64-block plan keeps hat4096.comp - the route is metadata, not a model-name lookup
+
+  -- negative control: count cross-check disagrees --
+  ok    refused as required
+
+  -- negative control: sliding_window in the list --
+  ok    refused as required
+
+  -- negative control: hadamard.version = 2 --
+  ok    refused as required
+
+model: layer/rotation contract rejected: prism.hadamard.block_size is absent while the rotation is active: the transform width cannot be defaulted to 4096, that is the 9B's answer not this file's
+  -- negative control: rotation active, block_size absent --
+  ok    refused as required
+
+=== [3] rotation: hadamard_fwht.comp on the card vs a host Sylvester FWHT ===
+  ok    orthogonality measured at N = 128: all 128 diagonal dot products are exactly 128 and all 16256 off-diagonal ones are exactly 0 (integer arithmetic, no tolerance involved)
+  ok    N =   16: max |H(H x) - N x| = 0.000e+00 over 16 lanes; 1/sqrt(N) = 0.25 is EXACT in binary
+  ok    N =   64: max |H(H x) - N x| = 0.000e+00 over 64 lanes; 1/sqrt(N) = 0.125 is EXACT in binary
+  ok    N =  256: max |H(H x) - N x| = 0.000e+00 over 256 lanes; 1/sqrt(N) = 0.0625 is EXACT in binary
+  ok    N = 1024: max |H(H x) - N x| = 9.766e-04 over 1024 lanes; 1/sqrt(N) = 0.03125 is EXACT in binary
+  ok    N = 4096: max |H(H x) - N x| = 9.766e-03 over 4096 lanes; 1/sqrt(N) = 0.015625 is EXACT in binary
+  gpu        Radeon RX 550X
+  ok    N =   16, 256 blocks: 4096 lanes BITWISE identical to the host FWHT (kernel reads X, writes Y - the out-of-place shape rotate() uses)
+  ok    N =   64, 64 blocks: 4096 lanes BITWISE identical to the host FWHT (kernel reads X, writes Y - the out-of-place shape rotate() uses)
+  ok    N =  256, 16 blocks: 4096 lanes BITWISE identical to the host FWHT (kernel reads X, writes Y - the out-of-place shape rotate() uses)
+  ok    N = 1024,  4 blocks: 4096 lanes BITWISE identical to the host FWHT (kernel reads X, writes Y - the out-of-place shape rotate() uses)
+  ok    N = 4096,  1 blocks: 4096 lanes BITWISE identical to the host FWHT (kernel reads X, writes Y - the out-of-place shape rotate() uses)
+  ok    1/sqrt(4096) == 1/64 bit-for-bit, so hadamard_fwht at block 4096 and hat4096.comp apply the same diagonal scale (the butterflies are the same operator; only the summation ORDER differs, which is why the 9B keeps its frozen kernel)
+             signs: the +-1 diagonal belongs to signs_mul.comp, not to this kernel - fold it into the FWHT and it gets applied twice, which is a permutation of the spectrum rather than a rounding. Forward order is signs->H for the 201 rotated weight tensors and H->signs for token_embd (the inverse sandwich); align_attn.exe owns that leg.
+
+=== verdict ===
+  ALL CHECKS PASSED (0 failure(s))
+rc=0
+--- ignition + bitwise gate: BONSAI_QCHECK=1, DEFAULT config, cap 256, 48 tokens
+--- environment at ignition time (report-only clear_field, no -Kill: same as HANDOVER §4.5)
+AVAILABLE_MB_BEFORE=2601
+KILLED=16
+AVAILABLE_MB_AFTER=2590
+VRAM_DEDICATED_TOTAL_MiB=3,501.5
+  VRAM dwm                    pid=1956     1,204.5 MiB
+  VRAM GameViewerServer       pid=5184     1,130.8 MiB
+  VRAM WeChatAppEx            pid=14488      357.0 MiB
+  VRAM WorkBuddy              pid=17168      165.0 MiB
+  VRAM Qoder CN               pid=12272      145.8 MiB
+device: Radeon RX 550X | driver 2.0.279 | device-local heap 3840 MiB | timestampPeriod 40.000 ns
+  limits: maxComputeWorkGroupSize[0]=1024 maxComputeWorkGroupCount[0]=4294967295 bufferImageGranularity=1
+  limits: maxComputeSharedMemorySize=32768 B (= 32 KiB) maxComputeWorkGroupInvocations=1024
+  compute queue = family 0, transfer-only queue = family 2
+
+=== weight plan, read from the tensor table (实测, not estimated) ===
+  tensors 427 = 202 PTQ1_0 + 225 f32   weights 8953803264 elems = 8.954 B
+  per-tensor shapes are K x M; the activation widths this file declares (prism.hadamard.sign_widths) are [4096, 12288], which is what the rotation has to cover.
+  checkpoint's own block form : 1957036032 B = 1.823 GiB  (1.75 bpw)
+  our 2-bit random-access form: 2516189184 B = 2.343 GiB  (codes 2.083 GiB + scales 0.260 GiB, 2.125 bpw)
+  f32 blob                    :  29411328 B = 28.049 MiB
+  LAYOUT COST = 0.521 GiB extra = 17064 tokens of KV at 32768 B/token
+
+=== the rest of the footprint ===
+  metadata prefixes : general.architecture = qwen35 -> prefixes [qwen35,prism,general,<bare>]
+  layer typing    : qwen35.full_attention_interval = 4 -> (b+1) % interval == 0  [the 9B's spelling]
+  rotation        : version 1, block 4096, kernel hat4096.comp (the 9B's bit-frozen path), signs explicit
+  blocks: 24 recurrent + 8 softmax-attention of 32 (interval key = 4, explicit typing in force)
+  recurrent state, context-INDEPENDENT: 2097152 B/layer state + 98304 B/layer conv = 50.2 MiB over 24 layers
+  KV cache: 32768 B/token (32.0 MiB per 1k tokens), fp16, 8 layers | q8_0 V: 25088 B/token
+  device-local heap: 3840 MiB
+
+=== per-layer cache charge (structural: recurrent layers own state, never KV) ===
+  b0  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b1  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b2  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b3  attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  b4  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b5  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b6  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b7  attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  b8  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b9  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b10 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b11 attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  b12 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b13 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b14 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b15 attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  b16 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b17 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b18 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b19 attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  b20 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b21 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b22 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b23 attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  b24 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b25 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b26 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b27 attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  b28 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b29 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b30 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b31 attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  TOTAL over 32 layers: 8 attention -> 32768 B/token fp16-V | 25088 B/token q8_0-V; 24 recurrent -> 52690944 B of context-independent state
+
+arena (single DEVICE_LOCAL allocation; sizes are the plan's, offsets are the driver's):
+  codes           2236612608 B  align 4    -> offset 0
+  scales           279576576 B  align 4    -> offset 2236612608
+  f32blob           29411328 B  align 4    -> offset 2516189184
+  ptq_scratch       33554432 B  align 4    -> offset 2545600512
+  x                    65536 B  align 4    -> offset 2579154944
+  xsum                  4096 B  align 4    -> offset 2579220480
+  out                8388608 B  align 4    -> offset 2579224576
+  arena committed 2.410 GiB, alignment padding 0 B
+  KV V representation: q8_0 blocks (32 elements + 1 fp16 scale) (BONSAI_KV_V_QUANT) | KF debug stream: off | KV block: 64 positions | spill watch: every 32 tokens, soft 32 / hard 64 MiB, growth run >= 3
+  spill thresholds are measured as GROWTH over the first decode sample (default; BONSAI_SPILL_ABS=1 for the absolute reading); the reference is the first decode sample and is printed with the curve
+  attention QK kernel: GQA-MERGED attn_qk_softmax_gqa_h4_q*.comp (cap 256; narrow <= 256, wide <= 2048, tiled row <= 65536; force=0 tile=2048)
+    GQA merge: grid 16 -> 4 workgroups per layer (HPK = 4 query heads served by one K gather), QK reference = narrow, LDS 8224 B = 8.0 KiB per workgroup (HPK*4*QTILE + 8*HPK, QTILE = 512)
+    V path: frozen attn_pv_q8v.comp (BONSAI_GQA_PART bit1 off, or the fp16 V arena which has no merged twin)
+  rotation route: block_size = 4096 -> hat4096.comp (bit-frozen, the 9B's path), normalize = 0.015625 (exact in binary)
+
+=== forward bring-up ===
+  driver: minStorageBufferOffsetAlignment = 4 B, maxStorageBufferRange = 4096.000 MiB
+  split-K scratch sized from the plan: 65536 floats (0.2 MiB) - max S*M over 202 PTQ tensors (xsum needs 96 floats, region keeps 128)
+  KV geometry (derived from the kernel layout, not typed):
+    K  fp16             512 words/slot/layer =   2048 B   (never compressed)
+    V q8_0 data       256 words/slot/layer =   1024 B   (8 blocks of 32 per head row)
+    V q8_0 scales      16 words/slot/layer =     64 B   (1 fp16 per 32-element block)
+    per layer-slot     3136 B -> x8 attention layers = 25088 B/token = 24.50 KiB/token
+  arena invariants | KV span 1605632 == cap 256 x 8 x 784 OK; ST 12582912 / CH 589824 are 24 GDN layers x per-layer state, cap-free OK
+  mixed-stack invariants | plan charges 1605632 KV words == arena 1605632 (+0 B/term of offset alignment); 24 recurrent layers charged 0 B of KV and 13172736 words of state == arena ST+CH; KV bytes per token 25088 (q8_0 V)
+  activation arena: 15250752 floats = 58.177 MiB (state 48.0 MiB + KV 6.1 MiB + logits 0.95 MiB)
+    P0 check | cap-proportional regions = SCORE+PROB+P16+MASK+POS (42 floats) + KF off (0) + KV 8 layers x 784 = 6314 floats/slot; GDN terms in it: 0 (ST = 12582912 floats total, independent of cap)
+  memory budget | device-local heap 3840.0 MiB, weights 2467.7 MiB already committed
+    activations at cap 256 : 58.2 MiB = cap-independent 52.0 MiB + 256 slots x 24.66 KiB/slot (q8_0-V + fp16-K arena 24.50 KiB + fp32 side 0.16 KiB)
+    headroom after this allocation: 1314.1 MiB (= 54558 more slots of cap, but the widest VALIDATED row for the wide QK kernel is 65536)
+  KV block hook: 256 slots = 4 blocks of 64 positions, 1.53 MiB per block (24.50 KiB/slot x 8 layers x 64), ceiling 1314.11 MiB, evict off
+  [spill] PDH Shared Usage counter added as \GPU Process Memory(*)\Shared Usage (sum of every instance whose name contains "pid_22364_")
+  dxgi budget LOCAL (VRAM)      : budget 3200.4 MiB, current usage 2471.6 MiB, available for reservation 1834.2 MiB, current reservation 0.0 MiB   (AUXILIARY: a reservation budget, not an eviction signal)
+  dxgi budget NON_LOCAL (system): budget 7461.9 MiB, current usage 40.8 MiB, available for reservation 3858.9 MiB, current reservation 0.0 MiB   (AUXILIARY: a reservation budget, not an eviction signal)
+  act               61003008 B  align 4    -> offset 0
+  signs: sum(0..4095) = 60, sum(4096..16383) = -94   (the file's own values; 60 / -94
+  were the numbers read off the metadata, and they are what makes this upload checkable)
+  pipelines: 22 elementwise/GEMV + 8 layers x 7 attention descriptor sets (78 of 128 sets, 504 of 1024 descriptors) | V = q8_0 (attn_pv_q8v), K = fp16 | norm+rope+pack = attn_norm_rope2 | tiled QK = attn_qk_softmax_tile_q2048 | GQA-merged QK = attn_qk_softmax_gqa_h4_q512 | GQA-merged PV = attn_pv_q8v_gqa
+
+=== region table (float units; every offset is a multiple of 16) ===
+  RES      off         0  size      4096
+  NRM      off      4096  size      4096
+  AN       off      8192  size      4096
+  ROT      off     12288  size      4096
+  HR       off     16384  size      4096
+  EMB      off     20480  size      4096
+  QKV      off     24576  size      8192
+  K        off     32768  size      1024
+  V        off     33792  size      1024
+  Z        off     34816  size      4096
+  ALPHA    off     38912  size        32
+  BETA     off     38944  size        32
+  G1       off     38976  size        32
+  G2       off     39008  size        32
+  GATE32   off     39040  size        32
+  CONV     off     39072  size      8192
+  L2       off     47264  size      4096
+  GDNO     off     51360  size      4096
+  GDNORM   off     55456  size      4096
+  SWG      off     59552  size      4096
+  PERM     off     63648  size      4096
+  FG       off     67744  size     12288
+  FU       off     80032  size     12288
+  FS       off     92320  size     12288
+  PART     off    104608  size     65536
+  XS       off    170144  size       128
+  LOGITS   off    170272  size    248320
+  Q16      off    418592  size      2048
+  QF       off    420640  size      4096
+  QD       off    424736  size      4096
+  GD       off    428832  size      4096
+  SCORE    off    432928  size      4096
+  PROB     off    437024  size      4096
+  P16      off    441120  size      2048
+  PGATE    off    443168  size      4096
+  GOUT     off    447264  size      4096
+  MASK     off    451360  size       256
+  POS      off    451616  size       256
+  KF       off    451888  size        16
+  DUMMY    off    451872  size        16
+  QKWN     off    451904  size      4096
+  SIGNS    off    456000  size     16384
+  KV       off    472384  size   1605632
+  ST       off   2078016  size    524288
+  CH       off  14660928  size     24576
+  KV split  K(fp16) 512     V (q8_0 data)  256     V-scales 16       x8 layers, x256 slots
+  signs on device: sum4096 = 60, sum12288 = -94, nonzero = 16384/16384
+
+  weight load 2622.2 ms, forward bring-up 422.0 ms
+  device-local total: weights 2.410 GiB + activations 58.177 MiB
+  chat template: thinking=on  system=(none) user=30 chars -> 16 tokens, id paths (encode vs assembled) IDENTICAL
+  prompt 16 tokens: 248045 846 198 95826 110827 98682 95986 96326 103725 248046 198 248045 74455 198 248068 198
+  sampler: temp=0.00 top_k=0 top_p=1.00 eos=248046 cap=256
+  prefill 1121.3 ms for 16 prompt tokens (14.27 tok/s)
+
+=== QK kernel audit (BONSAI_QCHECK, 16 live keys in the row, cap 256, dispatching NARROW q2048) ===
+  A layer 0 (cap<=256): SCORE 0/4096 bit-diff, PROB 0, P16 0  -> bitwise identical
+      size of the diff: SCORE <= 0 fp32 ulp (rel 0.000e+00), PROB <= 0 ulp (rel 0.000e+00)  [first diff: SCORE idx 0, PROB idx 0]
+      P16 (the operand PV reads when round_probs=1): bitwise identical - the token stream cannot differ between kernels
+  A layer 7 (cap<=256): SCORE 0/4096 bit-diff, PROB 0, P16 0  -> bitwise identical
+      size of the diff: SCORE <= 0 fp32 ulp (rel 0.000e+00), PROB <= 0 ulp (rel 0.000e+00)  [first diff: SCORE idx 0, PROB idx 0]
+      P16 (the operand PV reads when round_probs=1): bitwise identical - the token stream cannot differ between kernels
+  A2 layer 0 (cap 256, QTILE 2048): SCORE 0/4096 bit-diff, PROB 0, P16 0  -> bitwise identical
+  A2 layer 7 (cap 256, QTILE 2048): SCORE 0/4096 bit-diff, PROB 0, P16 0  -> bitwise identical
+  A3 layer 0 (cap 256, ref NARROW, HPK 4, merged q512, grid 16 -> 4): SCORE 0/4096 bit-diff, PROB 0, P16 0  -> bitwise identical
+  A3 layer 7 (cap 256, ref NARROW, HPK 4, merged q512, grid 16 -> 4): SCORE 0/4096 bit-diff, PROB 0, P16 0  -> bitwise identical
+      reach: every one of the 8192 SCORE/PROB elements and 4096 P16 words of both the first and the last attention layer, i.e. all 16 heads x 256 slots, packed pairs included past the 512-word boundary
+  A4 layer 0 (cap 256, PV q8_0 frozen vs merged, grid 16 -> 4): PGATE 0/4096 bit-diff, GOUT 0  -> bitwise identical
+  A4 layer 7 (cap 256, PV q8_0 frozen vs merged, grid 16 -> 4): PGATE 0/4096 bit-diff, GOUT 0  -> bitwise identical
+  B P16 == pack2(PROB) for 2048 pairs: 0 mismatches (covers indices above 512, the strided-pack range)  -> ok
+  C dead slots [16,256) x 16 heads are bitwise +0.0: 0 violations -> ok
+  D live-row sums: worst |sum-1| = 0.000e+00 over 16 heads x 16 keys -> ok
+  E index audit: 512 keys recomputed in double, worst |dot-SCORE| = 0.000e+00 at key 0 -> keys line up
+      reach: 16 live keys = 1 NTILE tile(s) of dot products, 128 packed pairs = 1 tile(s) of packs  <- past 512: the range a non-strided pack would drop
+  gate: PASS (bitmask 0 = A ok A2 ok A3 ok A4 ok B ok C ok D ok E ok)
+  logits after the prompt: max 23.4405 min -12.8177 mean -1.275638  nan 0 inf 0
+  top 8:  90700(23.44"Thinking")  8160(20.12"Here")  107680(16.98"嗯")  97237(14.25"用户")  96747(14.19"好的")  99496(13.87"思考")  5514(13.38" Here")  97490(13.04"这里")
+    [spill] tok 16     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2539.23 MiB, growth run 0)
+  gen  1  tok=  90700     69.78 ms  Thinking
+  gen  2  tok=   8340     69.61 ms   Process
+  gen  3  tok=     25     70.43 ms  :
+  gen  4  tok=    271     69.49 ms  
+
+
+  gen  5  tok=     16     69.87 ms  1
+  gen  6  tok=     13     70.27 ms  .
+  gen  7  tok=    220     69.81 ms   
+  gen  8  tok=   2972     69.84 ms   **
+  gen  9  tok=   2014     69.64 ms  An
+  gen 10  tok=  53983     70.59 ms  alyze
+  gen 11  tok=    279     70.10 ms   the
+  gen 12  tok=   5952     69.97 ms   Request
+  gen 13  tok=  64700     69.69 ms  :**
+  gen 14  tok=    198     70.41 ms  
+
+  gen 15  tok=    262     69.79 ms     
+  gen 16  tok=    348     69.90 ms   *
+  gen 17  tok=    256     69.87 ms    
+  gen 18  tok=   5396     69.86 ms   Input
+  gen 19  tok=     25     70.11 ms  :
+  gen 20  tok=    328     70.19 ms   "
+  gen 21  tok=   3710     70.17 ms  What
+  gen 22  tok=    369     69.90 ms   is
+  gen 23  tok=    279     69.82 ms   the
+  gen 24  tok=   7063     70.32 ms   meaning
+  gen 25  tok=    314     69.23 ms   of
+  gen 26  tok=    359     69.92 ms   '
+  gen 27  tok=   3710     70.18 ms  What
+  gen 28  tok=    369     70.16 ms   is
+  gen 29  tok=    279     70.18 ms   the
+  gen 30  tok=   7063     69.84 ms   meaning
+  gen 31  tok=    314     69.87 ms   of
+  gen 32  tok=    411     69.85 ms   this
+    [spill] tok 48     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2539.23 MiB, growth run 0)
+  gen 33  tok=   3296     69.21 ms   question
+  gen 34  tok=      6     69.96 ms  '
+  gen 35  tok=   7285     69.90 ms  ?"
+  gen 36  tok=    318     70.15 ms   (
+  gen 37  tok=  13784     69.44 ms  Wait
+  gen 38  tok=     11     70.01 ms  ,
+  gen 39  tok=    279     69.97 ms   the
+  gen 40  tok=   1156     70.07 ms   user
+  gen 41  tok=    369     69.95 ms   is
+  gen 42  tok=   9859     70.56 ms   asking
+  gen 43  tok=    728     69.94 ms   me
+  gen 44  tok=    310     70.73 ms   to
+  gen 45  tok=  10033     69.34 ms   explain
+  gen 46  tok=   2414     70.05 ms   something
+  gen 47  tok=     11     69.35 ms  ,
+  gen 48  tok=    694     71.34 ms   but
+
+=== pure-blood token rate (measured, this card) ===
+  48 generated tokens in 3358.6 ms  ->  14.29 tok/s
+  first generated token (prefill+1): 69.8 ms; steady-state: 70.0 ms/token
+  dispatches 95360, barriers 95296 per command buffer (one submit per token)
+  command buffers | load phase: 119 allocated (never reused, not counted below)
+                  | forward phase: 1 allocated + 151 reuses = 152 begins over 64 positions = 2.4 per position (BONSAI_CB_REUSE=1)
+  KV at the end: 64 live positions of cap 256 (1.53 MiB of arena, 24.50 KiB/token, V = q8_0), blocks evicted 0, refused 0, soft-watched 0
+  guard actions (decisions taken at a block boundary) and spill samples (threshold crossings) are different counters - a refusal on the cap-geometry path needs no hard sample at all, so "refused > 0, hard = 0" is consistent, not a contradiction.
+    [spill] tok 64     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2539.23 MiB, growth run 0)
+
+=== PDH 'GPU Process Memory\Shared Usage' for this pid (the spill judge) ===
+  thresholds judge GROWTH over the first decode sample; reference sample 40.93 MiB, soft > 32 MiB, hard > 64 MiB with a growth run of >= 3
+  samples 3 of 3 tried, peak absolute 40.93 MiB, peak growth +0.00 MiB, soft 0, hard 0, monotonic-run(>=3 increases) 0
+  curve (every sample, MiB): 16:40.9 48:40.9 64:40.9
+
+=== text ===
+Thinking Process:
+
+1.  **Analyze the Request:**
+    *   Input: "What is the meaning of 'What is the meaning of this question'?" (Wait, the user is asking me to explain something, but
+  gdn_mode=0 gdn_gmap=0 l2_mode=1 round_probs=1 cap=256
+rc_qcheck=0

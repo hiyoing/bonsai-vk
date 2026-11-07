@@ -1,0 +1,15 @@
+=== final-binary regression + ignition + OOM, Wed Nov  4 14:06:27     2026
+--- align_tokenizer 32 probes
+
+==== tokenizer alignment: 32/32 probes byte-identical ====
+--- align_tokenizer kr set
+
+==== tokenizer alignment: 7/7 probes byte-identical ====
+--- align_dequant
+  runtime dot form d*(cs-xs) vs sum(w_e*x_e): max abs 0.000e+00  max rel 0.000e+00  (100 blocks, 0 skipped for non-finite d)
+--- align_f16
+  our f16_to_f32 is exact over the whole binary16 domain:  YES (0 wrong numbers)
+  BOTH shader expressions == our host conversion, bit for bit:  YES (0 / 0 bit-diff)
+--- align_attn
+  V. verdict - card vs mirror against the format's own floor:
+     card vs mirror   score=6.695e-04 (=6.40e-06 of |kq|max)  prob=2.205e-06  context=0.000e+00  layer-out=1.192e-07 (=1.01e-07 of |gated|max)

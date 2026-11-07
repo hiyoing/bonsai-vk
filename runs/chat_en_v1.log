@@ -1,0 +1,208 @@
+device: Radeon RX 550X | driver 2.0.279 | device-local heap 3840 MiB | timestampPeriod 40.000 ns
+  limits: maxComputeWorkGroupSize[0]=1024 maxComputeWorkGroupCount[0]=4294967295 bufferImageGranularity=1
+  limits: maxComputeSharedMemorySize=32768 B (= 32 KiB) maxComputeWorkGroupInvocations=1024
+  compute queue = family 0, transfer-only queue = family 2
+
+=== weight plan, read from the tensor table (实测, not estimated) ===
+  tensors 427 = 202 PTQ1_0 + 225 f32   weights 8953803264 elems = 8.954 B
+  per-tensor shapes are K x M with K in {4096, 12288}; sign_widths says the same, so the
+  activation-side Hadamard has exactly two widths to cover.
+  checkpoint's own block form : 1957036032 B = 1.823 GiB  (1.75 bpw)
+  our 2-bit random-access form: 2516189184 B = 2.343 GiB  (codes 2.083 GiB + scales 0.260 GiB, 2.125 bpw)
+  f32 blob                    :  29411328 B = 28.049 MiB
+  LAYOUT COST = 0.521 GiB extra = 17064 tokens of KV at 32768 B/token
+
+=== the rest of the footprint ===
+  blocks: 24 GDN + 8 softmax-attention (full_attention_interval=4)
+  recurrent state, context-INDEPENDENT: 2097152 B/layer state + 98304 B/layer conv = 50.2 MiB over 24 layers
+  KV cache: 32768 B/token (32.0 MiB per 1k tokens), fp16, 8 layers
+  device-local heap: 0 MiB
+
+arena (single DEVICE_LOCAL allocation; sizes are the plan's, offsets are the driver's):
+  codes           2236612608 B  align 4    -> offset 0
+  scales           279576576 B  align 4    -> offset 2236612608
+  f32blob           29411328 B  align 4    -> offset 2516189184
+  ptq_scratch       33554432 B  align 4    -> offset 2545600512
+  x                    65536 B  align 4    -> offset 2579154944
+  xsum                  4096 B  align 4    -> offset 2579220480
+  out                8388608 B  align 4    -> offset 2579224576
+  arena committed 2.410 GiB, alignment padding 0 B
+  attention QK kernel: WIDE  attn_qk_softmax_wide.comp (cap 1024; narrow covers <= 256, wide <= 2048; force=0)
+
+=== forward bring-up ===
+  driver: minStorageBufferOffsetAlignment = 4 B, maxStorageBufferRange = 4096.000 MiB
+  split-K scratch sized from the plan: 65536 floats (0.2 MiB) - max S*M over 202 PTQ tensors
+  activation arena: 23114528 floats = 88.175 MiB (state 48.0 MiB + KV 32.0 MiB + logits 0.95 MiB)
+  act               92458112 B  align 4    -> offset 0
+  signs: sum(0..4095) = 60, sum(4096..16383) = -94   (the file's own values; 60 / -94
+  were the numbers read off the metadata, and they are what makes this upload checkable)
+  pipelines: 21 elementwise/GEMV + 8 layers x 4 attention descriptor sets (53 of 96)
+
+=== region table (float units; every offset is a multiple of 16) ===
+  RES      off         0  size      4096
+  NRM      off      4096  size      4096
+  AN       off      8192  size      4096
+  ROT      off     12288  size      4096
+  HR       off     16384  size      4096
+  EMB      off     20480  size      4096
+  QKV      off     24576  size      8192
+  K        off     32768  size      1024
+  V        off     33792  size      1024
+  Z        off     34816  size      4096
+  ALPHA    off     38912  size        32
+  BETA     off     38944  size        32
+  G1       off     38976  size        32
+  G2       off     39008  size        32
+  GATE32   off     39040  size        32
+  CONV     off     39072  size      8192
+  L2       off     47264  size      4096
+  GDNO     off     51360  size      4096
+  GDNORM   off     55456  size      4096
+  SWG      off     59552  size      4096
+  PERM     off     63648  size      4096
+  FG       off     67744  size     12288
+  FU       off     80032  size     12288
+  FS       off     92320  size     12288
+  PART     off    104608  size     65536
+  XS       off    170144  size       128
+  LOGITS   off    170272  size    248320
+  Q16      off    418592  size      2048
+  QF       off    420640  size      4096
+  QD       off    424736  size      4096
+  GD       off    428832  size      4096
+  SCORE    off    432928  size     16384
+  PROB     off    449312  size     16384
+  P16      off    465696  size      8192
+  PGATE    off    473888  size      4096
+  GOUT     off    477984  size      4096
+  MASK     off    482080  size      1024
+  POS      off    483104  size      1024
+  KF       off    484128  size   1048576
+  QKWN     off   1532704  size      4096
+  SIGNS    off   1536800  size     16384
+  KV       off   1553184  size   1048576
+  ST       off   9941792  size    524288
+  CH       off  22524704  size     24576
+  signs on device: sum4096 = 60, sum12288 = -94, nonzero = 16384/16384
+
+  weight load 1092.8 ms, forward bring-up 53.5 ms
+  device-local total: weights 2.410 GiB + activations 88.175 MiB
+  chat template: thinking=on  system=(none) user=48 chars -> 22 tokens, id paths (encode vs assembled) IDENTICAL
+  prompt 22 tokens: 248045 846 198 814 20139 303 799 11316 1092 264 69184 640 1558 369 13 248046 198 248045 74455 198 248068 198
+  sampler: temp=0.00 top_k=0 top_p=1.00 eos=248046 cap=1024
+  prefill 1603.8 ms for 22 prompt tokens (13.72 tok/s)
+  logits after the prompt: max 25.7536 min -10.7657 mean -1.417053  nan 0 inf 0
+  top 8:  90700(25.75"Thinking")  8160(16.85"Here")  760(15.03"The")  79420(14.20"thinking")  31248(13.89"Okay")  7047(13.55" thinking")  81266(13.10"Thought")  1596(13.06"We")
+  gen  1  tok=  90700     71.37 ms  Thinking
+  gen  2  tok=   8340     72.20 ms   Process
+  gen  3  tok=     25     71.59 ms  :
+  gen  4  tok=    271     71.73 ms  
+
+
+  gen  5  tok=     16     72.14 ms  1
+  gen  6  tok=     13     71.64 ms  .
+  gen  7  tok=    220     71.60 ms   
+  gen  8  tok=   2972     71.92 ms   **
+  gen  9  tok=   2014     70.87 ms  An
+  gen 10  tok=  53983     71.31 ms  alyze
+  gen 11  tok=    279     71.70 ms   the
+  gen 12  tok=   5952     71.14 ms   Request
+  gen 13  tok=  64700     72.03 ms  :**
+  gen 14  tok=    198     71.82 ms  
+
+  gen 15  tok=    262     71.23 ms     
+  gen 16  tok=    348     72.58 ms   *
+  gen 17  tok=    256     71.65 ms    
+  gen 18  tok=   5261     72.21 ms   Task
+  gen 19  tok=     25     71.71 ms  :
+  gen 20  tok=  18053     72.18 ms   Define
+  gen 21  tok=  24993     71.72 ms  /ex
+  gen 22  tok=  20139     72.03 ms  plain
+  gen 23  tok=   1092     71.73 ms   what
+  gen 24  tok=    264     71.47 ms   a
+  gen 25  tok=    328     71.83 ms   "
+  gen 26  tok=   4024     71.04 ms  tern
+  gen 27  tok=    640     72.41 ms  ary
+  gen 28  tok=      1     71.50 ms  "
+  gen 29  tok=   3254     71.24 ms   means
+  gen 30  tok=    303     72.14 ms   in
+  gen 31  tok=    279     71.92 ms   the
+  gen 32  tok=   2193     71.93 ms   context
+  gen 33  tok=    314     71.68 ms   of
+  gen 34  tok=    264     71.68 ms   a
+  gen 35  tok=   3050     72.10 ms   specific
+  gen 36  tok=   2193     72.29 ms   context
+  gen 37  tok=    318     72.44 ms   (
+  gen 38  tok=  13873     72.10 ms  likely
+  gen 39  tok=  11870     72.10 ms   logic
+  gen 40  tok=     11     72.74 ms  ,
+  gen 41  tok=  11870     72.10 ms   logic
+  gen 42  tok=  33389     72.07 ms   gates
+  gen 43  tok=     11     71.69 ms  ,
+  gen 44  tok=    466     71.58 ms   or
+  gen 45  tok=  11870     72.44 ms   logic
+  gen 46  tok=  33389     72.37 ms   gates
+  gen 47  tok=    303     72.40 ms   in
+  gen 48  tok=   4437     71.96 ms   general
+  gen 49  tok=    553     72.11 ms  ).
+  gen 50  tok=    198     72.16 ms  
+
+  gen 51  tok=    262     71.73 ms     
+  gen 52  tok=    348     71.95 ms   *
+  gen 53  tok=    256     72.72 ms    
+  gen 54  tok=  13428     71.99 ms   Wait
+  gen 55  tok=     11     71.96 ms  ,
+  gen 56  tok=    279     72.07 ms   the
+  gen 57  tok=   9640     71.75 ms   prompt
+  gen 58  tok=    369     72.54 ms   is
+  gen 59  tok=    328     72.74 ms   "
+  gen 60  tok=   3710     72.89 ms  What
+  gen 61  tok=    369     72.18 ms   is
+  gen 62  tok=    264     71.88 ms   a
+  gen 63  tok=  69184     72.12 ms   tern
+  gen 64  tok=    640     72.26 ms  ary
+  gen 65  tok=  11870     72.34 ms   logic
+  gen 66  tok=  17587     72.82 ms   gate
+  gen 67  tok=   7285     72.39 ms  ?"
+  gen 68  tok=    466     72.05 ms   or
+  gen 69  tok=    328     72.23 ms   "
+  gen 70  tok=   3710     72.61 ms  What
+  gen 71  tok=    369     72.89 ms   is
+  gen 72  tok=    264     72.49 ms   a
+  gen 73  tok=  69184     73.30 ms   tern
+  gen 74  tok=    640     72.75 ms  ary
+  gen 75  tok=  11870     72.74 ms   logic
+  gen 76  tok=  17587     72.94 ms   gate
+  gen 77  tok=   7285     72.77 ms  ?"
+  gen 78  tok=   2233     72.61 ms   No
+  gen 79  tok=     11     72.68 ms  ,
+  gen 80  tok=    279     72.64 ms   the
+  gen 81  tok=   1156     73.08 ms   user
+  gen 82  tok=   1066     73.07 ms   just
+  gen 83  tok=   1018     73.33 ms   said
+  gen 84  tok=    328     72.40 ms   "
+  gen 85  tok=  26003     72.56 ms  think
+  gen 86  tok=  47733     73.01 ms   silently
+  gen 87  tok=    413     73.19 ms   if
+  gen 88  tok=   4221     73.06 ms   needed
+  gen 89  tok=      1     72.92 ms  "
+  gen 90  tok=    694     72.81 ms   but
+  gen 91  tok=    279     72.74 ms   the
+  gen 92  tok=   9640     72.68 ms   prompt
+  gen 93  tok=    369     72.61 ms   is
+  gen 94  tok=   3404     72.79 ms   actually
+  gen 95  tok=   9859     73.09 ms   asking
+  gen 96  tok=    728     73.06 ms   me
+
+=== pure-blood token rate (measured, this card) ===
+  96 generated tokens in 6933.0 ms  ->  13.85 tok/s
+  first generated token (prefill+1): 71.4 ms; steady-state: 72.2 ms/token
+  dispatches 175820, barriers 175702 per command buffer (one submit per token)
+
+=== text ===
+Thinking Process:
+
+1.  **Analyze the Request:**
+    *   Task: Define/explain what a "ternary" means in the context of a specific context (likely logic, logic gates, or logic gates in general).
+    *   Wait, the prompt is "What is a ternary logic gate?" or "What is a ternary logic gate?" No, the user just said "think silently if needed" but the prompt is actually asking me
+  gdn_mode=0 gdn_gmap=0 l2_mode=1 round_probs=1 cap=1024

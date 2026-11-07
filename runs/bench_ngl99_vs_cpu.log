@@ -1,0 +1,17 @@
+load_backend: loaded RPC backend from prism-vk\prism\ggml-rpc.dll
+ggml_vulkan: Found 1 Vulkan devices:
+ggml_vulkan: 0 = Radeon RX 550X (AMD proprietary driver) | uma: 0 | fp16: 0 | bf16: 0 | fp4: 0 | warp size: 64 | shared memory: 32768 | int dot: 0 | matrix cores: none
+load_backend: loaded Vulkan backend from prism-vk\prism\ggml-vulkan.dll
+load_backend: loaded CPU backend from prism-vk\prism\ggml-cpu-haswell.dll
+| model                          |       size |     params | backend    | ngl | dev          |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | ------------ | --------------: | -------------------: |
+| qwen35 9B PTQ1_0 - 1.75 bpw ternary (group 128) |   1.85 GiB |     8.95 B | Vulkan     |  99 | Vulkan0      |           pp512 |         14.29 ± 0.00 |
+| qwen35 9B PTQ1_0 - 1.75 bpw ternary (group 128) |   1.85 GiB |     8.95 B | Vulkan     |  99 | Vulkan0      |           tg128 |          4.05 ± 0.00 |
+| qwen35 9B PTQ1_0 - 1.75 bpw ternary (group 128) |   1.85 GiB |     8.95 B | Vulkan     |   0 | Vulkan0      |           pp512 |         13.59 ± 0.00 |
+| qwen35 9B PTQ1_0 - 1.75 bpw ternary (group 128) |   1.85 GiB |     8.95 B | Vulkan     |   0 | Vulkan0      |           tg128 |          3.71 ± 0.00 |
+
+build: e3de71522 (10777)
+
+real	3m39.154s
+user	0m0.000s
+sys	0m0.030s

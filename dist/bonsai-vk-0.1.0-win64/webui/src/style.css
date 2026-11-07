@@ -1,0 +1,513 @@
+/* Project Bonsai WebUI - the whole stylesheet. No external font, no image, no url().
+   Palette is the delivery contract: white paper, charcoal ink, one terracotta accent used only for
+   the send button, the streaming caret, markdown links and the composer focus ring. Everything else
+   is neutral grey so the accent stays rare enough to mean something. */
+
+:root {
+  --paper: #ffffff;
+  --ink: #2d2d2d;
+  --terracotta: #d97757;
+  --code-bg: #f7f7f8;
+  --hairline: #e5e5e5;
+  --muted: #8a8a8e;
+  --faint: #b4b4b8;
+  --wash: #fafafa;
+  --col: 768px;
+  --hdr-h: 56px;
+  --sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, "Courier New", monospace;
+}
+
+* { box-sizing: border-box; }
+
+/* Author rules beat the UA [hidden] rule, and #send / .pill-btn set display:inline-flex below.
+   Without this the stop button would be visible while idle no matter what .hidden says. */
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ header */
+#hdr {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: var(--hdr-h);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--hairline);
+  z-index: 30;
+}
+
+#hdr-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: .01em;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.hdr-bar { color: var(--faint); font-weight: 400; margin: 0 2px; }
+.hdr-sub { color: var(--muted); font-weight: 500; }
+
+.hdr-btn {
+  position: absolute;
+  left: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.hdr-btn:hover { color: var(--ink); background: var(--wash); }
+
+#badge {
+  position: absolute;
+  right: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 40vw;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--faint);
+  letter-spacing: .01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+#badge-text { overflow: hidden; text-overflow: ellipsis; }
+.dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--faint);
+  flex: 0 0 auto;
+}
+.dot-live { background: #6f9c6f; }
+.dot-busy { background: var(--muted); }
+.dot-down { background: #c08a8a; }
+
+/* ------------------------------------------------------------------ thread */
+#scroll {
+  position: absolute;
+  top: var(--hdr-h);
+  bottom: 0; left: 0; right: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline) transparent;
+}
+#scroll::-webkit-scrollbar { width: 9px; }
+#scroll::-webkit-scrollbar-thumb {
+  background: var(--hairline);
+  border-radius: 5px;
+  border: 3px solid var(--paper);
+}
+
+#thread {
+  max-width: var(--col);
+  margin: 0 auto;
+  padding: 34px 20px 168px;
+  min-height: 100%;
+}
+
+#empty {
+  padding: 12vh 0 24px;
+  text-align: center;
+}
+#empty-mark { color: var(--faint); line-height: 0; margin-bottom: 18px; }
+#empty-title {
+  margin: 0 0 8px;
+  font-size: 25px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: var(--ink);
+}
+#empty-sub { margin: 0 0 26px; font-size: 13px; color: var(--muted); }
+
+#chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.chip {
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: color .12s, border-color .12s;
+}
+.chip:hover { color: var(--ink); border-color: var(--faint); }
+
+/* ------------------------------------------------------------------ messages */
+#msgs { display: block; }
+
+.turn { margin: 0 0 26px; }
+.turn-user { display: flex; justify-content: flex-end; }
+
+.bubble {
+  max-width: 82%;
+  background: var(--code-bg);
+  border-radius: 18px;
+  padding: 10px 16px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.turn-ai { display: block; }
+.ai-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 7px;
+  font-size: 11.5px;
+  font-family: var(--mono);
+  color: var(--faint);
+  letter-spacing: .02em;
+}
+.ai-head svg { flex: 0 0 auto; }
+
+.md { overflow-wrap: anywhere; }
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+.md p { margin: 0 0 14px; }
+.md h1, .md h2, .md h3, .md h4, .md h5, .md h6 {
+  margin: 24px 0 10px;
+  line-height: 1.4;
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+.md h1 { font-size: 23px; }
+.md h2 { font-size: 19.5px; }
+.md h3 { font-size: 17px; }
+.md h4, .md h5, .md h6 { font-size: 15.5px; }
+.md ul, .md ol { margin: 0 0 14px; padding-left: 24px; }
+.md li { margin: 3px 0; }
+.md li > ul, .md li > ol { margin: 3px 0; }
+.md blockquote {
+  margin: 0 0 14px;
+  padding: 2px 0 2px 15px;
+  border-left: 2px solid var(--hairline);
+  color: var(--muted);
+}
+.md hr { border: 0; border-top: 1px solid var(--hairline); margin: 22px 0; }
+.md strong { font-weight: 600; }
+.md em { font-style: italic; }
+.md del { color: var(--muted); }
+
+.md-link {
+  color: var(--terracotta);
+  text-decoration: none;
+  border-bottom: 1px solid var(--hairline);
+}
+.md-link:hover { border-bottom-color: currentColor; }
+
+.md code {
+  font-family: var(--mono);
+  font-size: .875em;
+  background: var(--code-bg);
+  border-radius: 4px;
+  padding: .12em .38em;
+  overflow-wrap: anywhere;
+}
+
+.codeblock {
+  margin: 0 0 16px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: var(--code-bg);
+  overflow: hidden;
+}
+.codebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 8px 5px 13px;
+  border-bottom: 1px solid var(--hairline);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.copy-btn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.copy-btn:hover { background: var(--hairline); color: var(--ink); }
+.codeblock pre {
+  margin: 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 12.8px;
+  line-height: 1.65;
+  tab-size: 4;
+}
+.codeblock pre code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+.md table {
+  border-collapse: collapse;
+  margin: 0 0 16px;
+  font-size: 13.5px;
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.md th, .md td {
+  border: 1px solid var(--hairline);
+  padding: 6px 11px;
+  text-align: left;
+  vertical-align: top;
+}
+.md th { background: var(--code-bg); font-weight: 600; }
+
+.md-wait { color: var(--faint); font-size: 13.5px; }
+.reason-count { color: var(--faint); }
+
+.caret {
+  display: inline-block;
+  width: 7px;
+  height: 15px;
+  margin-left: 2px;
+  vertical-align: -2px;
+  background: var(--terracotta);
+  border-radius: 1px;
+  animation: blink 1.05s steps(1, end) infinite;
+}
+@keyframes blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
+
+.reason {
+  margin: 0 0 12px;
+  border-left: 2px solid var(--hairline);
+  padding: 0 0 0 13px;
+}
+.reason-toggle {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--faint);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.reason-toggle:hover { color: var(--muted); }
+.reason-body {
+  margin-top: 6px;
+  font-size: 13.2px;
+  line-height: 1.7;
+  color: var(--muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.reason-body[hidden] { display: none; }
+
+.turn-meta {
+  margin-top: 9px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--faint);
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.err-note {
+  margin: 10px 0 0;
+  padding: 9px 13px;
+  border: 1px solid var(--hairline);
+  border-left: 2px solid #c08a8a;
+  border-radius: 8px;
+  background: var(--wash);
+  color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------------ composer */
+#dock {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  padding: 10px 20px 14px;
+  background: linear-gradient(to top, var(--paper) 68%, rgba(255, 255, 255, 0));
+  z-index: 20;
+}
+
+#composer {
+  max-width: var(--col);
+  margin: 0 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 9px 9px 9px 17px;
+  border: 1px solid var(--hairline);
+  border-radius: 24px;
+  background: var(--paper);
+  box-shadow: 0 2px 14px rgba(45, 45, 45, .05);
+  transition: border-color .14s, box-shadow .14s;
+}
+#composer:focus-within {
+  border-color: var(--terracotta);
+  box-shadow: 0 2px 16px rgba(45, 45, 45, .07);
+}
+
+#input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.65;
+  padding: 5px 0;
+  margin: 0;
+  max-height: 190px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+#input::placeholder { color: var(--faint); }
+
+#send, .pill-btn {
+  flex: 0 0 auto;
+  width: 33px; height: 33px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 1px;
+}
+#send {
+  background: var(--terracotta);
+  color: var(--paper);
+  transition: opacity .12s, transform .12s;
+}
+#send:hover { opacity: .88; }
+#send:active { transform: scale(.94); }
+#send:disabled {
+  background: var(--hairline);
+  color: var(--faint);
+  cursor: default;
+  opacity: 1;
+  transform: none;
+}
+.pill-btn { background: var(--ink); color: var(--paper); }
+.pill-btn:hover { opacity: .85; }
+
+#hint {
+  max-width: var(--col);
+  margin: 8px auto 0;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--faint);
+  line-height: 1.5;
+}
+.key {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  padding: 0 4px;
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------------ toast */
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: 116px;
+  transform: translateX(-50%);
+  max-width: min(560px, 88vw);
+  padding: 9px 16px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 13px;
+  line-height: 1.5;
+  z-index: 50;
+  box-shadow: 0 4px 18px rgba(45, 45, 45, .18);
+  overflow-wrap: anywhere;
+}
+#toast[hidden] { display: none; }
+
+/* ------------------------------------------------------------------ narrow */
+@media (max-width: 720px) {
+  body { font-size: 15px; }
+  /* On a narrow screen a centred nowrap title and the right-anchored badge occupy the same band and
+     overprint each other. Drop the subtitle, left-align the short title clear of the new-chat button,
+     and let the badge keep the right edge with an ellipsis. Measured: title.right < badge.left. */
+  #hdr { justify-content: flex-start; padding-left: 56px; }
+  #hdr-title { font-size: 12.5px; }
+  .hdr-bar, .hdr-sub { display: none; }
+  .hdr-btn span { display: none; }
+  .hdr-btn { padding: 0 8px; }
+  #badge { font-size: 10px; max-width: 46vw; right: 12px; }
+  #thread { padding: 24px 14px 156px; }
+  #empty { padding: 8vh 0 18px; }
+  #empty-title { font-size: 21px; }
+  .bubble { max-width: 90%; }
+  #dock { padding: 8px 12px 10px; }
+  #hint { font-size: 10.5px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caret { animation: none; }
+  * { transition: none !important; }
+}

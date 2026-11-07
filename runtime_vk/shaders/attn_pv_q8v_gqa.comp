@@ -1,0 +1,121 @@
+// attn_pv_q8v_gqa.comp - stage 3 with the V operand read as q8_0 blocks AND SHARED ACROSS THE QUERY
+// HEADS OF ONE KV GROUP. Twin of attn_pv_q8v.comp (byte-frozen, still the oracle for this branch) and
+// of attn_qk_softmax_gqa.glslh (the same merge on the QK side).
+//
+// WHY: attn_pv_q8v.comp maps one workgroup to one (layer, query head) and 256 lanes to the 256 output
+// dimensions, so for a key j every lane reads vd[]/vs[] - the quantised V bytes and the fp16 block
+// scale - and BFE/I2F/unpack-multiply them into a float. With n_head 16 and n_head_kv 4 that identical
+// work happens FOUR times, in four workgroups, for one copy of V. That is the V half of the 98.0 KiB
+// per position the §9.5 geometry table counts; merged it is 24.5 KiB.
+//
+// HERE: one workgroup per (layer, kv head), each lane owning one output dimension for ALL HPK heads of
+// that group. Per key the V data word, the scale word, the byte extract and the (scale * q) product
+// happen ONCE and feed HPK accumulators; the probabilities are per head and are still read per head -
+// they are the only thing that genuinely differs between the heads.
+//
+//   per key, per lane, old (4 workgroups x 1 head):  8 global loads   (4x vd, 4x vs, 4x p16)
+//   per key, per lane, new (1 workgroup x 4 heads):  6 global loads   (1x vd, 1x vs, 4x p16)
+//   ...and the BFE + I2F + fp16-scale unpack + scale multiply: 4 copies -> 1.
+// The multiply-add count per (head, dimension) is unchanged - the arithmetic does not get cheaper, the
+// bookkeeping and the V traffic do.
+//
+// BIT-EXACTNESS CONTRACT (gate: qk_audit stage A4, bitwise on PGATE and GOUT, rc 6 on any diff): each
+// accumulator belongs to one (head, output dimension) pair, and the merge changes only which workgroup
+// runs it. The loop is still ascending j, the operand is still `acc = acc + pv * v` with the same two
+// statements and the same values - pv comes from the same p16/p32 word and the same half-select, and v
+// is the same (scale * q) number the frozen kernel computes, just divided by HPK in the fetch instead
+// of HPK times. The gate exists because "same value" is a claim about the compiler's instruction
+// selection as much as about the maths, and claims get measured.
+//
+// K is NOT touched here (it is not read in this stage) and V is NOT compressed further: the q8_0 block
+// format, the 32-element scale granularity and the "never materialise the unpacked V to global memory"
+// rule from attn_pv_q8v.comp all carry over verbatim. The only structural difference is the HPK heads
+// per workgroup.
+//
+// This module exists for BONSAI_KV_V_QUANT=q8_0 (the default). In `none` mode the engine keeps
+// attn_pv.comp, the validated fp16 kernel, because duplicating a second V representation into the merge
+// would double the surface the fidelity ladder has to re-cover for no measured gain.
+//
+// HPK IS COMPILE-TIME (the accumulator array and the head loop are declared with it). The kernel bails
+// if the plan's own ratio disagrees, and fwd_init only selects this module when n_head/n_head_kv == 4.
+
+#version 450
+
+#ifndef HPK
+#define HPK 4u
+#endif
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+// Identical bindings, same order, same meaning as attn_pv_q8v.comp - mk_attn() passes both kernels the
+// same window vector, so an A/B cannot be confounded by a binding mistake.
+layout(binding = 0) readonly  buffer P32   { float p32[]; };     // [seq][nh][cap] f32 probabilities
+layout(binding = 1) readonly  buffer P16   { uint  p16[]; };     // [seq][nh][cap/2] fp16 operand
+layout(binding = 2) readonly  buffer VD    { uint  vd[]; };      // [cap][nkv][hd/4] q8_0 V data words
+layout(binding = 3) readonly  buffer VS    { uint  vs[]; };      // [cap][nkv][hd/64] q8_0 V scale words
+layout(binding = 4) readonly  buffer POS   { uint  pos[]; };     // [seq]
+layout(binding = 5) readonly  buffer GATE  { float gate[]; };    // [seq][nh][hd] pre-sigmoid gate
+layout(binding = 6) writeonly buffer PGATE { float pregate[]; }; // [seq][nh][hd] attention result
+layout(binding = 7) writeonly buffer GOUT  { float gated[]; };   // [seq][nh][hd] after the gate
+
+// Identical to attn_pv_q8v.comp's block, so the engine pushes the same 8 words to either kernel.
+layout(push_constant) uniform Push {
+    uint seq, nh, nkv, hd, cap;
+    uint round_probs;           // 1 = read p16 (official mixed-type cast), 0 = read p32
+    float pad0, pad1;
+} p;
+
+void main() {
+    const uint w = gl_WorkGroupID.x;
+    const uint d = gl_LocalInvocationID.x;
+    if (p.nh / p.nkv != HPK) return;
+    const uint t = w / p.nkv, kv = w % p.nkv;    // one workgroup per (layer, kv group)
+    const uint h0 = kv * HPK;                    // first query head served here
+    const uint nfill = pos[t] + 1u;
+
+    // ---- loop invariants (per lane; none of them depend on j). Verbatim from attn_pv_q8v.comp,
+    // including the parity conditions that make the address math additive rather than multiplicative:
+    // hd % 4 == 0 and (hd/32) % 2 == 0, both asserted host-side in fwd_init.
+    const uint nblk_row = p.hd / 32u;                    // q8_0 blocks per head row
+    const uint vdw_row  = p.nkv * p.hd / 4u;             // data words  per key slot
+    const uint vsw_row  = p.nkv * nblk_row / 2u;         // scale words per key slot
+    const uint vbase    = kv * (p.hd / 4u) + d / 4u;     // word holding this lane's element at j = 0
+    const uint sh       = (d & 3u) * 8u;                 // byte of this lane's element inside that word
+    const uint sbase    = (kv * nblk_row + d / 32u) / 2u;  // scale word for this lane's block at j = 0
+    const bool shi      = ((d / 32u) & 1u) != 0u;        // low or high half of the scale word (fixed)
+
+    uint prow16[HPK], prow32[HPK];
+    float acc[HPK];
+    for (uint s = 0u; s < HPK; ++s) {
+        prow16[s] = (t * p.nh + h0 + s) * (p.cap / 2u);
+        prow32[s] = (t * p.nh + h0 + s) * p.cap;
+        acc[s] = 0.0;
+    }
+
+    uint va = vbase, sa = sbase;                         // loop-carried: uint adds, no multiplies
+    for (uint j = 0u; j < nfill; ++j) {
+        // One V element, four heads. The extract and the dequantise are the variant-A arithmetic from
+        // attn_pv_q8v.comp, unchanged: bitfieldExtract(int(word), shift, 8) -> int -> float, times the
+        // fp16 scale, all inside registers, never written back to global memory.
+        const float q  = float(bitfieldExtract(int(vd[va]), int(sh), 8));  // BFE + I2F, in registers
+        const uint  sw = vs[sa];                                           // one of 2 fp16 scales
+        const float v  = (shi ? unpackHalf2x16(sw).y : unpackHalf2x16(sw).x) * q;
+        for (uint s = 0u; s < HPK; ++s) {
+            float pv;
+            if (p.round_probs != 0u) {
+                const uint word = p16[prow16[s] + (j >> 1u)];
+                pv = (j & 1u) == 0u ? unpackHalf2x16(word).x : unpackHalf2x16(word).y;
+            } else {
+                pv = p32[prow32[s] + j];
+            }
+            acc[s] = acc[s] + pv * v;                    // ascending j, the reference's own order
+        }
+        va += vdw_row; sa += vsw_row;
+    }
+
+    for (uint s = 0u; s < HPK; ++s) {
+        const uint o = (t * p.nh + h0 + s) * p.hd + d;
+        pregate[o] = acc[s];
+        gated[o] = acc[s] * (1.0 / (1.0 + exp(-gate[o])));
+    }
+}

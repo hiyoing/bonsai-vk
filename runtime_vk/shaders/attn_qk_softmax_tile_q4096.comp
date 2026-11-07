@@ -1,0 +1,9 @@
+// attn_qk_softmax_tile_q4096.comp - tiled stage-2 kernel, tile = 4096 keys.
+//
+//   LDS = sd[4096] (16384 B) + s_sum (4 B) = 16388 B - right on the 16 KiB design line, and it buys a
+//   4096-key TILE, not a 4096-key row: the wide kernel spends the same 16 KiB to address a 2048-key row.
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "f16_rne.glslh"
+#define QTILE 4096u
+#include "attn_qk_softmax_tile.glslh"

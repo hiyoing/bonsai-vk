@@ -1,0 +1,48 @@
+#version 450
+// embd_gather.comp - the embedding row, dequantized straight out of the repacked 2-bit arena.
+//
+// WHY THIS KERNEL EXISTS (and why agent C's gather_rows.comp cannot be used for it):
+// ggml's graph starts with GET_ROWS(token_embd.weight, inp_tokens) (runs/dbg_full_real.log line
+// 150), i.e. it reads the vocab row in the CHECKPOINT's own block form. Our engine never keeps that
+// form in VRAM: the loader SDMA-inflates every PTQ tensor into the random-access layout the measured
+// GEMV reads (codes [K/64][M] uvec4, scales [K/128][M] uint) and drops the blocks. So the gather has
+// to read the repacked form, which is a different address computation but the identical arithmetic:
+//     weight[row][k] = d[row][k/128] * (code[k] - 1),   code in {0,1,2}
+// exactly the term gemv_ternary.comp multiplies by, so the embedding row this kernel produces is the
+// same number the GEMV would have produced if M were 248320 and we bothered to run it.
+//
+// token_embd.weight is K=4096, M=248320 -> 993 KiB of output per row would be absurd, it is 16 KiB:
+// one row is 4096 f32. The graph then runs the INVERSE hadamard sandwich over it, which the metadata
+// names explicitly (prism.hadamard.inverse_weight_names = ["token_embd.weight"]) and the dump orders:
+// MUL_MAT(prism.hadamard.4096, node_0) and THEN MUL by signs.4096 - the opposite way round from every
+// forward projection, which is why the host wires this through hat4096.comp + signs_mul.comp in that
+// order rather than reusing the forward pair.
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly buffer CODES { uvec4 codes[]; };   // [K/64][M]
+layout(binding = 1) readonly buffer SCALE { uint  scale[]; };   // [K/128][M], f16 in the low half
+layout(binding = 2)       buffer Y        { float y[]; };       // [K] the embedding row
+
+layout(push_constant) uniform PC {
+    uint row;         // the token id = the row of the vocab matrix
+    uint m_rows;      // M, the stride between code words (248320 for token_embd)
+    uint k_cols;      // 4096
+    uint codes_off;   // uvec4 units
+    uint scale_off;   // uint units
+    uint y_off;       // float units
+    uint _p0, _p1;    // pad to 32 B
+};
+
+void main() {
+    const uint k = gl_WorkGroupID.x * 256u + gl_LocalInvocationID.x;
+    if (k >= k_cols) { return; }
+    const uint w  = codes_off + (k / 64u) * m_rows + row;
+    const uint e  = k & 63u;                          // position inside the 64-code word
+    const uint u3 = e >> 4;                           // which of the word's four uint32s
+    const uint sh = (e & 15u) * 2u;                   // and which 2-bit field of it
+    const uvec4 cw = codes[w];
+    const uint bits = (u3 == 0u) ? cw.x : (u3 == 1u) ? cw.y : (u3 == 2u) ? cw.z : cw.w;
+    const float c = float(bitfieldExtract(bits, int(sh), 2));
+    const float d = float(unpackHalf2x16(scale[scale_off + (k / 128u) * m_rows + row]).x);
+    y[y_off + k] = d * (c - 1.0);
+}

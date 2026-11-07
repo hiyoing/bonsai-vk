@@ -1,0 +1,55 @@
+// f16_rne.glslh - the fp16 packer our kernels use, MEASURED into existence.
+// Included text: no #version / #extension line of its own (glslang requires #version first in the
+// INCLUDING file), just the two functions below.
+//
+// WHY THIS FILE EXISTS (align_attn.exe, stage F, RX 550X, driver-reported fp16:0):
+//   2048 packed words of ordinary values - gaussians, half-ulp ties, subnormals, both signs -
+//   disagreed with our host round-to-nearest-even packer in 1273 of them (62.16%), and the first
+//   differing word was host 009EAEF8 vs GPU 009EAEF7 for f = -0.108880997, whose half mantissa is
+//   759.78: nearest would be 760, toward zero is 759. So this driver's packHalf2x16() lowers to
+//   V_CVT_PKRTZ_F16_F32 - round TOWARD ZERO, not the round-to-nearest-even that GLSL 4.50 section
+//   8.4 requires and that llama.cpp's ggml_fp32_to_fp16_row() performs on the CPU.
+//   The reference engine therefore builds its fp16 KV cache with RNE. Using the instruction here
+//   would make our arena differ from the reference's for 62% of the stored values, which is exactly
+//   the class of silent bias this project exists to catch. So the packing is done by hand.
+//
+// This is a transcription of f32_to_f16_bits() in attn_vk.h - same branches, same comparisons, same
+// bit math, uint arithmetic only - and align_attn stage F is the test that the two are identical
+// over 4096 floats including every edge class that function branches on.
+//
+// Included via GL_GOOGLE_include_directive (glslang 16.6.0 resolves it relative to the including
+// file), which is how one packer stays the source of truth for all three attn kernels.
+
+// one float -> the 16-bit IEEE-754 binary16 pattern, round to nearest even.
+uint f32_to_f16_rne(float f) {
+    const uint x = floatBitsToUint(f);
+    const uint sign = (x >> 16u) & 0x8000u;
+    const int  e = int((x >> 23u) & 0xFFu);              // f32 biased exponent
+    const uint m = x & 0x7FFFFFu;
+
+    if (e == 255) return sign | 0x7C00u | (m != 0u ? 0x0200u : 0u);   // Inf, or quiet-NaN
+    if (e >= 113 && e <= 142) {                          // half NORMAL: half_exp = e - 112
+        uint h = sign | (uint(e - 112) << 10u) | (m >> 13u);
+        const uint rest = m & 0x1FFFu;                   // the 13 bits being dropped
+        if (rest > 0x1000u || (rest == 0x1000u && (h & 1u) != 0u)) h = h + 1u;  // carry may reach
+        return h;                                        // the exponent: 0x7BFF -> 0x7C00 = Inf
+    }
+    if (e > 142) return sign | 0x7C00u;                  // overflow -> +-Inf
+    if (e == 0)  return sign;                            // f32 subnormal (<2^-126) -> signed zero
+    // half SUBNORMAL: value = (2^23 + m) * 2^(e-150), one subnormal step is 2^-24, so the integer
+    // significand is (2^23+m) >> (126-e), with the same RNE rule on the bits dropped.
+    const uint mant = m | 0x800000u;
+    const uint shift = uint(126 - e);                    // e <= 112 is all that is left here
+    if (shift >= 25u) return sign;                       // below halfway to the smallest subnormal
+    // 'half' is a RESERVED word in GLSL, so the halfway value is called hstep here.
+    const uint hstep = 1u << (shift - 1u);
+    const uint rest = mant & ((1u << shift) - 1u);
+    uint k = mant >> shift;
+    if (rest > hstep || (rest == hstep && (k & 1u) != 0u)) k = k + 1u;  // k == 1024 is the min normal
+    return sign | k;
+}
+
+// the arena word layout: low half = element 2i, high half = element 2i+1
+uint pack2_rne(vec2 v) {
+    return f32_to_f16_rne(v.x) | (f32_to_f16_rne(v.y) << 16u);
+}

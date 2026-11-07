@@ -1,0 +1,67 @@
+// shared_mem_probe.glslh - body of the shared-memory ceiling probe, included by
+// shaders/probe_shm_nNNNN.comp, one file per array length.
+//
+// WHY THIS EXISTS. attn_qk_softmax_wide.comp keeps one row's dot products and one row's
+// probabilities in workgroup-shared memory as two float[MAXCAP] arrays, so the cap the kernel can
+// address is set by the device's shared-memory ceiling:
+//
+//   maxComputeSharedMemorySize = 32768 B          (measured, runs/limits_probe.log:3)
+//   2 arrays x MAXCAP x 4 B  <=  32768 B  =>  MAXCAP <= 4096
+//
+// MAXCAP 2048 (what the kernel uses today) costs 16384 B - half the ceiling. MAXCAP 4096 costs
+// EXACTLY 32768 B: legal by the Vulkan valid-usage rule ("must be less than or equal to
+// maxComputeSharedMemorySize"), but with zero headroom, so whether the AMD Windows driver actually
+// creates the pipeline AND runs it correctly was a derivation, not a measurement. This file turns it
+// into a measurement. It is a NEW shader, deliberately - the three validated attention kernels are a
+// 0-error contract and get replaced rather than mutated (bonsai_forward.h).
+//
+// WHAT IS MEASURED PER CASE, IN THIS ORDER (the first two are different failures):
+//   1. vkCreateComputePipelines result   - does the driver accept the declared shared size at all?
+//   2. executed-vs-expected per element  - if it accepted, is every element the driver wrote back
+//      intact? A driver that accepts an oversized declaration and silently clips or wraps the
+//      allocation would pass test 1 and fail here, which is the dangerous case, so a pipeline
+//      creation success is NOT the verdict by itself.
+//   3. a below-limit must-succeed control and an above-limit control, so "the harness said OK"
+//      can be distinguished from "the harness cannot detect a failure".
+//
+// One workgroup of 256 lanes, both arrays filled with position-dependent values, barrier, read back,
+// write out. Values encode the index so any clipping shows up as a wrong element at a specific index
+// rather than as a uniform-looking buffer.
+
+#ifndef PROBE_N
+#define PROBE_N 4096u                 // overridable; each probe_shm_nNNNN.comp defines it
+#endif
+#ifndef PROBE_LOCALS
+#define PROBE_LOCALS 256u             // matches NTILE of the kernel this stands in for
+#endif
+
+layout(local_size_x = PROBE_LOCALS, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) writeonly buffer SD_OUT { float sd_out[]; };
+layout(binding = 1) writeonly buffer SP_OUT { float sp_out[]; };
+
+layout(push_constant) uniform Push {
+    uint n;                     // elements actually written: must be <= PROBE_N
+    uint pad0, pad1, pad2;
+} p;
+
+// The two arrays, sized by PROBE_N - this declaration is the entire object under test, and it is
+// declared at file scope because that is the only place GLSL allows the Shared storage class.
+shared float sd[PROBE_N];
+shared float sp[PROBE_N];
+
+void main() {
+    const uint lane = gl_LocalInvocationID.x;
+
+    for (uint k = lane; k < p.n; k += PROBE_LOCALS) {
+        sd[k] = float(k);
+        sp[k] = 1000000.0 + float(k);
+    }
+    // Workgroup barrier: in the Vulkan memory model the built-in barrier() is also the shared-memory
+    // availability/ordering barrier at Workgroup scope, which is what the read-back needs.
+    barrier();
+    for (uint k = lane; k < p.n; k += PROBE_LOCALS) {
+        sd_out[k] = sd[k];
+        sp_out[k] = sp[k];
+    }
+}

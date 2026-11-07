@@ -1,0 +1,54 @@
+== submission pipeline (BONSAI_PIPE) ==                          run 2026-11-01 14:10, bonsai_vk.exe 12288 4096 4 100
+  env: BONSAI_PIPE=1 BONSAI_TXBARRIER=1        (min-of-3 reps per shape, NTOK=6, OPS=201)
+  device: Radeon RX 550X | driver 2.0.279 | device-local heap 3840 MiB | timestampPeriod 40.000 ns
+  queue family 0: flags=0xF COMPUTE TRANSFER GRAPHICS SPARSE   tiler=64  contexts=1
+  queue family 1: flags=0xE COMPUTE TRANSFER SPARSE   tiler=64  contexts=1
+  queue family 2: flags=0xC TRANSFER SPARSE   tiler=64  contexts=8
+  compute queue = family 0, transfer-only queue = family 2
+
+arena (single vkAllocateMemory, DEVICE_LOCAL):
+  ptq_src   size=  11010048 B  alignment=4  -> offset 0
+  codes     size=  12582912 B  alignment=4  -> offset 11010048
+  scales    size=   1572864 B  alignment=4  -> offset 23592960
+  x         size=     16384 B  alignment=4  -> offset 25165824
+  xsum      size=       128 B  alignment=4  -> offset 25182208
+  out       size=    196608 B  alignment=4  -> offset 25182336
+  tensors=24.2 MiB  alignment padding=0 B (0.0000%)  arena=24.2 MiB
+  upload on the transfer-only queue (family 2): 10.5 MiB, engine 1550.4 us = 7.11 GB/s, wall 2268.3 us
+repack: 11.0 MB -> 12.6 MB in 1.30 ms (18.2 GB/s effective, one-time cost)
+correctness: max|err|=0.00000  max|ref|=122.4  rel=0.00e+00  (expect ~1e-6 rel in f32 over K=4096)
+M=12288 K=4096 splits=4 : 0.286 ms/token-op  176.3 Gop/s  44.1 GB/s (packed weights)
+  cross-check: wall 0.287 ms vs timestamps 0.286 ms = 99.6% of wall -> limits.timestampPeriod 40.0 ns is trustworthy here
+WGSL reference on this card (probe 13): 143-155 Gop/s for these shapes.
+
+== submission pipeline (BONSAI_PIPE) ==
+  H2D 993280 B (logits stand-in) on transfer-only queue: wall 789.4 us
+  A per-op engine timestamps: 48.2 us/op vs B's 48.2 us/op -> engine timestamps are valid only while the queue stays continuously busy
+  shape                                      wall/token     GPU busy    copy/sdma     host step    bubble
+  A per-op submit + per-op fence (201x)           81134.8      9683.1         0.0      6455.0    71451.6 us
+  A2 per-op submit, 1 fence/token                 69308.3     untrust         0.0      6440.5        0.0 us
+  B 1 CB/token, D2H inline on compute queue       64325.4     58130.9       160.2      6367.2     6194.5 us
+  C 1 CB/token + SDMA D2H (family 2)              64620.3     57955.2       140.2      6471.7     6665.1 us
+  D depth-2 pipeline (sample N while GPU runs N+1)    59097.3     57967.8       140.2      6386.5     1129.5 us
+  host step = memcpy 993,280 B out of the HOST_COHERENT mapping + greedy argmax over 248320; scanning the mapping
+    IN PLACE instead costs 24816.5 us/token (24.8 ms!): 6280.2 us memcpy, 144.0 us scan.  Design rule: never sample
+    through the coherent pointer.
+  -> submission granularity, measured: A (201 submits + 201 fences) 81.1 ms, A2 (201 submits + 1 fence) 69.3 ms,
+     B (1 submit + 1 fence) 64.3 ms per token.
+     splitting the loss: waiting costs 11.8 ms/token (14.6% of A), submitting separately costs 5.0 ms/token (6.1% of A).
+     DEEPINFER_EVAL section 3 projected the total as 20.0 ms = 37.1%.
+  -> D2H of 993280 B on the compute queue holds the GPU 160.2 us/token; on the transfer-only queue the same bytes take
+     140.2 us = 7.09 GB/s and the compute queue is free for the next token
+  -> depth-2 (D) is the only shape that hides the sampler: wall 59.1 ms/token, GPU busy 58.0 ms, bubble 1.1 ms = 1.91%
+  -> end-to-end decode rate implied by D alone: 16.92 tokens/s at this op shape (59.1 ms/token); THIS harness, not the
+     real graph
+  vkResetQueryPool: vkGetDeviceProcAddr -> NULL, vkGetInstanceProcAddr -> resolved (instance asked for API 1.1)
+
+-- second run, same binary, BONSAI_API12=1 (instance created at VK_API_VERSION_1_2) --
+  upload on the transfer-only queue (family 2): 10.5 MiB, engine 1551.5 us = 7.11 GB/s, wall 1905.9 us
+  M=12288 K=4096 splits=4 : 0.292 ms/token-op  172.7 Gop/s  43.2 GB/s (packed weights)
+  D depth-2 pipeline: wall 59075.8 us/token, GPU busy 57960.3, copy 140.2, host 6336.5, bubble 1115.5 (1.89%)
+  vkResetQueryPool: vkGetDeviceProcAddr -> resolved, vkGetInstanceProcAddr -> resolved
+  => the driver trap is an apiVersion question, not a missing export.  With VK_API_VERSION_1_1 the AMD loader's
+     vkGetDeviceProcAddr returns NULL for vkResetQueryPool, and jumping through the import-lib stub at that NULL is what
+     took the process down inside amdvlk64.dll.  Ask for 1.2 and the device entry point resolves.

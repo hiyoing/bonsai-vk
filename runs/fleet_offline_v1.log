@@ -1,0 +1,107 @@
+fleet ring: depth must be a power of two and >= 2 (got 3). The slot index is seq & mask so a non-power-of-two depth would need a division in the per-token path.
+fleet ring: depth must be a power of two and >= 2 (got 1). The slot index is seq & mask so a non-power-of-two depth would need a division in the per-token path.
+fleet ring: slot_bytes must be > 0
+== bonsai_fleet selftest (offline; no Vulkan object is created by any path below) ==
+
+  -- ring algebra (no driver) --
+  ok  : depth 4 x 16 KiB host ring allocates
+  ok  : mask = depth-1, so the slot select is an AND and never a division
+  ok  : total = depth x slot_bytes
+  ok  : depth 3 refused - a non-power-of-two ring needs modulo in the per-boundary path
+  ok  : depth 1 refused - it cannot hold a payload while the next one is produced
+  ok  : slot_bytes 0 refused
+  ok  : consecutive sequences use different slots
+  ok  : sequence 4 wraps onto sequence 0's slot - the exact reason reserve() must refuse rather than evict
+  ok  : an empty ring accepts seq 0
+  ok  : publish is monotone: 4 publishes => produced 4
+  ok  : readiness follows the cursor, not the wall clock
+  ok  : a FULL ring refuses seq 4 instead of overwriting slot 0
+  ok  : after one consume the wrapped sequence is admitted
+  ok  : a slot's first and last word are addressable through the mapping at the wrapped index too
+
+  -- split arithmetic (no driver) --
+  ok  : 8 uniform layers over 2 cards inside an 8 MiB budget
+  ok  : one contiguous range per card
+  ok  : the ranges tile [0,8) with no gap and no overlap - the contiguity the GDN-state-never-crosses argument depends on
+  ok  : byte conservation: sum(ranges) == layers + head + tail
+  ok  : head charged to card 0, tail to the last card
+  ok  : 2 ranges => 1 boundary crossing per token
+  ok  : 1 card: everything on it, zero hops - the schedule degenerates to today's build
+  ok  : cards > layers is refused instead of building an empty range
+  ok  : a budget below (layers+head+tail)/cards is refused
+  ok  : a head tensor larger than one card's budget is refused BEFORE any layer is assigned
+  ok  : a byte table that does not cover every layer is refused
+  ok  : uneven layer bytes still fit both budgets
+
+  -- arena memory-type decisions (SYNTHETIC tables, no driver) --
+  ok  : zero-copy REFUSES this table (no type is DEVICE_LOCAL|HOST_VISIBLE|HOST_COHERENT at once) - the branch cannot fall back and the refusal is the answer, not a failure
+  ok  : discrete branch picks the FIRST type carrying DEVICE_LOCAL and no other requirement - that is bonsai_vk.cpp:331-335's predicate, and ~30 existing logs are computed against exactly this index
+  ok  : a discrete card's DEVICE_LOCAL heap is not reported as unified, so the ring import must not be skipped on its account
+  ok  : zero-copy picks a DEVICE_LOCAL|HOST_VISIBLE|HOST_COHERENT type
+  ok  : and prefers the HOST_CACHED one - MEASURED, WC vs cached mapping is 24.8 ms against 6.28 ms over the same bytes (END_TO_END_MEASURED §2.2)
+  ok  : and reports the heap unified, which is what makes the ring alias and the hop a store instead of a copy
+  ok  : on the same table the discrete branch still returns the first DEVICE_LOCAL type: the MODE flag, not the device class, decides which branch runs
+  ok  : DEVICE_LOCAL|HOST_VISIBLE without HOST_COHERENT is refused - a non-coherent mapping needs flushes the arena writer does not issue, so it would corrupt weights silently
+  ok  : a DEVICE_LOCAL|HOST_VISIBLE|HOST_COHERENT type on its own heap is still accepted (BAR-streaming weights are CPU-writable)
+  ok  : but it is NOT called unified - so the ring-alias shortcut is not taken on a machine that only has BAR memory
+  ok  : a single-type heap is not enough to call it unified
+
+  -- model byte sums --
+  ok  : the 9B's block_count reads as 32
+  ok  : a GDN block's DEVICE-resident bytes are 62,554,880
+  ok  : a softmax block's are 59,017,216
+  ok  : 24 GDN + 8 softmax layer bytes sum to 1,973,454,848 = 1.838 GiB
+  ok  : the FILE (PTQ1_0, 1.75 bpw) layer bytes sum to 1,541,441,536 - the upload number, not the budget number
+  ok  : token_embd in the device form is 286,064,640 B
+  ok  : output.weight + output_norm = 286,081,024 B
+  ok  : token_embd's file form is 222,494,720 B
+  ok  : no non-layer tensor other than the head/tail pair went unaccounted for (a nonzero value would be charged to card 0 and printed)
+  ok  : 32 layers / 2 cards at 3840 MiB/card fits, 1 boundary per token
+  ok  : the same split at 1200 MiB/card is REFUSED - the weights alone need 2.37 GiB / 2 = 1213.9 MiB per card
+  ok  : 4 cards at 1 GiB each fits and costs 3 hops/token
+  ok  : 8 cards at 512 MiB each is refused: head 273 MiB + tail 273 MiB on the two end cards plus a quarter-GiB of layers per card does not fit, which is the answer a budget check exists to give
+  ok  : the DERIVED fallback constants match the file exactly for this model - if they ever stop matching, this check is the one that says so
+
+  -- declared status and the numbers a report cites --
+  ok  : policy enum order = documented status: implemented, declared, declared
+  ok  : the hop payload is one hidden vector = 4096 floats = 16 KiB
+  ok  : the driver-reservation constant is arithmetic on the two MEASURED numbers (4096 - 3840), not a guess
+fleet pipeline REFUSE: range [1,2) names card 1 but only 1 card context(s) exist.
+  ok  : fleet_pipeline_init refuses a schedule whose ranges name cards that do not exist, instead of indexing the command-buffer table out of bounds
+
+selftest: 55 checks, 0 failed -> PASS
+rc_selftest=0
+
+== fleet split: 64 layers over 4 card(s), budget 3840 MiB/card ==
+  budget basis: MEASURED device-local heap of THIS host's 4 GiB card = 3840 MiB (DERIVED driver reservation = 4096 - 3840 = 256 MiB, STAGE3_RUNTIME §7). On another card that is an ASSUMPTION - pass its real heap as budget_MiB.
+  NOTE: asked for 64 layers, the file has 32 - the file's count is used.
+  byte source: GGUF tensor table of models/Ternary-Bonsai-2-9B-PTQ1_0.gguf - 427 tensors, 32 layers, hidden 4096, ffn 12288, full_attention_interval 4
+  per-layer DEVICE bytes:  59017216 B x 8 layer(s) [8 softmax, 0 recurrent]  62554880 B x 24 layer(s) [0 softmax, 24 recurrent]
+  layers total  : device 1973454848 B (1.838 GiB) | file 1541441536 B (1.436 GiB)
+  head (embedding): device 286064640 B | file 222494720 B
+  tail (output + output_norm): device 286081024 B | file 222511104 B
+  whole model   : device 2545600512 B (2.371 GiB) | file 1986447360 B (1.850 GiB)
+  per-card weight bytes from the GGUF tensor table, DEVICE form (codes+scales+f32)
+  card layers           bytes needed   bytes budget  headroom
+     0 [  0,  4)         532746496     4026531840   3331.9 MiB
+     1 [  4, 12)         493363712     4026531840   3369.5 MiB
+     2 [ 12, 20)         493363712     4026531840   3369.5 MiB
+     3 [ 20, 32)        1026126592     4026531840   2861.4 MiB
+  layers 32 over 4 card(s): 3 hop(s)/token (contiguous split => one boundary per card transition), 49152 B/token across the ring at 16384 B each, payload total 2545600512 B, sum of ranges 2545600512 B (conservation exact)
+  DERIVED hop cost per token: 3 x (engine 3.1 us + fence round trip 99.4 us) = 0.31 ms  [engine scaled from the MEASURED 6.2 us at 32 KiB; round trip MEASURED 99.4 us]
+  CAPACITY, NOT SPEED: one token's layer chain is sequential, so a 2-card split halves
+  the bytes per card and leaves the token's critical path alone. The depth-D ring only
+  recovers time when >= 2 microbatches (tokens) are in flight; then card k computes
+  microbatch i+1's range while microbatch i's boundary bytes are still moving.
+  cold-boot upload per card at the MEASURED 7.12 GB/s SDMA H2D:
+    card 0: 415174912 B to upload = 58 ms of SDMA | 532746496 B resident = 13.2% of its 3840 MiB budget
+    card 1: 385360384 B to upload = 54 ms of SDMA | 493363712 B resident = 12.3% of its 3840 MiB budget
+    card 2: 385360384 B to upload = 54 ms of SDMA | 493363712 B resident = 12.3% of its 3840 MiB budget
+    card 3: 800551680 B to upload = 112 ms of SDMA | 1026126592 B resident = 25.5% of its 3840 MiB budget
+  ZERO-COPY (B) removes the 70 ms/card above only as an SDMA COPY: on an iGPU the stores that fill the arena ARE the upload, so the copy and the staging allocation both go away. It removes none of the per-token cost - 1682 MiB/token stays where it is, which is why the MEASURED h >= 78.3% device-residency line is still the judge.
+  state on top of the weights (DERIVED from the MEASURED totals; 1 sequence, 4 K ctx):
+    card 0: 3 recurrent + 1 attention -> GDN state 4.71 MiB + KV 4.00 MiB = 8.71 MiB on top of 508.1 MiB of weights -> headroom 3323.2 MiB
+    card 1: 6 recurrent + 2 attention -> GDN state 9.42 MiB + KV 8.00 MiB = 17.42 MiB on top of 470.5 MiB of weights -> headroom 3352.1 MiB
+    card 2: 6 recurrent + 2 attention -> GDN state 9.42 MiB + KV 8.00 MiB = 17.42 MiB on top of 470.5 MiB of weights -> headroom 3352.1 MiB
+    card 3: 9 recurrent + 3 attention -> GDN state 14.13 MiB + KV 12.00 MiB = 26.13 MiB on top of 978.6 MiB of weights -> headroom 2835.3 MiB
+rc_split=0

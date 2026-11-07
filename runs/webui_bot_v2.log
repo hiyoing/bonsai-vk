@@ -1,0 +1,21 @@
+screenshot: webui\shots\bot-report-v2.png
+ok: true
+duration: 36ms
+totals: {"A":30,"B":59,"C":28,"D":37,"passed":154,"failed":0}
+{
+  "ok": true,
+  "totals": {
+    "A": 30,
+    "B": 59,
+    "C": 28,
+    "D": 37,
+    "passed": 154,
+    "failed": 0
+  },
+  "failures": [],
+  "runtimeErrors": [],
+  "durationMs": 36
+}
+exceptions: 0
+consoleErrors: 0
+logErrors: 0

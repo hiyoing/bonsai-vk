@@ -1,0 +1,33 @@
+
+=== weight plan, read from the tensor table (实测, not estimated) ===
+  tensors 427 = 202 PTQ1_0 + 225 f32   weights 8953803264 elems = 8.954 B
+  per-tensor shapes are K x M with K in {4096, 12288}; sign_widths says the same, so the
+  activation-side Hadamard has exactly two widths to cover.
+  checkpoint's own block form : 1957036032 B = 1.823 GiB  (1.75 bpw)
+  our 2-bit random-access form: 2516189184 B = 2.343 GiB  (codes 2.083 GiB + scales 0.260 GiB, 2.125 bpw)
+  f32 blob                    :  29411328 B = 28.049 MiB
+  LAYOUT COST = 0.521 GiB extra = 17064 tokens of KV at 32768 B/token
+
+=== the rest of the footprint ===
+  blocks: 24 GDN + 8 softmax-attention (full_attention_interval=4)
+  recurrent state, context-INDEPENDENT: 2097152 B/layer state + 98304 B/layer conv = 50.2 MiB over 24 layers
+  KV cache: 32768 B/token (32.0 MiB per 1k tokens), fp16, 8 layers
+  device-local heap: 3840 MiB
+
+=== per-token GEMV inventory (实测, from the tensor table) ===
+  block 0  (GDN): 6 GEMV
+  block 1  (GDN): 6 GEMV
+  block 2  (GDN): 6 GEMV
+  block 3  (attention): 7 GEMV
+  block 31 (attention): 7 GEMV
+  output.weight: M=248320 K=4096 -> 248320 logits
+  TOTAL per token: 201 GEMV, 7.929 GMAC, weights read 2.077 GiB/token (2.25 bits/weight)
+  at the measured 176.3 Gop/s (runs/build_full_3.txt) the projections alone cost 45.0 ms -> 22.2 tok/s, and the weight stream is 49.6 GB/s
+  (that tok/s is the PROJECTION ceiling only: glue ops, barriers and the per-token fence come off it. STAGE5 measured the official engine's real per-token structure at 201 ops, so this is the same op count we are about to pay for.)
+
+=== context ceiling per layout (推算 from the measured bytes above) ===
+  [our 2.125 bpw random-access layout] weights 2.343 GiB -> 728 MiB left for KV -> 23298 tokens
+  [native 1.75 bpw block layout] weights 1.823 GiB -> 1261 MiB left for KV -> 40362 tokens
+  (the second number is what the context ceiling actually costs: our fast layout buys
+   speed with the same gigabytes that would have been tokens. Decide it with a measurement,
+   not with a preference - a native-block GEMV kernel does not exist yet.)

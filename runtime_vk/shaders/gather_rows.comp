@@ -1,0 +1,121 @@
+#version 450
+// gather_rows.comp - embedding lookup: y[t][e] = W[ids[t]][e], with the PTQ1_0 decode path built in.
+//
+// ggml op it replaces: GET_ROWS(token_embd.weight{4096, 248320, 1, 1}, inp_tokens{2,1,1,1})
+// (runs/dbg_full_real.log line 1: node_0, the very first node of the official forward).
+//
+// ---------------------------------------------------------------- THE WEIGHT LAYOUT, both kinds
+// token_embd.weight is dtype 143 (PTQ1_0), shape {4096, 248320}, i.e. ne[0] = 4096 = the embedding
+// length and ne[1] = 248320 = the vocabulary. ggml stores a tensor with ne[0] fastest, so ONE TOKEN
+// ROW IS 4096 CONTIGUOUS ELEMENTS and the row of token id v starts at v * 4096 weights. In PTQ1_0
+// that row is 4096/128 = 32 quant blocks of 28 B, laid out row-major exactly the way
+// repack_ptq1_0.comp reads it:
+//     block index = id * (k_cols/128) + blk      -> words [block*7 .. block*7+6]
+// so the word offset of element e of row id is
+//     (id * (k_cols/128) + e/128) * 7  +  byte(e%128)/4,  shifted by 8*(byte%4)
+// An f32 tensor (dtype 0 - the norms, biases and every ssm_* weight) is the boring case: element
+// (id, e) at id * k_cols + e in FLOATS. mode 1 handles that; mode 0 (the default) is PTQ1_0. The two
+// are NOT interchangeable and the offsets are in different units (uint words vs floats), which is
+// precisely the kind of thing that shows up as garbage embeddings 2000 tokens later.
+//
+// ---------------------------------------------------------------- the decode arithmetic
+// Reused VERBATIM from ptq_decode.h - trit_of_byte() / elem_to_byte_trit() / the block scale at
+// bytes 26..27 - because that header is the single home of PTQ1_0 decoding for this runtime and
+// align_dequant.exe already proved it against the official _dequant_ptq1_0.comp shader over the
+// whole file (FAITHFUL_REPRO.md). The three pieces, in the header's own words:
+//   one block = 128 weights = 7 x 32-bit words = 28 B = 1.75 bpw
+//     qs[0..15]   words 0..3 : byte j, trit t -> element 16*t + j
+//     qs[16..23]  words 4..5 : byte j, trit t -> element 80 + 8*t + (j-16)
+//     qh[0..1]    word 6     : byte h, trit t -> element 120 + 2*t + h
+//     d           bytes 26..27 (upper half of word 6): fp16 block scale
+//   trit of byte b after t steps of the fork's base-3 fixed-point recurrence, NOT a bitfield:
+//     v = (b * 3^t) & 0xFF ; raw = (v * 3) >> 8 ; weight = (raw - 1) * d
+// The scale decode goes through unpackHalf2x16(w6).y, the same instruction gemv_ternary.comp line 77
+// uses for the same field; align_f16.exe closed all 65536 fp16 patterns against it, so the two paths
+// cannot disagree. This kernel stores f32 and does no fp16 packing, so f16_rne.glslh is not needed.
+//
+// WHY DECODE FROM THE FILE INSTEAD OF GATHERING FROM THE REPACKED 2-BIT LAYOUT: the repacked codes
+// are column-major ((k/64)*M + row), so a row gather would be a 64-vec4 STRIDED read with stride
+// M=248320 words, and holding the repacked embedding at all costs 254 MB of the 4 GB card already
+// carrying 1.66 GB of weights. One row per token, decoded in place, is 16 KB of work: the gather is
+// once per token, so this is the cheap and the small option at the same time.
+//
+// THE INVARIANT THE ENGINE HAS TO KEEP: prism.hadamard.inverse_weight_names = ['token_embd.weight']
+// and prism.hadamard.axis = input-last-dimension. The embedding row is stored in the INVERSE rotated
+// basis, and the official graph applies the rotation to it at runtime - node_2 =
+// MUL_MAT(prism.hadamard.4096{4096,4096}, node_0_reshaped) at dump line 18, then
+// MUL(that, prism.hadamard.signs.4096) at line 34. So a gathered row is NOT the residual-stream
+// vector yet: the engine must follow this dispatch with hadamard_block.comp (block 4096, /64) and
+// then signs_mul.comp (s_off = 0, the signs_4096 half). H is symmetric and orthogonal, so "inverse"
+// and "forward" are the same matrix and only the order of the three steps is a decision.
+//
+// Work per element: 1 byte fetch (L1: 16 elements per lane share 1-4 bytes), up to 4 multiply-mask
+// steps of the recurrence, 1 subtract, 1 multiply by d, 1 store. Determinism: no reduction at all,
+// every output element is produced by exactly one lane from one byte, so the result is order-free
+// and must be bit-exact against the CPU reference.
+//
+// DISPATCH: gl_WorkGroupCount.x == n_ids (one workgroup per token), local_size 256, each lane doing
+// ceil(k_cols/256) = 16 elements at k_cols = 4096. k_cols must be a multiple of 128 (asserted by the
+// host) because that is the quant block.
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly buffer IDS   { uint  ids[]; };    // [n_ids] token ids
+layout(binding = 1) readonly buffer WT    { uint  wt[]; };     // the weight tensor: PTQ1_0 words
+                                                             // (mode 0) or f32 bits (mode 1)
+layout(binding = 2)       buffer Y { float y[]; };             // [n_ids][k_cols] the gathered rows
+
+layout(push_constant) uniform PC {
+    uint ids_off;    // in uint units
+    uint w_off;      // mode 0: in uint (4 B) word units;  mode 1: in float units
+    uint y_off;      // in float units
+    uint n_ids;      // workgroups
+    uint k_cols;     // embedding length, multiple of 128 (4096 here)
+    uint id_stride;  // stride between consecutive ids in uint units (1 for a contiguous row)
+    uint mode;       // 0 = PTQ1_0 decode, 1 = f32 copy
+    uint _p0;        // pad to 32 B
+};
+
+// one byte of a block, straight out of the global buffer (dynamic index into `wt`, never into a local
+// array - a locally indexed array would be private-memory spill on this driver)
+uint byte_at(uint base, uint by) {
+    return (wt[base + (by >> 2u)] >> ((by & 3u) * 8u)) & 0xFFu;
+}
+
+// ptq_decode.h trit_of_byte(): iterate the *3 mod 256 recurrence t times, then take (v*3)>>8
+uint trit_of_byte(uint b, uint t) {
+    uint v = b;
+    for (uint i = 0u; i < t; ++i) v = (v * 3u) & 0xFFu;
+    return (v * 3u) >> 8u;
+}
+
+// ptq_decode.h elem_to_byte_trit(): element e of a 128-element block -> (byte, trit)
+void elem_to_byte_trit(uint e, out uint byte, out uint trit) {
+    if (e < 80u)       { byte = e % 16u;              trit = e / 16u; }
+    else if (e < 120u) { byte = 16u + (e - 80u) % 8u; trit = (e - 80u) / 8u; }
+    else               { byte = 24u + (e - 120u) % 2u; trit = (e - 120u) / 2u; }
+}
+
+void main() {
+    const uint t = gl_WorkGroupID.x;
+    if (t >= n_ids) { return; }               // workgroup-uniform test, and there is no barrier
+    const uint lane = gl_LocalInvocationID.x;
+    const uint id = ids[ids_off + t * id_stride];
+    const uint yrow = y_off + t * k_cols;
+    const uint nblk = k_cols / 128u;
+    const uint per = (k_cols + 255u) / 256u;
+
+    for (uint i = 0u; i < per; ++i) {
+        const uint e = lane * per + i;                 // contiguous slice per lane
+        if (e >= k_cols) break;
+        if (mode == 1u) {
+            y[yrow + e] = uintBitsToFloat(wt[w_off + id * k_cols + e]);
+        } else {
+            const uint base = w_off + (id * nblk + e / 128u) * 7u;
+            uint by, tr;
+            elem_to_byte_trit(e % 128u, by, tr);
+            const float d = unpackHalf2x16(wt[base + 6u]).y;      // bytes 26..27 = high half of word 6
+            y[yrow + e] = (float(trit_of_byte(byte_at(base, by), tr)) - 1.0) * d;
+        }
+    }
+}

@@ -1,0 +1,54 @@
+result: {"failures":[{"layer":"A","name":"the composer border returns to the hairline","ok":false,"detail":"got \"rgb(217, 119, 87)\" want \"rgb(229, 229, 229)\""},{"layer":"C","name":"usage tokens are attached","ok":false,"detail":"got null want 5"},{"layer":"C","name":"the second request carries the whole transcript","ok":false,"detail":"got 3 want 4"},{"layer":"C","name":"transcript roles alternate correctly","ok":false,"detail":"got [\"user\",\"assistant\",\"user\"] want [\"user\",\"assistant\",\"user\",\"assistant\"]"},{"layer":"C","name":"a failed reply is not sent back in the next prompt","ok":false,"detail":"got 9 want 1"},{"layer":"C","name":"a long reply produced no runtime error","ok":false,"detail":"got 1 want 0"}],"runtimeErrors":[],"totals":{"A":30,"B":59,"C":27,"D":37,"passed":147,"failed":6}}
+{
+  "failures": [
+    {
+      "layer": "A",
+      "name": "the composer border returns to the hairline",
+      "ok": false,
+      "detail": "got \"rgb(217, 119, 87)\" want \"rgb(229, 229, 229)\""
+    },
+    {
+      "layer": "C",
+      "name": "usage tokens are attached",
+      "ok": false,
+      "detail": "got null want 5"
+    },
+    {
+      "layer": "C",
+      "name": "the second request carries the whole transcript",
+      "ok": false,
+      "detail": "got 3 want 4"
+    },
+    {
+      "layer": "C",
+      "name": "transcript roles alternate correctly",
+      "ok": false,
+      "detail": "got [\"user\",\"assistant\",\"user\"] want [\"user\",\"assistant\",\"user\",\"assistant\"]"
+    },
+    {
+      "layer": "C",
+      "name": "a failed reply is not sent back in the next prompt",
+      "ok": false,
+      "detail": "got 9 want 1"
+    },
+    {
+      "layer": "C",
+      "name": "a long reply produced no runtime error",
+      "ok": false,
+      "detail": "got 1 want 0"
+    }
+  ],
+  "runtimeErrors": [],
+  "totals": {
+    "A": 30,
+    "B": 59,
+    "C": 27,
+    "D": 37,
+    "passed": 147,
+    "failed": 6
+  }
+}
+exceptions: 0
+consoleErrors: 0
+logErrors: 1
+Failed to load resource: net::ERR_FILE_NOT_FOUND

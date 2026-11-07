@@ -1,0 +1,21 @@
+0.00.106.972 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.107.373 W srv  llama_server: -----------------
+0.00.107.375 W srv  llama_server: CORS is set to allow all origins ('*') and no API key is set
+0.00.107.376 W srv  llama_server: this can be a security risk (cross-origin attacks)
+0.00.107.376 W srv  llama_server: more info: https://github.com/ggml-org/llama.cpp/pull/25655
+0.00.107.377 W srv  llama_server: -----------------
+0.00.118.080 I srv    load_model: loading model 'models\Ternary-Bonsai-2-9B-PTQ1_0.gguf'
+0.00.839.995 W common_fit_params: failed to fit params to free device memory: n_gpu_layers already set by user to 99, abort
+
+
+Loading model... ggml_vulkan: Device memory allocation of size 1073741824 failed.
+ggml_vulkan: vk::Device::allocateMemory: ErrorOutOfDeviceMemory
+0.02.910.741 E alloc_tensor_range: failed to allocate Vulkan0 buffer of size 1073741824
+0.02.922.050 E llama_init_from_model: failed to initialize the context: failed to allocate buffer for kv cache
+0.02.922.056 E cmn  common_init_: failed to create context with model 'models\Ternary-Bonsai-2-9B-PTQ1_0.gguf'
+0.02.922.059 E cmn  common_init_: failed to create context with model 'models\Ternary-Bonsai-2-9B-PTQ1_0.gguf'
+0.02.922.064 E srv    load_model: failed to create_context with model 'models\Ternary-Bonsai-2-9B-PTQ1_0.gguf'
+0.02.922.068 I srv   operator (): operator (): cleaning up before exit...
+0.02.922.574 E srv  llama_server: exiting due to model loading error
+llama_server exited with code 1
+Error: the server exited before becoming ready

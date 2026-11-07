@@ -1,0 +1,101 @@
+device: Radeon RX 550X | driver 2.0.279 | device-local heap 3840 MiB | timestampPeriod 40.000 ns
+  limits: maxComputeWorkGroupSize[0]=1024 maxComputeWorkGroupCount[0]=4294967295 bufferImageGranularity=1
+  compute queue = family 0, transfer-only queue = family 2
+
+=== weight plan, read from the tensor table (实测, not estimated) ===
+  tensors 427 = 202 PTQ1_0 + 225 f32   weights 8953803264 elems = 8.954 B
+  per-tensor shapes are K x M with K in {4096, 12288}; sign_widths says the same, so the
+  activation-side Hadamard has exactly two widths to cover.
+  checkpoint's own block form : 1957036032 B = 1.823 GiB  (1.75 bpw)
+  our 2-bit random-access form: 2516189184 B = 2.343 GiB  (codes 2.083 GiB + scales 0.260 GiB, 2.125 bpw)
+  f32 blob                    :  29411328 B = 28.049 MiB
+  LAYOUT COST = 0.521 GiB extra = 17064 tokens of KV at 32768 B/token
+
+=== the rest of the footprint ===
+  blocks: 24 GDN + 8 softmax-attention (full_attention_interval=4)
+  recurrent state, context-INDEPENDENT: 2097152 B/layer state + 98304 B/layer conv = 50.2 MiB over 24 layers
+  KV cache: 32768 B/token (32.0 MiB per 1k tokens), fp16, 8 layers
+  device-local heap: 0 MiB
+
+arena (single DEVICE_LOCAL allocation; sizes are the plan's, offsets are the driver's):
+  codes           2236612608 B  align 4    -> offset 0
+  scales           279576576 B  align 4    -> offset 2236612608
+  f32blob           29411328 B  align 4    -> offset 2516189184
+  ptq_scratch       33554432 B  align 4    -> offset 2545600512
+  x                    65536 B  align 4    -> offset 2579154944
+  xsum                  4096 B  align 4    -> offset 2579220480
+  out                8388608 B  align 4    -> offset 2579224576
+  arena committed 2.410 GiB, alignment padding 0 B
+
+=== weight load, measured on this card ===
+  SDMA    1866.4 MiB in   286.1 ms =  6.84 GB/s (transfer-only queue)
+  repack   1866.4 MiB -> 2399.6 MiB in   164.2 ms = 27.25 GB/s effective, 260 dispatches in 59 batches
+  f32blob     28.0 MiB   TOTAL 450.3 ms
+
+  plan+arena+pipelines 370.7 ms   weight load+repack 809.2 ms   TOTAL 1179.9 ms
+  the official fork took 16050 ms cold / 3680 ms warm for the same file; this is the
+  pure-blood engine's own cold path, disk -> SDMA -> repack in VRAM, measured above.
+  device-local footprint of the weights alone: 2.410 GiB
+
+=== byte-level layout proof (codes + scale read back from the arena) ===
+  output.weight            row 0       blk 0   MISMATCH   codes a4a04694 2562068a 81614840 a1262660 | scale 247c
+      expected      codes a4a04694 2562068a 81614840 a1262660 | scale 247c
+  output.weight            row 124160  blk 3   MISMATCH   codes a84514a5 05a12944 121a04a1 2a991985 | scale 23a2
+      expected      codes a84514a5 05a12944 121a04a1 2a991985 | scale 23a2
+  output.weight            row 248319  blk 31  MISMATCH   codes a41a0255 5a044892 10a85928 012661a5 | scale 1ec2
+      expected      codes a41a0255 5a044892 10a85928 012661a5 | scale 1ec2
+  token_embd.weight        row 0       blk 0   MISMATCH   codes aa0a9605 a0065460 66610456 00880929 | scale 22bb
+      expected      codes aa0a9605 a0065460 66610456 00880929 | scale 22bb
+  token_embd.weight        row 124160  blk 3   MISMATCH   codes 1a5aa056 61a2466a 19616615 9a828512 | scale 239d
+      expected      codes 1a5aa056 61a2466a 19616615 9a828512 | scale 239d
+  token_embd.weight        row 248319  blk 31  MISMATCH   codes 06a16019 509a8a95 96808559 1889a164 | scale 1b4e
+      expected      codes 06a16019 509a8a95 96808559 1889a164 | scale 1b4e
+  blk.0.attn_qkv.weight    row 0       blk 0   MISMATCH   codes 4854a112 48606565 02240282 a4948a09 | scale 25a3
+      expected      codes 4854a112 48606565 02240282 a4948a09 | scale 25a3
+  blk.0.attn_qkv.weight    row 4096    blk 3   MISMATCH   codes 95966510 22a50014 a90900a0 08a51640 | scale 240a
+      expected      codes 95966510 22a50014 a90900a0 08a51640 | scale 240a
+  blk.0.attn_qkv.weight    row 8191    blk 31  MISMATCH   codes 6a09886a 4a24488a 45200918 62196815 | scale 253b
+      expected      codes 6a09886a 4a24488a 45200918 62196815 | scale 253b
+  blk.0.ffn_gate.weight    row 0       blk 0   MISMATCH   codes a6a664a1 49524a44 15921958 415a1a41 | scale 2328
+      expected      codes a6a664a1 49524a44 15921958 415a1a41 | scale 2328
+  blk.0.ffn_gate.weight    row 6144    blk 3   MISMATCH   codes 0804a002 85806196 58a62516 52a11a05 | scale 21fc
+      expected      codes 0804a002 85806196 58a62516 52a11a05 | scale 21fc
+  blk.0.ffn_gate.weight    row 12287   blk 31  MISMATCH   codes 60a92465 40496152 84a6619a a1a81561 | scale 2324
+      expected      codes 60a92465 40496152 84a6619a a1a81561 | scale 2324
+  blk.31.ffn_down.weight   row 0       blk 0   MISMATCH   codes a4604982 88995410 42659898 5206194a | scale 2232
+      expected      codes a4604982 88995410 42659898 5206194a | scale 2232
+  blk.31.ffn_down.weight   row 2048    blk 3   MISMATCH   codes 81488642 05401660 90a64544 6a568159 | scale 220d
+      expected      codes 81488642 05401660 90a64544 6a568159 | scale 220d
+  blk.31.ffn_down.weight   row 4095    blk 95  MISMATCH   codes 4490a565 69288048 a2a6a519 1292556a | scale 22fc
+      expected      codes 4490a565 69288048 a2a6a519 1292556a | scale 22fc
+  blk.0.ssm_alpha.weight   row 0       blk 0   MISMATCH   codes a4a04694 2562068a 81614840 a1262660 | scale 247c
+      expected      codes a0902080 10208020 50500040 a0900080 | scale 3ca5
+  blk.0.ssm_alpha.weight   row 16      blk 3   MISMATCH   codes 0a129281 2499a005 6990216a 85481688 | scale 2538
+      expected      codes 80900000 20108080 50401010 a0906010 | scale 3ca8
+layout: cannot read blk.0.ssm_alpha.weight row 31 blk 4294967295
+  layout mismatches: 17
+
+=== engine GEMV on REAL weights vs CPU reference (ptq_decode, float64) ===
+  blk.0.attn_qkv.weight      row 3866    gpu=     -0.288901 ref=     -0.314870  abs=2.60e-02 rel=8.25e-02
+  blk.0.attn_qkv.weight      row 2566    gpu=      0.228253 ref=     -0.488937  abs=7.17e-01 rel=1.47e+00
+  blk.0.attn_qkv.weight      M=8192 K=4096 splits=8
+  blk.0.ffn_gate.weight      row 192     gpu=      0.078262 ref=     -0.170418  abs=2.49e-01 rel=1.46e+00
+  blk.0.ffn_gate.weight      row 10610   gpu=      0.338343 ref=      0.001286  abs=3.37e-01 rel=2.62e+02
+  blk.0.ffn_gate.weight      M=12288 K=4096 splits=4
+  blk.0.ffn_down.weight      row 2699    gpu=      0.886725 ref=      1.184070  abs=2.97e-01 rel=2.51e-01
+  blk.0.ffn_down.weight      row 1354    gpu=     -0.444202 ref=      0.271133  abs=7.15e-01 rel=2.64e+00
+  blk.0.ffn_down.weight      M=4096 K=12288 splits=16
+  blk.0.ssm_out.weight       row 1048    gpu=     -0.027598 ref=      0.265928  abs=2.94e-01 rel=1.10e+00
+  blk.0.ssm_out.weight       row 3173    gpu=     -0.094670 ref=      0.528327  abs=6.23e-01 rel=1.18e+00
+  blk.0.ssm_out.weight       M=4096 K=4096 splits=16
+  blk.31.attn_output.weight  row 1221    gpu=     -0.183955 ref=     -2.013828  abs=1.83e+00 rel=9.09e-01
+  blk.31.attn_output.weight  row 516     gpu=     -1.149758 ref=      0.077857  abs=1.23e+00 rel=1.58e+01
+  blk.31.attn_output.weight  M=4096 K=4096 splits=16
+  blk.0.attn_gate.weight     row 2666    gpu=     -0.430205 ref=     -0.518416  abs=8.82e-02 rel=1.70e-01
+  blk.0.attn_gate.weight     row 648     gpu=      0.440695 ref=      0.635858  abs=1.95e-01 rel=3.07e-01
+  blk.0.attn_gate.weight     M=4096 K=4096 splits=16
+  blk.7.ffn_up.weight        row 5140    gpu=      0.360162 ref=     -0.309127  abs=6.69e-01 rel=2.17e+00
+  blk.7.ffn_up.weight        row 5646    gpu=      0.015914 ref=     -0.260307  abs=2.76e-01 rel=1.06e+00
+  blk.7.ffn_up.weight        M=12288 K=4096 splits=4
+
+verify: 14 rows compared, worst rel = 2.621e+02 (blk.0.ffn_gate.weight row 10610)

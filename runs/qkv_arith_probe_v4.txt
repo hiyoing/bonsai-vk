@@ -1,0 +1,198 @@
+[gguf] models/Ternary-Bonsai-2-9B-PTQ1_0.gguf
+[gguf] tensors=427 data_start=11039616 sign_values key present=True
+[meta] sign_values elem-type=5 n=16384 sum(0..4095)=60  (the engine prints 60 for the same slice - runs/qcheck_256.log)
+[meta] rms_epsilon = 9.999999974752427e-07 from ['qwen35.attention.layer_norm_rms_epsilon']
+[cache] HR (f32 chain) loaded from tools\..\runs\qkv_probe_hr.bin (QKV_PROBE_CACHE=1)
+[cache] HR (f64 chain) loaded from tools\..\runs\qkv_probe_hr64.bin (QKV_PROBE_CACHE=1)
+
+=== CPU-rebuilt block-0 operand chain vs the oracle's own print (pass 2) ===
+  RES  input_embed head [   0.0002    0.0116    0.0131] want [   0.0002    0.0116    0.0131]   sum    -0.464154 want    -0.464154
+  NRM  norm-0      head [   0.0143    1.0184    1.1478] want [   0.0143    1.0184    1.1478]   sum   -40.661991 want   -40.661980
+  AN   attn_norm-0 head [   0.0134    1.1238    1.1596] want [   0.0134    1.1238    1.1596]   sum   -45.631555 want   -45.631546
+  ROT  node_17     head [  -0.0134   -1.1238   -1.1596] want [  -0.0134   -1.1238   -1.1596]   sum   -89.238927 want   -89.238937
+  HR   node_19     head [  -1.3944    0.0263   -1.4444] want [  -1.3944    0.0263   -1.4444]   sum    -0.860532 want    -0.860536
+  my two reconstructions of the SAME operand differ by rms 6.018e-08 per element (f32 chain vs f64 chain)
+
+[weights] blk.0.attn_qkv.weight dims=[4096, 8192] type=143 blocks/row=32
+
+=== the six channels the oracle prints: candidate arithmetics vs the 4-decimal window
+
+  (a candidate is CONSISTENT only if EVERY channel it predicts lands inside want +/- 5e-5)
+
+  channel 0: want    0.5366  window [0.53655, 0.53665]   our GPU 0.53794
+     V0 exact, f64                        0.537943   out  d(want)= +0.00134
+     V1 ternary form, f32 acc             0.537943   out  d(want)= +0.00134
+     V2 ternary form, f16 acc             0.545410   out  d(want)= +0.00881
+     V3 direct dot, f32 acc               0.537943   out  d(want)= +0.00134
+     V4 direct dot, f16 acc               0.529785   out  d(want)= -0.00681
+     V5 direct dot, x rounded f16         0.537806   out  d(want)= +0.00121
+     V6 direct dot, w rounded f16         0.537943   out  d(want)= +0.00134
+     V7 direct dot, both rounded f16      0.537806   out  d(want)= +0.00121
+     V8 direct dot, x -> q8_0             0.536754   out  d(want)= +0.00015
+     V9 ternary form, x -> q8_0           0.536754   out  d(want)= +0.00015
+     V10 x -> q8_0, then f16 acc          0.539551   out  d(want)= +0.00295
+     V11 x -> q8_0, w rounded f16         0.536754   out  d(want)= +0.00015
+     V13 q8_0 blk32, ties away from 0     0.536754   out  d(want)= +0.00015
+     V14 q8_0 blk64                       0.535645   out  d(want)= -0.00096
+     V15 q8_0, x from the f64 chain       0.536754   out  d(want)= +0.00015
+     V16 x -> f16 -> q8_0                 0.534462   out  d(want)= -0.00214
+     V17 q8_0 reciprocal grid, f32        0.536754   out  d(want)= +0.00015
+     V18 q8_0 reciprocal grid, f64        0.536754   out  d(want)= +0.00015
+     V19 recip grid + ternary form        0.536754   out  d(want)= +0.00015
+     V12 direct dot, x rounded bf16       0.538986   out  d(want)= +0.00239
+
+  channel 1: want   -0.8338  window [-0.83385, -0.83375]   our GPU -0.82876
+     V0 exact, f64                       -0.828764   out  d(want)= +0.00504
+     V1 ternary form, f32 acc            -0.828764   out  d(want)= +0.00504
+     V2 ternary form, f16 acc            -0.828613   out  d(want)= +0.00519
+     V3 direct dot, f32 acc              -0.828764   out  d(want)= +0.00504
+     V4 direct dot, f16 acc              -0.831055   out  d(want)= +0.00275
+     V5 direct dot, x rounded f16        -0.828881   out  d(want)= +0.00492
+     V6 direct dot, w rounded f16        -0.828764   out  d(want)= +0.00504
+     V7 direct dot, both rounded f16     -0.828881   out  d(want)= +0.00492
+     V8 direct dot, x -> q8_0            -0.833761   IN    d(want)= +0.00004
+     V9 ternary form, x -> q8_0          -0.833761   IN    d(want)= +0.00004
+     V10 x -> q8_0, then f16 acc         -0.838867   out  d(want)= -0.00507
+     V11 x -> q8_0, w rounded f16        -0.833761   IN    d(want)= +0.00004
+     V13 q8_0 blk32, ties away from 0    -0.833761   IN    d(want)= +0.00004
+     V14 q8_0 blk64                      -0.836417   out  d(want)= -0.00262
+     V15 q8_0, x from the f64 chain      -0.833761   IN    d(want)= +0.00004
+     V16 x -> f16 -> q8_0                -0.835804   out  d(want)= -0.00200
+     V17 q8_0 reciprocal grid, f32       -0.833761   IN    d(want)= +0.00004
+     V18 q8_0 reciprocal grid, f64       -0.833761   IN    d(want)= +0.00004
+     V19 recip grid + ternary form       -0.833761   IN    d(want)= +0.00004
+     V12 direct dot, x rounded bf16      -0.826418   out  d(want)= +0.00738
+
+  channel 2: want    0.3179  window [0.31785, 0.31795]   our GPU 0.31063
+     V0 exact, f64                        0.310630   out  d(want)= -0.00727
+     V1 ternary form, f32 acc             0.310630   out  d(want)= -0.00727
+     V2 ternary form, f16 acc             0.307373   out  d(want)= -0.01053
+     V3 direct dot, f32 acc               0.310630   out  d(want)= -0.00727
+     V4 direct dot, f16 acc               0.312500   out  d(want)= -0.00540
+     V5 direct dot, x rounded f16         0.310536   out  d(want)= -0.00736
+     V6 direct dot, w rounded f16         0.310630   out  d(want)= -0.00727
+     V7 direct dot, both rounded f16      0.310536   out  d(want)= -0.00736
+     V8 direct dot, x -> q8_0             0.317852   IN    d(want)= -0.00005
+     V9 ternary form, x -> q8_0           0.317852   IN    d(want)= -0.00005
+     V10 x -> q8_0, then f16 acc          0.314941   out  d(want)= -0.00296
+     V11 x -> q8_0, w rounded f16         0.317852   IN    d(want)= -0.00005
+     V13 q8_0 blk32, ties away from 0     0.317852   IN    d(want)= -0.00005
+     V14 q8_0 blk64                       0.318754   out  d(want)= +0.00085
+     V15 q8_0, x from the f64 chain       0.317852   IN    d(want)= -0.00005
+     V16 x -> f16 -> q8_0                 0.317057   out  d(want)= -0.00084
+     V17 q8_0 reciprocal grid, f32        0.317852   IN    d(want)= -0.00005
+     V18 q8_0 reciprocal grid, f64        0.317852   IN    d(want)= -0.00005
+     V19 recip grid + ternary form        0.317852   IN    d(want)= -0.00005
+     V12 direct dot, x rounded bf16       0.312943   out  d(want)= -0.00496
+
+  channel 8189: want    1.3872  window [1.38715, 1.38725]
+     V0 exact, f64                        1.390183   out  d(want)= +0.00298
+     V1 ternary form, f32 acc             1.390183   out  d(want)= +0.00298
+     V2 ternary form, f16 acc             1.395508   out  d(want)= +0.00831
+     V3 direct dot, f32 acc               1.390183   out  d(want)= +0.00298
+     V4 direct dot, f16 acc               1.376953   out  d(want)= -0.01025
+     V5 direct dot, x rounded f16         1.390123   out  d(want)= +0.00292
+     V6 direct dot, w rounded f16         1.390183   out  d(want)= +0.00298
+     V7 direct dot, both rounded f16      1.390123   out  d(want)= +0.00292
+     V8 direct dot, x -> q8_0             1.387015   out  d(want)= -0.00018
+     V9 ternary form, x -> q8_0           1.387015   out  d(want)= -0.00018
+     V10 x -> q8_0, then f16 acc          1.386719   out  d(want)= -0.00048
+     V11 x -> q8_0, w rounded f16         1.387015   out  d(want)= -0.00018
+     V13 q8_0 blk32, ties away from 0     1.387015   out  d(want)= -0.00018
+     V14 q8_0 blk64                       1.389866   out  d(want)= +0.00267
+     V15 q8_0, x from the f64 chain       1.387015   out  d(want)= -0.00018
+     V16 x -> f16 -> q8_0                 1.386777   out  d(want)= -0.00042
+     V17 q8_0 reciprocal grid, f32        1.387015   out  d(want)= -0.00018
+     V18 q8_0 reciprocal grid, f64        1.387015   out  d(want)= -0.00018
+     V19 recip grid + ternary form        1.387015   out  d(want)= -0.00018
+     V12 direct dot, x rounded bf16       1.388122   out  d(want)= +0.00092
+
+  channel 8190: want    1.1099  window [1.10985, 1.10995]
+     V0 exact, f64                        1.105576   out  d(want)= -0.00432
+     V1 ternary form, f32 acc             1.105576   out  d(want)= -0.00432
+     V2 ternary form, f16 acc             1.106445   out  d(want)= -0.00345
+     V3 direct dot, f32 acc               1.105576   out  d(want)= -0.00432
+     V4 direct dot, f16 acc               1.102539   out  d(want)= -0.00736
+     V5 direct dot, x rounded f16         1.105476   out  d(want)= -0.00442
+     V6 direct dot, w rounded f16         1.105576   out  d(want)= -0.00432
+     V7 direct dot, both rounded f16      1.105476   out  d(want)= -0.00442
+     V8 direct dot, x -> q8_0             1.109926   IN    d(want)= +0.00003
+     V9 ternary form, x -> q8_0           1.109926   IN    d(want)= +0.00003
+     V10 x -> q8_0, then f16 acc          1.121094   out  d(want)= +0.01119
+     V11 x -> q8_0, w rounded f16         1.109926   IN    d(want)= +0.00003
+     V13 q8_0 blk32, ties away from 0     1.109926   IN    d(want)= +0.00003
+     V14 q8_0 blk64                       1.109970   out  d(want)= +0.00007
+     V15 q8_0, x from the f64 chain       1.109926   IN    d(want)= +0.00003
+     V16 x -> f16 -> q8_0                 1.108119   out  d(want)= -0.00178
+     V17 q8_0 reciprocal grid, f32        1.109926   IN    d(want)= +0.00003
+     V18 q8_0 reciprocal grid, f64        1.109926   IN    d(want)= +0.00003
+     V19 recip grid + ternary form        1.109926   IN    d(want)= +0.00003
+     V12 direct dot, x rounded bf16       1.102971   out  d(want)= -0.00693
+
+  channel 8191: want   -4.4314  window [-4.43145, -4.43135]
+     V0 exact, f64                       -4.433341   out  d(want)= -0.00194
+     V1 ternary form, f32 acc            -4.433341   out  d(want)= -0.00194
+     V2 ternary form, f16 acc            -4.433594   out  d(want)= -0.00219
+     V3 direct dot, f32 acc              -4.433341   out  d(want)= -0.00194
+     V4 direct dot, f16 acc              -4.410156   out  d(want)= +0.02124
+     V5 direct dot, x rounded f16        -4.433311   out  d(want)= -0.00191
+     V6 direct dot, w rounded f16        -4.433341   out  d(want)= -0.00194
+     V7 direct dot, both rounded f16     -4.433311   out  d(want)= -0.00191
+     V8 direct dot, x -> q8_0            -4.431679   out  d(want)= -0.00028
+     V9 ternary form, x -> q8_0          -4.431679   out  d(want)= -0.00028
+     V10 x -> q8_0, then f16 acc         -4.402344   out  d(want)= +0.02906
+     V11 x -> q8_0, w rounded f16        -4.431679   out  d(want)= -0.00028
+     V13 q8_0 blk32, ties away from 0    -4.431679   out  d(want)= -0.00028
+     V14 q8_0 blk64                      -4.430366   out  d(want)= +0.00103
+     V15 q8_0, x from the f64 chain      -4.431679   out  d(want)= -0.00028
+     V16 x -> f16 -> q8_0                -4.431265   out  d(want)= +0.00013
+     V17 q8_0 reciprocal grid, f32       -4.431679   out  d(want)= -0.00028
+     V18 q8_0 reciprocal grid, f64       -4.431679   out  d(want)= -0.00028
+     V19 recip grid + ternary form       -4.431679   out  d(want)= -0.00028
+     V12 direct dot, x rounded bf16      -4.434233   out  d(want)= -0.00283
+
+=== verdict table: how many of the oracle's 6 printed channels each arithmetic hits ===
+  arithmetic                          in window   worst |d(want)|
+  V0 exact, f64                            0/6           0.00727
+  V1 ternary form, f32 acc                 0/6           0.00727
+  V2 ternary form, f16 acc                 0/6           0.01053
+  V3 direct dot, f32 acc                   0/6           0.00727
+  V4 direct dot, f16 acc                   0/6           0.02124
+  V5 direct dot, x rounded f16             0/6           0.00736
+  V6 direct dot, w rounded f16             0/6           0.00727
+  V7 direct dot, both rounded f16          0/6           0.00736
+  V8 direct dot, x -> q8_0                 3/6           0.00028
+  V9 ternary form, x -> q8_0               3/6           0.00028
+  V10 x -> q8_0, then f16 acc              0/6           0.02906
+  V11 x -> q8_0, w rounded f16             3/6           0.00028
+  V13 q8_0 blk32, ties away from 0         3/6           0.00028
+  V14 q8_0 blk64                           0/6           0.00267
+  V15 q8_0, x from the f64 chain           3/6           0.00028
+  V16 x -> f16 -> q8_0                     0/6           0.00214
+  V17 q8_0 reciprocal grid, f32            3/6           0.00028
+  V18 q8_0 reciprocal grid, f64            3/6           0.00028
+  V19 recip grid + ternary form            3/6           0.00028
+  V12 direct dot, x rounded bf16           0/6           0.00738
+
+=== is what is LEFT of the q8_0 residual bigger than my uncertainty about the operand? ===
+  row   |V0 exact|   Sum|w*x|  cancel   ||w||2    d(want) V8   recon spread V8-V15   dx implied (rms / coh)     rms|x|
+      0     0.53794      48.957     91.0   1.0659       +0.000154      8.790e-09    1.448e-04  2.765e-06  1.053e+00
+      1     0.82876      48.355     58.3   1.0581       +0.000039      9.575e-09    3.720e-05  7.102e-07  1.053e+00
+      2     0.31063      48.565    156.3   1.0549       -0.000048      2.378e-08    4.523e-05  8.629e-07  1.053e+00
+   8189     1.39018      45.472     32.7   1.0006       -0.000185      2.620e-08    1.846e-04  3.525e-06  1.053e+00
+   8190     1.10558      45.124     40.8   0.9941       +0.000026      3.008e-08    2.576e-05  4.919e-07  1.053e+00
+   8191     4.43334      46.452     10.5   0.9987       -0.000279      4.555e-08    2.798e-04  5.345e-06  1.053e+00
+  cancel      = Sum|w_k x_k| / |result|: how many digits the 4096-term dot throws away.
+  d(want) V8  = the q8_0 hypothesis' residual against the oracle's 4-decimal print; exact
+                arithmetic's residual on the same channel is 0.00134 (ch 0) to 0.00727 (ch 2).
+  recon spread= the SAME arithmetic on the f64-chain operand - the floor below which a
+                channel-by-channel comparison cannot discriminate anything.
+  dx implied  = the per-element activation error the residual would require under
+                random-sign noise (/||w||2) and fully coherent noise (/||w||1), shown
+                against the operand's own rms.
+
+  A candidate that hits 6/6 identifies the oracle's arithmetic. The reading of this table
+  is in runs/traitor_forensics_v1.md; nothing here is fitted - the windows are the
+  oracle's own printed resolution and the candidates are fixed before looking at them.
+[note] d(want) is measured against the oracle's PRINTED value, whose own quantisation is +/-5e-5.
+[note] our GPU's channel 0/1/2 are transcribed from runs/fwd_align_v10.log.

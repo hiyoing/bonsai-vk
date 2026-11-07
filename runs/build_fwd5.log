@@ -1,0 +1,5 @@
+In file included from bonsai_vk.cpp:180:
+bonsai_forward.h:442:15: warning: 'double fwd_region_sum(Fwd&, uint32_t, uint32_t)' defined but not used [-Wunused-function]
+  442 | static double fwd_region_sum(Fwd &f, uint32_t off, uint32_t n) {
+      |               ^~~~~~~~~~~~~~
+EXIT=0

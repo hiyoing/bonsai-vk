@@ -1,0 +1,15 @@
+gqa_on_c4096_q512                  rc=0  steady-state: 118.8 ms/token       
+gqa_on_c8192_q512                  rc=0  steady-state: 171.4 ms/token       
+gqa_on_c16384_q512                 rc=0  steady-state: 264.9 ms/token       
+gqa_on_c32768_q512                 rc=0  steady-state: 461.9 ms/token       
+gqa_off_c4096_tile2048             rc=0  steady-state: 128.7 ms/token       
+gqa_off_c8192_tile2048             rc=0  steady-state: 186.7 ms/token       
+gqa_off_c16384_tile2048            rc=0  steady-state: 315.0 ms/token       
+gqa_off_c32768_tile2048            rc=0  steady-state: 545.4 ms/token       
+gqa_on_c4096_q1024                 rc=0  steady-state: 124.8 ms/token       
+gqa_on_c32768_q1024                rc=4                                     
+gqa_part_qk_only_c4096             rc=0  steady-state: 109.8 ms/token       
+gqa_part_pv_only_c4096             rc=0  steady-state: 184.2 ms/token       
+short_merged_gqa_on                rc=0  steady-state: 80.9 ms/token        
+short_merged_gqa_off               rc=0  steady-state: 93.9 ms/token        
+done

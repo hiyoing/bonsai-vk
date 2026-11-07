@@ -1,0 +1,159 @@
+// attn_qk_softmax_tile.glslh - body of the TILED stage-2 kernel. Included by
+// attn_qk_softmax_tile_q1024/q2048/q4096.comp, each of which only sets QTILE.
+//
+// WHAT THIS IS FOR. attn_qk_softmax_wide.comp keeps a whole row in workgroup memory: two arrays
+// `shared float sd[MAXCAP]` + `sp[MAXCAP]`, so the addressable row length and the LDS footprint are
+// the SAME number (8*MAXCAP bytes). That coupling is what made 2048 keys the ceiling and what makes
+// 4096 keys cost 32 KiB - the measurement in runs/shared_probe_v3.log says the driver takes 32 KiB
+// and runs it correctly, and the bench in the same log says 32 KiB costs +19.6% over 16 KiB on an
+// identical instruction stream, because a 32 KiB workgroup is not co-resident the way a 16 KiB one
+// is. Design line for this engine: one workgroup never crosses 16 KiB of LDS.
+//
+// Breaking the coupling needs one observation about the existing kernel: the row it keeps in LDS is
+// the SCORE row, and it is ALREADY written to global memory in the same pass (`score[row+k] = acc`).
+// So the second and third walks over the row (max, then exp+sum, then divide) can re-read the values
+// from that global row instead of from LDS. fp32 stored to a VkBuffer and read back is the SAME
+// bit pattern, so this is not an approximation - it is the same number arriving by a different path.
+// Consequences:
+//   * LDS becomes 4*QTILE bytes (one array, not two), independent of cap: QTILE 2048 = 8 KiB,
+//     QTILE 4096 = 16 KiB. MAXCAP disappears; the row length is bounded by the arena and the budget,
+//     not by a compile-time array.
+//   * every loop is bounded by nfill (the live prefix), not by cap. In the wide kernel the dot loop
+//     runs over the WHOLE cap and skips dead lanes with a branch, and lane 0 zeroes the tail serially:
+//     an arena sized for 32K therefore taxes a 64-token request. Here a short request costs a short
+//     loop no matter how big the arena is - which is the actual answer to "long-context capability
+//     must not slow down short contexts".
+//   * the cost, measured rather than assumed: the dots are read from global once more, and the
+//     unnormalised probabilities are written and read once more. At cap 2048 that is about 8 B per
+//     live element per head of extra traffic against the ~96 KiB per position the K/V read already
+//     does, i.e. ~1%. It buys capability, NOT bandwidth - K and V are still read once per query per
+//     head either way; tiling K into LDS would not reduce a single byte, because in decode nothing
+//     re-reads a key inside one workgroup.
+//
+// BIT-EXACTNESS CONTRACT (why this file exists instead of an edit): the accumulation ORDER is the
+// reference's order, and the narrow kernel is the oracle. Copied verbatim from the wide kernel:
+//   - the dot product expression: two unpackHalf2x16 reads, `acc = acc + a*b` written as two
+//     statements per pair, ascending d, not an fma, not a `+=`, not reordered;
+//   - max pass, exp+sum pass: executed by LANE 0, walking the row in ASCENDING GLOBAL INDEX. Here
+//     that means tile by tile in ascending tile order and ascending l inside each tile, which is the
+//     same sequence the wide kernel's single walk performs;
+//   - the divide is per element (order-free) but still divides the same value lane 0 stored;
+//   - dead slots outside the filled prefix are exact zeros; the whole row stays defined so a dump
+//     reads the same and the stale-pack failure mode the wide kernel documents cannot come back.
+// The gate for all of this is qk_audit: tile vs wide must be 0 bit-different on SCORE/PROB/P16 at
+// every cap they share, exactly as wide vs narrow had to be at cap <= 256.
+
+#ifndef QTILE
+#define QTILE 2048u
+#endif
+
+#define NTILE  256u
+
+layout(local_size_x = NTILE, local_size_y = 1, local_size_z = 1) in;
+
+// Same seven bindings, same order, same meaning as attn_qk_softmax_wide.comp - the descriptor sets
+// are literally the same vector in mk_attn(), so a dispatch-level A/B cannot be confounded by a
+// binding mistake. SCORE and PROB lose the `writeonly` qualifier HERE ONLY: this kernel reads back what
+// it wrote, which is the whole trick. The descriptor, the window and the memory are unchanged.
+layout(binding = 0) readonly  buffer Q16   { uint  q16[]; };   // [seq][nh][hd/2]
+layout(binding = 1) readonly  buffer KC    { uint  kc[]; };    // [cap][nkv][hd/2] the K arena
+layout(binding = 2) readonly  buffer MASK  { float mask[]; };  // [seq][cap] additive, -INF = dead
+layout(binding = 3) readonly  buffer POS   { uint  pos[]; };   // [seq] absolute positions
+layout(binding = 4)           buffer SCORE { float score[]; }; // [seq][nh][cap] raw kq
+layout(binding = 5)           buffer PROB  { float prob[]; };  // [seq][nh][cap] f32 probabilities
+layout(binding = 6) writeonly buffer P16   { uint  p16[]; };   // [seq][nh][cap/2] the fp16 operand
+
+layout(push_constant) uniform Push {
+    uint seq, nh, nkv, hd, cap;
+    uint round_probs;          // 1 = PV sees fp16 probabilities (ggml's mixed-type cast)
+    float scale, pad0;
+} p;
+
+// One tile of the row, and the running sum that only lane 0 owns. 4*QTILE + 4 bytes total.
+shared float sd[QTILE];
+shared float s_sum;
+
+void main() {
+    const uint w = gl_WorkGroupID.x;
+    const uint j = gl_LocalInvocationID.x;
+    const uint t = w / p.nh, h = w % p.nh;
+    const uint hw = p.hd / 2u;
+    const uint nfill = pos[t] + 1u;              // causal AND filled: live keys are 0..pos[t]
+    const uint kv = h / (p.nh / p.nkv);
+    const uint row = (t * p.nh + h) * p.cap;
+    const uint q1 = (t * p.nh + h) * hw;
+
+    // ---- pass 1: the dots and the running max, QTILE keys at a time --------------------------
+    float mx = uintBitsToFloat(0xFF800000u);
+    for (uint tb = 0u; tb < nfill; tb += QTILE) {
+        const uint len = min(QTILE, nfill - tb);
+        for (uint l = j; l < len; l += NTILE) {
+            const uint k = tb + l;
+            const uint k1 = (k * p.nkv + kv) * hw;
+            float acc = 0.0;
+            for (uint d = 0u; d < hw; ++d) {
+                acc = acc + unpackHalf2x16(q16[q1 + d]).x * unpackHalf2x16(kc[k1 + d]).x;
+                acc = acc + unpackHalf2x16(q16[q1 + d]).y * unpackHalf2x16(kc[k1 + d]).y;
+            }
+            sd[l] = acc;
+            score[row + k] = acc;
+        }
+        barrier();
+        if (j == 0u) for (uint l = 0u; l < len; ++l) {
+            const float v = sd[l] * p.scale + mask[t * p.cap + tb + l];
+            if (v > mx) mx = v;
+        }
+        barrier();                                // lane 0 must finish reading sd[] before the next
+    }                                           // tile stage overwrites it
+    // Outside the filled prefix the row is exact zero, and that tail is written by ALL lanes on a
+    // stride (the wide kernel made lane 0 walk it serially, which costs cap-nfill dependent steps in
+    // one lane for a purely cosmetic value).
+    for (uint k = nfill + j; k < p.cap; k += NTILE) score[row + k] = 0.0;
+    // MEMORY BARRIER, not just the workgroup one. The next pass reads bytes that OTHER lanes wrote to
+    // DEVICE memory. `barrier()` is a ControlBarrier at workgroup scope, which is the guarantee shared
+    // memory needs; a value written by lane 5 and read by lane 0 through a VkBuffer needs the
+    // device-scope MakeAvailable|MakeVisible that memoryBarrier() lowers to. Getting this wrong is not
+    // a crash - it is a stale float, so it is stated here rather than left to the reader.
+    memoryBarrier();
+    barrier();
+
+    // ---- pass 2: exp and sum, ascending, re-reading the dots from the global row -------------
+    // The read-back is the same fp32 pattern pass 1 wrote, so `v` below is bit-for-bit the number the
+    // wide kernel computed out of LDS.
+    if (j == 0u) s_sum = 0.0;
+    for (uint tb = 0u; tb < nfill; tb += QTILE) {
+        const uint len = min(QTILE, nfill - tb);
+        for (uint l = j; l < len; l += NTILE) sd[l] = score[row + tb + l];
+        barrier();
+        if (j == 0u) {
+            float sum = s_sum;
+            for (uint l = 0u; l < len; ++l) {
+                const float v = sd[l] * p.scale + mask[t * p.cap + tb + l];
+                const float e = exp(v - mx);
+                sd[l] = e;
+                prob[row + tb + l] = e;            // unnormalised; pass 3 divides it in place
+                sum = sum + e;                     // the same ascending dependency chain
+            }
+            s_sum = sum;
+        }
+        barrier();
+    }
+    // Lane 0 wrote the whole unnormalised PROB row to device memory; pass 3 divides it from every lane.
+    memoryBarrier();
+    barrier();
+
+    // ---- pass 3: normalise, and zero the dead tail (per element, so any lane may own it) -----
+    const float sum = s_sum;
+    for (uint i = j; i < nfill; i += NTILE) prob[row + i] = prob[row + i] / sum;
+    for (uint i = nfill + j; i < p.cap; i += NTILE) prob[row + i] = 0.0;
+    memoryBarrier();                             // pass 4 reads pairs owned by other lanes
+    barrier();
+
+    // ---- pass 4: the fp16 pack, strided over the whole row, reading the normalised row back --
+    // Same stride rule and same RNE helper as the wide kernel; the operand simply comes from global
+    // PROB instead of from the sp[] array that no longer exists. Covering the full cap/2 pairs is
+    // what keeps PV's stale-byte failure mode (the one WIDE#2 documents) closed.
+    for (uint w2 = j; w2 < p.cap / 2u; w2 += NTILE)
+        p16[(t * p.nh + h) * (p.cap / 2u) + w2] =
+            pack2_rne(vec2(prob[row + 2u * w2], prob[row + 2u * w2 + 1u]));
+}

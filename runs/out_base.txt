@@ -1,0 +1,14 @@
+device: Radeon RX 550X | driver 2.0.279 | device-local heap 3840 MiB | timestampPeriod 40.000 ns
+  queue family 0: flags=0xF COMPUTE TRANSFER GRAPHICS SPARSE   tiler=64  contexts=1
+  queue family 1: flags=0xE COMPUTE TRANSFER SPARSE   tiler=64  contexts=1
+  queue family 2: flags=0xC TRANSFER SPARSE   tiler=64  contexts=8
+  compute queue = family 0, transfer-only queue = family 2
+
+arena (single vkAllocateMemory, DEVICE_LOCAL):
+  ptq_src   size=  11010048 B  alignment=4  -> offset 0
+  codes     size=  12582912 B  alignment=4  -> offset 11010048
+  scales    size=   1572864 B  alignment=4  -> offset 23592960
+  x         size=     16384 B  alignment=4  -> offset 25165824
+  xsum      size=       128 B  alignment=4  -> offset 25182208
+  out       size=    196608 B  alignment=4  -> offset 25182336
+  tensors=24.2 MiB  alignment padding=0 B (0.0000%)  arena=24.2 MiB

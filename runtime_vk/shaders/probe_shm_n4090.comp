@@ -1,0 +1,7 @@
+// probe_shm_n4090.comp - shared-memory ceiling probe, PROBE_N = 4090.
+//
+//   sd[4090] + sp[4090] = 2 * 4090 * 4 B = 32720 B, declared in shared_mem_probe.glslh.
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#define PROBE_N 4090u
+#include "shared_mem_probe.glslh"

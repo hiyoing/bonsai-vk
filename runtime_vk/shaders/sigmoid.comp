@@ -1,0 +1,39 @@
+#version 450
+// sigmoid.comp - y = 1 / (1 + exp(-x)), elementwise, vectorised by 4.
+//
+// ggml op it replaces: UNARY_SIGMOID, which the official GDN graph applies twice per layer:
+//   SIGMOID(beta-0{1,32,2,1})   -> the delta-rule beta   (runs/dbg_full_real.log line 496)
+//   SIGMOID(gate_reshaped-3)    -> the attention output gate (line 3857)
+// attn_vk.h's attn_gate_row() writes exactly 1/(1+exp(-x)) and the comment there says why: "ggml's
+// sigmoid is 1/(1+exp(-x)); the shader writes it the same way, so it is not close enough". The
+// reciprocal-of-exp form is kept (not exp/(1+exp), not 0.5*(1+tanh(x/2))) because each of those is a
+// different fp32 sequence and the reference is the first one.
+//
+// Work per element: 1 exp + 1 add + 1 divide. Judged against a float reference by relative error
+// plus a bit-exact count for the same reason silu.comp states (the driver's exp is approximate;
+// align_attn leg T measured ~1 fp32 ulp).
+//
+// DISPATCH: gl_WorkGroupCount.x == ceil(n_vec4 / 256). Requires n % 4 == 0.
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly buffer X { vec4 xb[]; };
+layout(binding = 1)       buffer Y { vec4 yb[]; };
+
+layout(push_constant) uniform PC {
+    uint x_off;    // in vec4 units
+    uint y_off;    // in vec4 units
+    uint n_vec4;   // n_elements / 4
+    uint _p0, _p1, _p2, _p3, _p4;   // pad to 32 B
+};
+
+void main() {
+    const uint i = gl_WorkGroupID.x * 256u + gl_LocalInvocationID.x;
+    if (i >= n_vec4) { return; }
+    const vec4 x = xb[x_off + i];
+    yb[y_off + i] = vec4(
+        1.0 / (1.0 + exp(-x.x)),
+        1.0 / (1.0 + exp(-x.y)),
+        1.0 / (1.0 + exp(-x.z)),
+        1.0 / (1.0 + exp(-x.w)));
+}

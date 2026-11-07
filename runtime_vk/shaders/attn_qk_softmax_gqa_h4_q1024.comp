@@ -1,0 +1,14 @@
+// attn_qk_softmax_gqa_h4_q1024.comp - GQA-merged stage-2 kernel, HPK = 4, 1024 keys per tile.
+//
+//   LDS = 4*4*1024 + 32 = 16,416 B, i.e. 32 bytes OVER the 16 KiB design line - the overage is the two
+//   per-row scalar arrays (s_mx/s_sum, 8*HPK bytes), not another tile of rows. Provided so the merged
+//   kernel can be timed at the foot of the cliff as well as below it; the default is q512, and no auto
+//   path picks this width (BONSAI_GQA_TILE=1024 does, and it prints which width it took).
+//   The `h4` in the name is load-bearing - HPK is a compile-time constant and fwd_init selects this
+//   module only for a plan whose n_head/n_head_kv is exactly 4.
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "f16_rne.glslh"
+#define HPK    4u
+#define QTILE  1024u
+#include "attn_qk_softmax_gqa.glslh"

@@ -1,0 +1,60 @@
+device: Radeon RX 550X | driver 2.0.279 | device-local heap 3840 MiB | timestampPeriod 40.000 ns
+  limits: maxComputeWorkGroupSize[0]=1024 maxComputeWorkGroupCount[0]=4294967295 bufferImageGranularity=1
+  compute queue = family 0, transfer-only queue = family 2
+
+=== weight plan, read from the tensor table (实测, not estimated) ===
+  tensors 427 = 202 PTQ1_0 + 225 f32   weights 8953803264 elems = 8.954 B
+  per-tensor shapes are K x M with K in {4096, 12288}; sign_widths says the same, so the
+  activation-side Hadamard has exactly two widths to cover.
+  checkpoint's own block form : 1957036032 B = 1.823 GiB  (1.75 bpw)
+  our 2-bit random-access form: 2516189184 B = 2.343 GiB  (codes 2.083 GiB + scales 0.260 GiB, 2.125 bpw)
+  f32 blob                    :  29411328 B = 28.049 MiB
+  LAYOUT COST = 0.521 GiB extra = 17064 tokens of KV at 32768 B/token
+
+=== the rest of the footprint ===
+  blocks: 24 GDN + 8 softmax-attention (full_attention_interval=4)
+  recurrent state, context-INDEPENDENT: 2097152 B/layer state + 98304 B/layer conv = 50.2 MiB over 24 layers
+  KV cache: 32768 B/token (32.0 MiB per 1k tokens), fp16, 8 layers
+  device-local heap: 0 MiB
+
+arena (single DEVICE_LOCAL allocation; sizes are the plan's, offsets are the driver's):
+  codes           2236612608 B  align 4    -> offset 0
+  scales           279576576 B  align 4    -> offset 2236612608
+  f32blob           29411328 B  align 4    -> offset 2516189184
+  ptq_scratch       33554432 B  align 4    -> offset 2545600512
+  x                    65536 B  align 4    -> offset 2579154944
+  xsum                  4096 B  align 4    -> offset 2579220480
+  out                8388608 B  align 4    -> offset 2579224576
+  arena committed 2.410 GiB, alignment padding 0 B
+
+=== forward bring-up ===
+  driver: minStorageBufferOffsetAlignment = 4 B, maxStorageBufferRange = 4096.000 MiB
+  split-K scratch sized from the plan: 65536 floats (0.2 MiB) - max S*M over 202 PTQ tensors
+  activation arena: 15701280 floats = 59.896 MiB (state 48.0 MiB + KV 8.0 MiB + logits 0.95 MiB)
+  act               62805120 B  align 4    -> offset 0
+  signs: sum(0..4095) = 60, sum(4096..16383) = -94   (the file's own values; 60 / -94
+  were the numbers read off the metadata, and they are what makes this upload checkable)
+  pipelines: 20 elementwise/GEMV + 8 layers x 3 attention descriptor sets
+
+  weight load 14307.6 ms, forward bring-up 202.4 ms
+  device-local total: weights 2.410 GiB + activations 59.896 MiB
+  prompt 6 tokens: 95826 110827 98682 95986 96326 103725
+  sampler: temp=0.00 top_k=0 top_p=1.00 eos=248046 cap=256
+
+=== region sums after the cut (compare against runs/oracle_nodes.txt) ===
+  input_embed (RES)      sum =       0.000000  (4096 floats)
+  attn_norm-0 (AN)       sum =       0.000000  (4096 floats)
+  rotated (HR)           sum =       0.078247  (4096 floats)
+  qkv mixed              sum =       0.000000  (8192 floats)
+  conv+silu              sum =       0.000000  (8192 floats)
+  l2 q/k                 sum =       0.230501  (4096 floats)
+  g (log decay)          sum =       0.000000  (32 floats)
+  beta                   sum =       0.000000  (32 floats)
+  delta o                sum =      -1.219038  (4096 floats)
+  swiglu z*o             sum =       0.000000  (4096 floats)
+  permuted               sum =       0.000000  (4096 floats)
+  ffn gate               sum =       0.000000  (12288 floats)
+  ffn up                 sum =       0.000000  (12288 floats)
+  ffn swiglu             sum =       0.000000  (12288 floats)
+  cut after block 0: no logits, alignment mode
+  gdn_mode=0 gdn_gmap=0 l2_mode=1 gate_second_half=1 round_probs=1 cap=256

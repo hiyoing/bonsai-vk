@@ -1,0 +1,58 @@
+#version 450
+
+// attn_pv.comp - stage 3: the context projection and the gate. The GPU twin of attn_pv_row() +
+// attn_gate_row() in attn_vk.h.
+//
+//   out[d]      = sum_j p[j] * V[j][d]          (V comes from the fp16 arena, ascending j)
+//   gated[d]    = out[d] * 1/(1 + exp(-gate[d]))
+// The gate is the odd 256-wide row of each 512 group of blk.N.attn_q's 8192 outputs - SIGMOIDed and
+// MULed into the attention result, which is what the -fa off dump shows for layers 3..31. The engine
+// hands this kernel the already de-interleaved window (shaders/deint_qg.comp), so gate[] is indexed
+// exactly like the output.
+//
+// One workgroup per (token, q head), one lane per dim d. Each lane owns its whole sum over j, in
+// ascending order, which is both the reference's order and the cheapest way to be deterministic:
+// no cross-lane reduction, so no reduction tree that could disagree with the CPU.
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly  buffer P32   { float p32[]; };   // [seq][nh][cap] f32 probabilities
+layout(binding = 1) readonly  buffer P16   { uint  p16[]; };   // [seq][nh][cap/2] fp16 operand
+layout(binding = 2) readonly  buffer VC    { uint  vc[]; };    // [cap][nkv][hd/2] the V arena
+layout(binding = 3) readonly  buffer POS   { uint  pos[]; };   // [seq]
+layout(binding = 4) readonly  buffer GATE  { float gate[]; };  // [seq][nh][hd] pre-sigmoid gate
+layout(binding = 5) writeonly buffer PGATE { float pregate[]; };// [seq][nh][hd] attention result
+layout(binding = 6) writeonly buffer GOUT  { float gated[]; };  // [seq][nh][hd] after the gate
+
+layout(push_constant) uniform Push {
+    uint seq, nh, nkv, hd, cap;
+    uint round_probs;           // 1 = read p16 (official mixed-type cast), 0 = read p32
+    float pad0, pad1;
+} p;
+
+void main() {
+    const uint w = gl_WorkGroupID.x;
+    const uint d = gl_LocalInvocationID.x;
+    const uint t = w / p.nh, h = w % p.nh;
+    const uint hw = p.hd / 2u;
+    const uint nfill = pos[t] + 1u;
+    const uint kv = h / (p.nh / p.nkv);
+
+    float acc = 0.0;
+    for (uint j = 0u; j < nfill; ++j) {
+        float pv;
+        if (p.round_probs != 0u) {
+            const uint word = p16[(t * p.nh + h) * (p.cap / 2u) + j / 2u];
+            pv = (j & 1u) == 0u ? unpackHalf2x16(word).x : unpackHalf2x16(word).y;
+        } else {
+            pv = p32[(t * p.nh + h) * p.cap + j];
+        }
+        const uint vw = vc[(j * p.nkv + kv) * hw + d / 2u];
+        const float v = (d & 1u) == 0u ? unpackHalf2x16(vw).x : unpackHalf2x16(vw).y;
+        acc = acc + pv * v;
+    }
+
+    const uint o = (t * p.nh + h) * p.hd + d;
+    pregate[o] = acc;
+    gated[o] = acc * (1.0 / (1.0 + exp(-gate[o])));
+}

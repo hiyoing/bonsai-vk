@@ -1,0 +1,4 @@
+cannot open tokenizer32:../runs/tok_probes.txt
+[hdr] GGUF v3  tensors=427  data_start=11039616  vocab=248320  merges=247587
+[hdr] model=gpt2  pre=qwen35  add_bos=0  bos=248044  eos=248046
+[bpe] vocab=248320  ranks=247587  specials=33  unk=0  eos=248046

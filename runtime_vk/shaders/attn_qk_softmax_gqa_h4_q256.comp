@@ -1,0 +1,11 @@
+// attn_qk_softmax_gqa_h4_q256.comp - GQA-merged stage-2 kernel, HPK = n_head/n_head_kv = 4, 256 keys
+// per tile. LDS = 4*4*256 + 8*4 = 4,128 B = 4.03 KiB per workgroup: the cheap end of the measured flat
+// band, kept so the occupancy question can be asked inside the merged kernel too (BONSAI_GQA_TILE).
+// The `h4` in the name is load-bearing - HPK is a compile-time constant and fwd_init selects this
+// module only for a plan whose n_head/n_head_kv is exactly 4.
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "f16_rne.glslh"
+#define HPK    4u
+#define QTILE  256u
+#include "attn_qk_softmax_gqa.glslh"

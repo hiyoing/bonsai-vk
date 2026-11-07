@@ -1,0 +1,161 @@
+device: Radeon RX 550X | driver 2.0.279 | device-local heap 3840 MiB | timestampPeriod 40.000 ns
+  limits: maxComputeWorkGroupSize[0]=1024 maxComputeWorkGroupCount[0]=4294967295 bufferImageGranularity=1
+  limits: maxComputeSharedMemorySize=32768 B (= 32 KiB) maxComputeWorkGroupInvocations=1024
+  compute queue = family 0, transfer-only queue = family 2
+
+=== weight plan, read from the tensor table (实测, not estimated) ===
+  tensors 427 = 202 PTQ1_0 + 225 f32   weights 8953803264 elems = 8.954 B
+  per-tensor shapes are K x M with K in {4096, 12288}; sign_widths says the same, so the
+  activation-side Hadamard has exactly two widths to cover.
+  checkpoint's own block form : 1957036032 B = 1.823 GiB  (1.75 bpw)
+  our 2-bit random-access form: 2516189184 B = 2.343 GiB  (codes 2.083 GiB + scales 0.260 GiB, 2.125 bpw)
+  f32 blob                    :  29411328 B = 28.049 MiB
+  LAYOUT COST = 0.521 GiB extra = 17064 tokens of KV at 32768 B/token
+
+=== the rest of the footprint ===
+  blocks: 24 GDN + 8 softmax-attention (full_attention_interval=4)
+  recurrent state, context-INDEPENDENT: 2097152 B/layer state + 98304 B/layer conv = 50.2 MiB over 24 layers
+  KV cache: 32768 B/token (32.0 MiB per 1k tokens), fp16, 8 layers
+  device-local heap: 3840 MiB
+
+arena (single DEVICE_LOCAL allocation; sizes are the plan's, offsets are the driver's):
+  codes           2236612608 B  align 4    -> offset 0
+  scales           279576576 B  align 4    -> offset 2236612608
+  f32blob           29411328 B  align 4    -> offset 2516189184
+  ptq_scratch       33554432 B  align 4    -> offset 2545600512
+  x                    65536 B  align 4    -> offset 2579154944
+  xsum                  4096 B  align 4    -> offset 2579220480
+  out                8388608 B  align 4    -> offset 2579224576
+  arena committed 2.410 GiB, alignment padding 0 B
+  attention QK kernel: NARROW attn_qk_softmax.comp (cap 256; narrow covers <= 256, wide <= 2048; force=0)
+
+=== forward bring-up ===
+  driver: minStorageBufferOffsetAlignment = 4 B, maxStorageBufferRange = 4096.000 MiB
+  split-K scratch sized from the plan: 65536 floats (0.2 MiB) - max S*M over 202 PTQ tensors
+  activation arena: 16004384 floats = 61.052 MiB (state 48.0 MiB + KV 8.0 MiB + logits 0.95 MiB)
+  memory budget | device-local heap 3840.0 MiB, weights 2467.7 MiB already committed
+    activations at cap 256 : 61.1 MiB = cap-independent 52.0 MiB + 256 slots x 36.16 KiB/slot (fp16 K/V 32.00 + fp32 q/k+score/prob 4.16)
+    headroom after this allocation: 1311.2 MiB (= 37127 more slots of cap, but the widest VALIDATED attention row is 2048)
+  act               64017536 B  align 4    -> offset 0
+  signs: sum(0..4095) = 60, sum(4096..16383) = -94   (the file's own values; 60 / -94
+  were the numbers read off the metadata, and they are what makes this upload checkable)
+  pipelines: 21 elementwise/GEMV + 8 layers x 4 attention descriptor sets (53 of 96)
+
+=== region table (float units; every offset is a multiple of 16) ===
+  RES      off         0  size      4096
+  NRM      off      4096  size      4096
+  AN       off      8192  size      4096
+  ROT      off     12288  size      4096
+  HR       off     16384  size      4096
+  EMB      off     20480  size      4096
+  QKV      off     24576  size      8192
+  K        off     32768  size      1024
+  V        off     33792  size      1024
+  Z        off     34816  size      4096
+  ALPHA    off     38912  size        32
+  BETA     off     38944  size        32
+  G1       off     38976  size        32
+  G2       off     39008  size        32
+  GATE32   off     39040  size        32
+  CONV     off     39072  size      8192
+  L2       off     47264  size      4096
+  GDNO     off     51360  size      4096
+  GDNORM   off     55456  size      4096
+  SWG      off     59552  size      4096
+  PERM     off     63648  size      4096
+  FG       off     67744  size     12288
+  FU       off     80032  size     12288
+  FS       off     92320  size     12288
+  PART     off    104608  size     65536
+  XS       off    170144  size       128
+  LOGITS   off    170272  size    248320
+  Q16      off    418592  size      2048
+  QF       off    420640  size      4096
+  QD       off    424736  size      4096
+  GD       off    428832  size      4096
+  SCORE    off    432928  size      4096
+  PROB     off    437024  size      4096
+  P16      off    441120  size      2048
+  PGATE    off    443168  size      4096
+  GOUT     off    447264  size      4096
+  MASK     off    451360  size       256
+  POS      off    451616  size       256
+  KF       off    451872  size    262144
+  QKWN     off    714016  size      4096
+  SIGNS    off    718112  size     16384
+  KV       off    734496  size    262144
+  ST       off   2831648  size    524288
+  CH       off  15414560  size     24576
+  signs on device: sum4096 = 60, sum12288 = -94, nonzero = 16384/16384
+
+  weight load 1089.1 ms, forward bring-up 46.1 ms
+  device-local total: weights 2.410 GiB + activations 61.052 MiB
+  chat template: thinking=on  system=(none) user=30 chars -> 16 tokens, id paths (encode vs assembled) IDENTICAL
+  prompt 16 tokens: 248045 846 198 95826 110827 98682 95986 96326 103725 248046 198 248045 74455 198 248068 198
+  sampler: temp=0.00 top_k=0 top_p=1.00 eos=248046 cap=256
+  prefill 1143.7 ms for 16 prompt tokens (13.99 tok/s)
+  logits after the prompt: max 23.4437 min -12.8155 mean -1.276158  nan 0 inf 0
+  top 8:  90700(23.44"Thinking")  8160(20.12"Here")  107680(16.98"嗯")  97237(14.25"用户")  96747(14.19"好的")  99496(13.87"思考")  5514(13.38" Here")  97490(13.04"这里")
+  gen  1  tok=  90700     70.99 ms  Thinking
+  gen  2  tok=   8340     70.93 ms   Process
+  gen  3  tok=     25     71.68 ms  :
+  gen  4  tok=    271     71.26 ms  
+
+
+  gen  5  tok=     16     70.31 ms  1
+  gen  6  tok=     13     71.61 ms  .
+  gen  7  tok=    220     71.48 ms   
+  gen  8  tok=   2972     70.92 ms   **
+  gen  9  tok=   2014     70.47 ms  An
+  gen 10  tok=  53983     71.49 ms  alyze
+  gen 11  tok=    279     71.05 ms   the
+  gen 12  tok=   5952     70.71 ms   Request
+  gen 13  tok=  64700     70.74 ms  :**
+  gen 14  tok=    198     71.66 ms  
+
+  gen 15  tok=    262     70.81 ms     
+  gen 16  tok=    348     71.48 ms   *
+  gen 17  tok=    256     70.94 ms    
+  gen 18  tok=   5396     70.77 ms   Input
+  gen 19  tok=     25     70.70 ms  :
+  gen 20  tok=    328     71.37 ms   "
+  gen 21  tok=   3710     71.44 ms  What
+  gen 22  tok=    369     70.87 ms   is
+  gen 23  tok=    279     70.96 ms   the
+  gen 24  tok=   7063     71.46 ms   meaning
+  gen 25  tok=    314     70.76 ms   of
+  gen 26  tok=    359     71.45 ms   '
+  gen 27  tok=   3710     71.15 ms  What
+  gen 28  tok=    369     71.19 ms   is
+  gen 29  tok=    279     71.34 ms   the
+  gen 30  tok=   7063     71.46 ms   meaning
+  gen 31  tok=    314     71.51 ms   of
+  gen 32  tok=    411     71.26 ms   this
+  gen 33  tok=   3296     70.96 ms   question
+  gen 34  tok=      6     71.23 ms  '
+  gen 35  tok=   7285     71.50 ms  ?"
+  gen 36  tok=    318     71.17 ms   (
+  gen 37  tok=  13784     70.97 ms  Wait
+  gen 38  tok=     11     71.19 ms  ,
+  gen 39  tok=    279     72.15 ms   the
+  gen 40  tok=   1156     71.27 ms   user
+  gen 41  tok=    369     71.74 ms   is
+  gen 42  tok=   9859     71.22 ms   asking
+  gen 43  tok=    728     71.59 ms   me
+  gen 44  tok=    310     71.32 ms   to
+  gen 45  tok=  10033     71.66 ms   explain
+  gen 46  tok=   2414     72.02 ms   something
+  gen 47  tok=     11     71.34 ms  ,
+  gen 48  tok=    694     72.38 ms   but
+
+=== pure-blood token rate (measured, this card) ===
+  48 generated tokens in 3419.9 ms  ->  14.04 tok/s
+  first generated token (prefill+1): 71.0 ms; steady-state: 71.2 ms/token
+  dispatches 95360, barriers 95296 per command buffer (one submit per token)
+
+=== text ===
+Thinking Process:
+
+1.  **Analyze the Request:**
+    *   Input: "What is the meaning of 'What is the meaning of this question'?" (Wait, the user is asking me to explain something, but
+  gdn_mode=0 gdn_gmap=0 l2_mode=1 round_probs=1 cap=256

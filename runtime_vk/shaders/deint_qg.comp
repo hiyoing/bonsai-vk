@@ -1,0 +1,41 @@
+#version 450
+// deint_qg.comp - split blk.N.attn_q's 8192 outputs into a contiguous q (4096) and gate (4096).
+//
+// THE LAYOUT IS MEASURED, NOT ASSUMED. runs/ladder_v4.log prints the 32 row sums of the attn_q
+// output of block 3 over the cold-cache 1-token state, and they alternate:
+//   row 0 +27.8, row 1 -1003.2, row 2 +36.4, row 3 -977.6, ... row 30 -16.2, row 31 -1044.0
+// The 16 even rows total +131.3 against the official Qcur_reshaped-3 = +131.812424, and the 16 odd
+// rows total -17057.6 against the official gate_reshaped-3 = -17096.734375 (log lines 34900..35100).
+// So attn_q is NOT two contiguous halves: each 512-wide group is [q head (256), gate head (256)],
+// which is also why the dump needs CONT to turn its gate VIEW into a tensor - a strided view of a
+// per-head interleave. Assuming the halves cost the whole network: block 3's branch came out
+// 16.93895 against the official 4.167934 and every later residual inherited it.
+//
+// The attention kernels keep their own head-major indexing untouched; they read the two outputs of
+// this kernel instead, so the stage-7 verified math stays byte-identical.
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly buffer X { float x[]; };   // attn_q output, 2*hd per head, interleaved
+layout(binding = 1)       buffer YQ { float q[]; };     // [nh][hd], head-major contiguous
+layout(binding = 2)       buffer YG { float g[]; };     // [nh][hd], same order, pre-sigmoid
+
+// All three bindings are the whole activation arena (the {A,A,A} layout the elementwise pipelines
+// use), so every access carries its region offset - the same convention rms_norm/mul/permute_vg use.
+layout(push_constant) uniform PC {
+    uint n_head;      // 16
+    uint hd;          // 256 = head_dim
+    uint x_off;       // float units into the activation arena
+    uint q_off;
+    uint g_off;
+    uint _p0, _p1, _p2;   // pad to 32 B
+};
+
+void main() {
+    const uint i = gl_WorkGroupID.x * 256u + gl_LocalInvocationID.x;   // over n_head * 2 * hd
+    if (i >= n_head * 2u * hd) { return; }
+    const uint grp = 2u * hd;
+    const uint h = i / grp, o = i - h * grp;
+    const float v = x[x_off + i];
+    if (o < hd) q[q_off + h * hd + o] = v;
+    else        g[g_off + h * hd + (o - hd)] = v;
+}

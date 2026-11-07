@@ -1,0 +1,26 @@
+AVAILABLE_MB_BEFORE=1945
+--- hard-target scan ---
+  KILL msedge         pid=1788    ws=   251.6 MB
+  KILL msedge         pid=8120    ws=   232.0 MB
+  KILL msedge         pid=9496    ws=    18.5 MB
+  KILL msedge         pid=17704   ws=    25.4 MB
+  KILL msedge         pid=18956   ws=   237.0 MB
+  KILL msedge         pid=20384   ws=    11.2 MB
+  KILL msedge         pid=20932   ws=    49.1 MB
+  KILL msedge         pid=21252   ws=    21.7 MB
+  KILL msedge         pid=21384   ws=    34.6 MB
+  KILL msedge         pid=21408   ws=   280.3 MB
+  KILL msedge         pid=22048   ws=   105.2 MB
+  KILL msedge         pid=22464   ws=    20.9 MB
+  KILL WeChat         pid=11160   ws=   274.6 MB
+  KILL WeChatAppEx    pid=5692    ws=    61.1 MB
+  KILL WeChatAppEx    pid=9060    ws=   164.9 MB
+  KILL WeChatAppEx    pid=9412    ws=    33.0 MB
+  KILL WeChatAppEx    pid=13080   ws=    35.5 MB
+  KILL WeChatAppEx    pid=13820   ws=    10.0 MB
+  KILL WeChatAppEx    pid=13912   ws=   212.0 MB
+  KILL WeChatAppEx    pid=14488   ws=   408.5 MB
+  KILL WeChatAppEx    pid=16216   ws=    39.1 MB
+--- after ---
+KILLED=21
+AVAILABLE_MB_AFTER=1921

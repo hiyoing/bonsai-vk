@@ -1,0 +1,93 @@
+#version 450
+#extension GL_EXT_control_flow_attributes : require   // for [[unroll]]; compile-time only - the
+//                                                    emitted SPIR-V carries no extension dependency
+// gemv_ternary.comp - batch-1 ternary GEMV over the repacked 2-bit layout.
+//
+//   weight[row][k] = d[row][k/128] * (c[row][k] - 1),   c in {0,1,2}
+//   out[row]       = sum_b d[b] * ( sum_{k in b} c[k]*x[k] - xsum[b] )
+// so the "-1" of true ternary costs one precomputed vector (xsum, K/128 floats, rebuilt per
+// token by xsum.comp) and the inner loop is exactly
+//   v_bfe_u32  (bitfieldExtract)  +  v_cvt_f32_u32  +  v_fma_f32
+// per code - 3 first-class VALU slots, no divide, no base-3 arithmetic, no select chain.
+//
+// Structure is the configuration measured best on this exact card (probes 11/13):
+//   * one output row per thread, local_size 64 = one full GCN4 wavefront
+//   * x read as vec4: ONE 16 B load feeds FOUR codes (scalar x loads cost 22 -> 29 GB/s, probe 10/11)
+//   * 4 independent accumulators inside block_part to cover v_fma latency
+//   * 2 weight words per iteration = 128 codes = exactly one quant block, so d and xsum cost
+//     1 load + 1 cvt + 1 fma per 128 codes (~2% ALU) instead of per code
+//   * K split over gl_WorkGroupID.y: M=4096/K=12288 115.0 -> 142.8 Gop/s at 8 splits,
+//     M=1024/K=4096 34.6 -> 83.4 (probe 13, re-run today); narrow-M shapes cannot fill the
+//     40 SIMDs otherwise
+//
+// Measured on this exact card (probe 14 = this structure in WGSL, relerr 1.7e-07..3.9e-07 against a
+// numpy reference that carries the same per-128-block scale): 124.1 Gop/s (4096x4096, splits 4),
+// 144.3 (12288x4096, splits 1), 142.8 (4096x12288, splits 8), 83.4 for the narrow M=1024 shape;
+// per-layer weighted 135.8 Gop/s -> 66 ms/token -> 15.1 tok/s. That is 31-33 GB/s of the layout's
+// own 69-79 GB/s read capability, i.e. instruction-issue bound, not bandwidth bound.
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly buffer CODES { uvec4 codes[]; };   // [K/64][M], 64 codes per word
+layout(binding = 1) readonly buffer XVEC  { vec4 xb[]; };       // rotated activation vector
+layout(binding = 2) readonly buffer SCALE { uint scale[]; };    // f16 in low 16 bits, [K/128][M]
+layout(binding = 3) readonly buffer XSUM  { float xsum[]; };    // sum of x per 128-code block
+layout(binding = 4) buffer      OUT       { float outb[]; };    // [splits*M] partials, or M finals
+
+layout(push_constant) uniform PC {
+    uint m_rows;
+    uint k_cols;        // multiple of 128
+    uint n_splits;      // host guarantees (k_cols/128) % n_splits == 0
+    uint codes_off;     // in uvec4 units
+    uint scale_off;     // in uint units
+    uint out_off;       // in float units
+    uint x_off;         // in vec4 units - the activation arena holds every region, so the input
+    uint xsum_off;      // in float units   vector is never a buffer of its own, only an offset
+    uint _p0;           // pad to 32 B
+};
+
+// sum of 64 codes * x for one uvec4 word; word index i selects the x range [i*64, i*64+64)
+// xbase is x_off (vec4 units): the activation arena is one binding, the input vector is an offset.
+float block_part(uvec4 W, uint i, uint xbase) {
+    float s0 = 0.0, s1 = 0.0, s2 = 0.0, s3 = 0.0;
+    [[unroll]] for (int u = 0; u < 4; ++u) {
+        uint wu = (u == 0) ? W.x : (u == 1) ? W.y : (u == 2) ? W.z : W.w;
+        [[unroll]] for (int t = 0; t < 4; ++t) {
+            vec4 xv = xb[xbase + i * 16u + uint(u) * 4u + uint(t)];
+            uint sh = uint(8 * t);
+            s0 = fma(float(bitfieldExtract(wu, int(sh + 0u), 2)), xv.x, s0);
+            s1 = fma(float(bitfieldExtract(wu, int(sh + 2u), 2)), xv.y, s1);
+            s2 = fma(float(bitfieldExtract(wu, int(sh + 4u), 2)), xv.z, s2);
+            s3 = fma(float(bitfieldExtract(wu, int(sh + 6u), 2)), xv.w, s3);
+        }
+    }
+    return (s0 + s1) + (s2 + s3);
+}
+
+// The first REAL-weight run caught the offset bug: the benchmark bound one tensor's codes as its
+// own VkBuffer, so codes_off/scale_off sat unused in the push-constant block and the shader indexed
+// from element 0 of whatever was bound. The engine binds the whole 2.083 GiB codes arena once (one
+// descriptor set for all 201 GEMVs), which silently made every tensor read tensor 0's bytes. So the
+// offsets are now part of the addressing, in the same element units the plan computes:
+//   codes_off in uvec4 units, scale_off in uint units, out_off in float units.
+// A benchmark that binds a per-tensor buffer just passes 0 and behaves exactly as before.
+void main() {
+    const uint row = gl_WorkGroupID.x * 64u + gl_LocalInvocationID.x;
+    if (row >= m_rows) { return; }
+
+    const uint nblk = k_cols / 128u;
+    const uint per  = nblk / n_splits;
+    const uint s    = gl_WorkGroupID.y;
+
+    float acc = 0.0;
+    for (uint b = s * per; b < (s + 1u) * per; ++b) {
+        const uint i0 = 2u * b;
+        const uint w0 = codes_off + i0 * m_rows + row;
+        const float cp = block_part(codes[w0], i0, x_off) + block_part(codes[w0 + m_rows], i0 + 1u, x_off);
+        const float d = float(unpackHalf2x16(scale[scale_off + b * m_rows + row]).x);
+        acc = fma(d, cp - xsum[xsum_off + b], acc);
+    }
+
+    if (n_splits == 1u) outb[out_off + row] = acc;
+    else                outb[out_off + s * m_rows + row] = acc;
+}

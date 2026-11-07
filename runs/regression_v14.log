@@ -1,0 +1,97 @@
+=== post-fix fidelity re-run (bonsai_weights.h stage_alloc hoist + fleet fence pattern), Thu Nov  5 01:38:08     2026 ===
+--- align_tokenizer 32 probes
+
+==== tokenizer alignment: 32/32 probes byte-identical ====
+--- align_tokenizer kr set
+
+==== tokenizer alignment: 7/7 probes byte-identical ====
+--- align_dequant (1000 blocks, real gguf)
+  max|GPU-REF - CPU-REF| = 0.00000  (over 128000 finite pairs, argmax weight 0)
+      bit-exact 128000/128000 (100.000%)   NaN/Inf-aware equal 128000/128000   non-finite mismatches 0
+  max|OURS    - CPU-REF| = 0.00000  (over 128000 finite pairs, argmax weight 0)
+      bit-exact 128000/128000 (100.000%)   NaN/Inf-aware equal 128000/128000   non-finite mismatches 0
+  max|OURS    - GPU-REF| = 0.00000  (over 128000 finite pairs, argmax weight 0)
+      bit-exact 128000/128000 (100.000%)   NaN/Inf-aware equal 128000/128000   non-finite mismatches 0
+  runtime dot form d*(cs-xs) vs sum(w_e*x_e): max abs 0.000e+00  max rel 0.000e+00  (1000 blocks, 0 skipped for non-finite d)
+   last bits. Measured 0.000e+00 here, which is what exactness requires: (trit-1) is
+--- align_f16
+  card's float(float16_t)  is IEEE-exact:                   YES (0 wrong, 2045 bit-diff)
+  card's float(unpackHalf2x16(x).x) is IEEE-exact:          YES (0 wrong, 2045 bit-diff)
+  BOTH shader expressions == our host conversion, bit for bit:  YES (0 / 0 bit-diff)
+--- align_attn 64 256
+  ideal(fp64, nothing rounded) -> +fp16 arena : max|err|=4.6188e-04 at 163426
+                               -> +fp16 Q     : max|err|=4.7433e-04 at 55847
+                               -> +fp16 probs : max|err|=3.3428e-04 at 53128
+  the fp32 mirror vs the all-fp16 ideal       : max|err|=2.9401e-04 at 45854  (float32 accumulation, not a layout error)
+  |gated|max = 1.289, so the whole fp16+fp32 chain costs at most 1.564e-03 absolute (1.214e-03 relative)
+
+  V. verdict - card vs mirror against the format's own floor:
+     card vs mirror   score=3.567e-03 (=3.16e-05 of |kq|max)  prob=2.487e-05  context=4.104e-04  layer-out=2.555e-04 (=1.98e-04 of |gated|max)
+     fp16 layout cost  arena=4.619e-04  Q=4.743e-04  probs=3.343e-04  sum=1.564e-03  (= the SAME tensor space the engine cannot opt out of)
+     ratio our/format = 0.262 -> our divergence is SMALLER than the error the official fp16 cache imposes; the remaining card/host difference is the last fp32 bits of a transcendental, not a term the official engine gets right and we get wrong
+
+[done]
+--- align_27b (27B adapter gates)
+  map      ...A...A...A...A...A...A...A...A...A...A...A...A...A...A...A...A  (A = full attention, . = SSM/GDN)
+  ok    SSM KV charge is 0 by construction over all 48 recurrent blocks (sum of kv_bytes_per_layer() on non-attention layers)
+  27B       blocks  64 = 16 attn + 48 ssm | KV/token    49.000 KiB, arena at cap 32768 =   1568.00 MiB | SSM state   100.50 MiB
+             KV/token is the sum over the 16 charged layers only, cross-checked against the plan's own per-token function
+             FORBIDDEN allocator (KV on all 64 blocks): 196.000 KiB/token = 4.0x the charged one; the invariant is worth 4704.00 MiB at cap 32768
+             SYNTHETIC shape: the 9B's hidden/ffn/vocab with 64 blocks = 4.21 GiB of repacked weights. This tests the resolver, the charge and the kernel route; it is NOT Ternary-Bonsai-2-27B's 5.9 GB geometry, which this host cannot read.
+  route    version 1, block 1024, kernel hadamard_fwht.comp (FWHT, 1/sqrt(block)), signs explicit
+  ok    block_size 4096 on the same 64-block plan keeps hat4096.comp - the route is metadata, not a model-name lookup
+
+  -- negative control: count cross-check disagrees --
+  ok    refused as required
+
+  -- negative control: sliding_window in the list --
+  ok    refused as required
+
+  -- negative control: hadamard.version = 2 --
+  ok    refused as required
+
+model: layer/rotation contract rejected: prism.hadamard.block_size is absent while the rotation is active: the transform width cannot be defaulted to 4096, that is the 9B's answer not this file's
+  -- negative control: rotation active, block_size absent --
+  ok    refused as required
+
+=== [3] rotation: hadamard_fwht.comp on the card vs a host Sylvester FWHT ===
+  ok    orthogonality measured at N = 128: all 128 diagonal dot products are exactly 128 and all 16256 off-diagonal ones are exactly 0 (integer arithmetic, no tolerance involved)
+  ok    N =   16: max |H(H x) - N x| = 0.000e+00 over 16 lanes; 1/sqrt(N) = 0.25 is EXACT in binary
+  ok    N =   64: max |H(H x) - N x| = 0.000e+00 over 64 lanes; 1/sqrt(N) = 0.125 is EXACT in binary
+  ok    N =  256: max |H(H x) - N x| = 0.000e+00 over 256 lanes; 1/sqrt(N) = 0.0625 is EXACT in binary
+  ok    N = 1024: max |H(H x) - N x| = 9.766e-04 over 1024 lanes; 1/sqrt(N) = 0.03125 is EXACT in binary
+  ok    N = 4096: max |H(H x) - N x| = 9.766e-03 over 4096 lanes; 1/sqrt(N) = 0.015625 is EXACT in binary
+  gpu        Radeon RX 550X
+  ok    N =   16, 256 blocks: 4096 lanes BITWISE identical to the host FWHT (kernel reads X, writes Y - the out-of-place shape rotate() uses)
+  ok    N =   64, 64 blocks: 4096 lanes BITWISE identical to the host FWHT (kernel reads X, writes Y - the out-of-place shape rotate() uses)
+  ok    N =  256, 16 blocks: 4096 lanes BITWISE identical to the host FWHT (kernel reads X, writes Y - the out-of-place shape rotate() uses)
+  ok    N = 1024,  4 blocks: 4096 lanes BITWISE identical to the host FWHT (kernel reads X, writes Y - the out-of-place shape rotate() uses)
+  ok    N = 4096,  1 blocks: 4096 lanes BITWISE identical to the host FWHT (kernel reads X, writes Y - the out-of-place shape rotate() uses)
+  ok    1/sqrt(4096) == 1/64 bit-for-bit, so hadamard_fwht at block 4096 and hat4096.comp apply the same diagonal scale (the butterflies are the same operator; only the summation ORDER differs, which is why the 9B keeps its frozen kernel)
+             signs: the +-1 diagonal belongs to signs_mul.comp, not to this kernel - fold it into the FWHT and it gets applied twice, which is a permutation of the spectrum rather than a rounding. Forward order is signs->H for the 201 rotated weight tensors and H->signs for token_embd (the inverse sandwich); align_attn.exe owns that leg.
+
+=== verdict ===
+  ALL CHECKS PASSED (0 failure(s))
+--- QCHECK bitwise gate, cap 256
+  our 2-bit random-access form: 2516189184 B = 2.343 GiB  (codes 2.083 GiB + scales 0.260 GiB, 2.125 bpw)
+  rotation        : version 1, block 4096, kernel hat4096.comp (the 9B's bit-frozen path), signs explicit
+    V path: frozen attn_pv_q8v.comp (BONSAI_GQA_PART bit1 off, or the fp16 V arena which has no merged twin)
+  rotation route: block_size = 4096 -> hat4096.comp (bit-frozen, the 9B's path), normalize = 0.015625 (exact in binary)
+  prefill 1154.5 ms for 16 prompt tokens (13.86 tok/s)
+=== QK kernel audit (BONSAI_QCHECK, 16 live keys in the row, cap 256, dispatching NARROW q2048) ===
+  A layer 0 (cap<=256): SCORE 0/4096 bit-diff, PROB 0, P16 0  -> bitwise identical
+      P16 (the operand PV reads when round_probs=1): bitwise identical - the token stream cannot differ between kernels
+  A layer 7 (cap<=256): SCORE 0/4096 bit-diff, PROB 0, P16 0  -> bitwise identical
+      P16 (the operand PV reads when round_probs=1): bitwise identical - the token stream cannot differ between kernels
+  A2 layer 0 (cap 256, QTILE 2048): SCORE 0/4096 bit-diff, PROB 0, P16 0  -> bitwise identical
+  A2 layer 7 (cap 256, QTILE 2048): SCORE 0/4096 bit-diff, PROB 0, P16 0  -> bitwise identical
+  A3 layer 0 (cap 256, ref NARROW, HPK 4, merged q512, grid 16 -> 4): SCORE 0/4096 bit-diff, PROB 0, P16 0  -> bitwise identical
+  A3 layer 7 (cap 256, ref NARROW, HPK 4, merged q512, grid 16 -> 4): SCORE 0/4096 bit-diff, PROB 0, P16 0  -> bitwise identical
+  A4 layer 0 (cap 256, PV q8_0 frozen vs merged, grid 16 -> 4): PGATE 0/4096 bit-diff, GOUT 0  -> bitwise identical
+  A4 layer 7 (cap 256, PV q8_0 frozen vs merged, grid 16 -> 4): PGATE 0/4096 bit-diff, GOUT 0  -> bitwise identical
+  B P16 == pack2(PROB) for 2048 pairs: 0 mismatches (covers indices above 512, the strided-pack range)  -> ok
+  C dead slots [16,256) x 16 heads are bitwise +0.0: 0 violations -> ok
+  gate: PASS (bitmask 0 = A ok A2 ok A3 ok A4 ok B ok C ok D ok E ok)
+  48 generated tokens in 3389.5 ms  ->  14.16 tok/s
+  first generated token (prefill+1): 70.2 ms; steady-state: 70.6 ms/token
+rc_qcheck=0

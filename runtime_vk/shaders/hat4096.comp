@@ -1,0 +1,60 @@
+#version 450
+// hat4096.comp - normalized Sylvester-Walsh Hadamard transform over the FULL 4096 activation
+// width, in blocks of 4096, out-of-place (dst may alias src through a different offset).
+//
+// WHY 4096 AND NOT 1024 (this is measured, not inherited): the official graph multiplies the
+// activation by a materialised tensor named prism.hadamard.4096 with ne {4096, 4096}
+// (runs/dbg_full_real.log line 18, 147, 970, 1042, 1102), and the checkpoint metadata says
+// prism.hadamard.block_size = 4096 / transform = "normalized-sylvester-walsh-hadamard".
+// The 12288-wide FFN case is the same matrix applied to three 4096 blocks: the dump shows
+// MUL_MAT(prism.hadamard.4096, (reshaped){4096, 6}) for a 2-token batch, i.e. 3 blocks per token
+// (line 1102). So n_blocks = K/4096 and nothing else.
+//
+// WHY A TRANSFORM AT ALL, AND WHY ITS NORMALISATION IS 1/64: the identity below was checked
+// against the oracle dump before this kernel was written. For H[i][j] = (-1)^popcount(i&j)
+// scaled by 1/sqrt(N), sum_j (Hx)_j = sqrt(N) * x[0], because the column sums of the unnormalised
+// Sylvester matrix are N for column 0 and 0 otherwise. The dump gives both sides:
+//   sum(node_0) = -4.543495, node_0[1][0] = -0.0156 (the second token's first element, the first
+//   token's is printed as 0.0000), and sum(node_2) = -0.996582. 64 * (-0.015572) = -0.9966.
+// So N = 4096, the scale is 1/64, and the sign vector is applied AFTER the transform on the
+// inverse (embedding) side and BEFORE it on the forward (pre-projection) side - both orders are
+// read off the same dump (line 18 then 34 for the embedding; line 131 then 147 for the projections).
+//
+// COST: 12 butterfly stages x 2048 pairs x 2 adds = 49152 lane-ops per 4096 block, plus 16 KB of
+// shared memory per workgroup. At the measured ~300 G lane-op/s that is ~0.0002 ms per block -
+// it never shows up in a profile, which is the whole reason doing the rotation on the activation
+// side is affordable instead of materialising a rotated copy of every weight matrix.
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly buffer X { float x[]; };
+layout(binding = 1)       buffer Y { float y[]; };
+
+layout(push_constant) uniform PC {
+    uint x_off;     // float units, must be a multiple of 4 (the region bases all are)
+    uint y_off;     // float units
+    uint n_blk;     // number of 4096-wide blocks; gl_WorkGroupCount.x == n_blk
+    uint _p0, _p1, _p2, _p3, _p4;   // pad to 32 B
+};
+
+shared float s[4096];
+
+void main() {
+    const uint b = gl_WorkGroupID.x;
+    const uint lane = gl_LocalInvocationID.x;
+    const uint base = b * 4096u;
+    for (uint i = lane; i < 4096u; i += 256u) s[i] = x[x_off + base + i];
+    barrier();
+    // ascending h = 1,2,4,... is what produces the Sylvester (Hadamard-ordered, not sequency)
+    // matrix H[i][j] = (-1)^popcount(i&j); the pair enumeration j = ((i&~(h-1))<<1)|(i&(h-1))
+    // visits each of the 2048 pairs at distance h exactly once.
+    for (uint h = 1u; h < 4096u; h <<= 1u) {
+        for (uint i = lane; i < 2048u; i += 256u) {
+            const uint j = ((i & ~(h - 1u)) << 1u) | (i & (h - 1u));
+            const float a = s[j], c = s[j + h];
+            s[j] = a + c;
+            s[j + h] = a - c;
+        }
+        barrier();
+    }
+    for (uint i = lane; i < 4096u; i += 256u) y[y_off + base + i] = s[i] * (1.0 / 64.0);
+}

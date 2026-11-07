@@ -1,0 +1,50 @@
+#version 450
+// gemv_f32.comp - dense f32 GEMV for the two projections that are NOT quantized.
+//
+// Which ones, from the tensor table: blk.N.ssm_alpha.weight{4096,32} and blk.N.ssm_beta.weight
+// {4096,32}, dtype 0 (f32), 24 GDN layers x 2 = 48 tensors, 512 KiB each. The dump proves both
+// consume the UNROTATED normalised vector:
+//   node_42 = MUL_MAT(blk.0.ssm_alpha.weight{4096,32}, attn_norm-0{4096,2})      (line 404)
+//   node_48 = MUL_MAT(blk.0.ssm_beta.weight{4096,32},   attn_norm-0{4096,2})      (line 466)
+// while every PTQ1_0 projection consumes the signs+Hadamard transform of the same vector. That is
+// exactly what prism.hadamard.weight_names (201 names, all PTQ1_0) says: the f32 weights were
+// never rotated, so feeding them a rotated activation would be a silent correctness bug.
+//
+// out[r] = sum_k W[r*K + k] * x[k], rows contiguous - the f32 blob stores a {K,M} tensor at
+// f32_off with element (k,r) at f32_off + r*K + k (d0 = K is the fastest dim in GGUF).
+//
+// SHAPE IS FIXED BY THE FILE: m_rows = 32, k_cols = 4096. Split-K over gl_WorkGroupID.y, because
+// 32 rows cannot fill 40 SIMDs on their own; the partials are summed by reduce.comp, the same
+// kernel the ternary GEMV uses, with the same [splits][M] output layout.
+//
+// COST, so nobody thinks this is free: 48 tensors x 131072 MAC = 6.3 M MAC/token = 0.08 % of the
+// 7.929 GMAC/token the PTQ side does, and 24 MiB/token of reads = 0.46 GB/s at 18.6 tok/s.
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly buffer XVEC { vec4 xb[]; };     // activation, vec4 view
+layout(binding = 1) readonly buffer W    { vec4 wb[]; };     // the f32 blob, vec4 view
+layout(binding = 2)       buffer OUT     { float outb[]; };  // [splits*M] partials or M finals
+
+layout(push_constant) uniform PC {
+    uint m_rows;      // 32
+    uint k_cols;      // 4096, multiple of 128 and of 4
+    uint n_splits;    // host guarantees (k_cols/4) % n_splits == 0
+    uint x_off;       // vec4 units into the activation arena
+    uint w_off;       // vec4 units into the f32 blob (f32_off/4)
+    uint out_off;     // float units
+    uint _p0, _p1;    // pad to 32 B
+};
+
+void main() {
+    const uint row = gl_LocalInvocationID.x;
+    if (row >= m_rows) { return; }
+    const uint kq4 = k_cols / 4u;
+    const uint per = kq4 / n_splits;
+    const uint s = gl_WorkGroupID.y;
+    const uint wbase = w_off + row * kq4 + s * per;
+    const uint xbase = x_off + s * per;           // x_off is already in vec4 units
+    float acc = 0.0;
+    for (uint i = 0u; i < per; ++i) acc += dot(wb[wbase + i], xb[xbase + i]);
+    if (n_splits == 1u) outb[out_off + row] = acc;
+    else                outb[out_off + s * m_rows + row] = acc;
+}

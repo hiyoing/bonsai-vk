@@ -1,0 +1,44 @@
+#version 450
+// swiglu.comp - y[i] = silu(a[i]) * b[i], the two-operand gated linear unit, vectorised by 4.
+//
+// ggml op it replaces: GLU(SWIGLU). Operand order was CHECKED, not assumed, in two places:
+//   * the node dump: ffn_swiglu-0 = SWIGLU(ffn_gate-0{12288,2}, ffn_up-0{12288,2})
+//     (runs/dbg_full_real.log line 1074) - the FIRST source is the gate; and the GDN output
+//     SWIGLU(Vulkan0#z-0{128,32,2}, node_60) at line 759, again z/gate first.
+//   * ggml's own contract, ggml_swiglu(a,b) = silu(a)*b, i.e. silu goes on src0.
+// So: a = ffn_gate projection, b = ffn_up projection, both {12288} per token, and the result feeds
+// ffn_down. The engine passes the gate as binding 0. Getting this backwards is silent - the shapes
+// match either way and the output is wrong everywhere.
+//
+// silu is the same x/(1+exp(-x)) sequence as silu.comp (NOT x*sigmoid(x)), so the reference the
+// engine is charged against is one expression, not two.
+//
+// Work per element: 1 exp + 1 add + 1 divide + 1 multiply, 2 loads, 1 store. The trailing multiply
+// CANNOT be contracted into an FMA - there is no add after it - so the only non-exact step is exp().
+//
+// DISPATCH: gl_WorkGroupCount.x == ceil(n_vec4 / 256), n_vec4 = 12288/4 = 3072 per token. Requires
+// n % 4 == 0.
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly buffer A { vec4 ab[]; };   // the GATE operand (ffn_gate, silu applied)
+layout(binding = 1) readonly buffer B { vec4 bb[]; };   // the UP operand
+layout(binding = 2)       buffer Y { vec4 yb[]; };
+
+layout(push_constant) uniform PC {
+    uint a_off;    // in vec4 units
+    uint b_off;    // in vec4 units
+    uint y_off;    // in vec4 units
+    uint n_vec4;   // n_elements / 4
+    uint _p0, _p1, _p2, _p3;   // pad to 32 B
+};
+
+float silu1(float x) { return x / (1.0 + exp(-x)); }
+
+void main() {
+    const uint i = gl_WorkGroupID.x * 256u + gl_LocalInvocationID.x;
+    if (i >= n_vec4) { return; }
+    const vec4 a = ab[a_off + i], b = bb[b_off + i];
+    yb[y_off + i] = vec4(silu1(a.x) * b.x, silu1(a.y) * b.y,
+                         silu1(a.z) * b.z, silu1(a.w) * b.w);
+}

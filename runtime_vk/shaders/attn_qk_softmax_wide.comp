@@ -1,0 +1,120 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "f16_rne.glslh"
+
+// attn_qk_softmax_wide.comp - the SAME stage 2 as attn_qk_softmax.comp, but the lane no longer IS a
+// key position, so rows wider than 256 become possible.
+//
+// Why a second file and not an edit: attn_qk_softmax.comp is one of the three kernels that reached
+// max|err| = 0 against the official layer-3 dump (FAITHFUL_REPRO.md §3), and the project rule is that
+// validated kernels get replaced by a new kernel rather than mutated (bonsai_forward.h:334-336).
+// This file is derived from it line by line; the only differences are the two shapes marked WIDE
+// below. Everything that decides the NUMBERS - the dot-product expression, the ascending d, lane 0's
+// serial max/exp/sum in ascending j, the exact-zero rule for dead slots, RNE packing - is copied
+// verbatim, because the accumulation ORDER is the contract that makes the comparison bit-exact
+// rather than "within tolerance" (HANDOVER.md §8.3).
+//
+// Cross-validation contract: at cap <= 256 this kernel must produce BITWISE identical SCORE/PROB/P16
+// to the narrow one. That is its first test, and it is cheaper than any external oracle.
+
+// MAXCAP is sized from THIS driver's measured answer, not from ggml's banner:
+//   maxComputeSharedMemorySize = 32768 B (measured, runs/limits_probe.log:3)
+// Two float[MAXCAP] arrays cost 8*MAXCAP bytes, so 2048 takes 16 KiB - half the budget.
+//
+// UPDATE, MEASURED (runs/shared_probe_v3.log, tools: runtime_vk/shared_probe.cpp): 4096 would ask for
+// EXACTLY 32768 B, and this driver both creates that pipeline and runs it with every element of both
+// arrays round-tripping correctly - so "no headroom, the driver will refuse it" was a derivation and
+// it was wrong; even the over-limit sizes 33792 B and 36864 B execute (gfx803 has 64 KiB of LDS per
+// CU, the Vulkan limit is a software rule). MAXCAP still stays at 2048, for two reasons that are not
+// driver rejection:
+//   1) cost. bench_shm_n*.comp runs an identical instruction stream at different shared sizes:
+//      16 KiB -> 22.47 ms, 32 KiB -> 26.87 ms for 64x256 workgroups, i.e. +19.6% (measured), because
+//      a 32 KiB workgroup cannot be co-resident the way a 16 KiB one can.
+//   2) validation coverage. The narrow<->wide bitwise gate and the qk_audit ladder have only ever
+//      been run up to cap 2048. Raising the constant without re-running them would be an unvalidated
+//      kernel, and the accumulation order in this file is a contract, not a preference.
+#define NTILE  256u
+#define MAXCAP 2048u
+
+layout(local_size_x = NTILE, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) readonly  buffer Q16   { uint  q16[]; };   // [seq][nh][hd/2]
+layout(binding = 1) readonly  buffer KC    { uint  kc[]; };    // [cap][nkv][hd/2] the K arena
+layout(binding = 2) readonly  buffer MASK  { float mask[]; };  // [seq][cap] additive, -INF = dead
+layout(binding = 3) readonly  buffer POS   { uint  pos[]; };   // [seq] absolute positions
+layout(binding = 4) writeonly buffer SCORE { float score[]; }; // [seq][nh][cap] raw kq
+layout(binding = 5) writeonly buffer PROB  { float prob[]; };  // [seq][nh][cap] f32 probabilities
+layout(binding = 6) writeonly buffer P16   { uint  p16[]; };   // [seq][nh][cap/2] the fp16 operand
+
+layout(push_constant) uniform Push {
+    uint seq, nh, nkv, hd, cap;
+    uint round_probs;          // 1 = PV sees fp16 probabilities (ggml's mixed-type cast)
+    float scale, pad0;
+} p;
+
+shared float sd[MAXCAP];     // this row's dot products
+shared float sp[MAXCAP];     // this row's probabilities
+
+void main() {
+    const uint w = gl_WorkGroupID.x;
+    const uint j = gl_LocalInvocationID.x;
+    const uint t = w / p.nh, h = w % p.nh;
+    const uint hw = p.hd / 2u;
+    const uint nfill = pos[t] + 1u;              // causal AND filled: live keys are 0..pos[t]
+    const uint kv = h / (p.nh / p.nkv);
+    const uint row = (t * p.nh + h) * p.cap;
+    const uint q1 = (t * p.nh + h) * hw;
+
+    // ---- WIDE #1: lane j owns key positions j, j+NTILE, j+2*NTILE, ... Each key still gets the
+    // same 256-term dot product, halves unpacked, in ascending d, with the same two-step
+    // "acc = acc + a*b" writing as the narrow kernel - not a +=, not an fma, not reordered.
+    for (uint k = j; k < p.cap; k += NTILE) {
+        if (k < nfill) {
+            const uint k1 = (k * p.nkv + kv) * hw;
+            float acc = 0.0;
+            for (uint d = 0u; d < hw; ++d) {
+                acc = acc + unpackHalf2x16(q16[q1 + d]).x * unpackHalf2x16(kc[k1 + d]).x;
+                acc = acc + unpackHalf2x16(q16[q1 + d]).y * unpackHalf2x16(kc[k1 + d]).y;
+            }
+            sd[k] = acc;
+            score[row + k] = acc;
+        } else {
+            score[row + k] = 0.0;                // never read: outside the filled prefix
+        }
+    }
+    barrier();
+
+    // ---- mask, max, exp, sum, divide - all in lane 0, in ascending i, exactly as the narrow
+    // kernel does it. The order IS the reference's order; widening the row must not "optimise" this
+    // into a tree reduction, because a tree changes which numbers are added first (HANDOVER.md §8.3).
+    if (j == 0u) {
+        float mx = uintBitsToFloat(0xFF800000u);
+        for (uint i = 0u; i < nfill; ++i) {
+            const float v = sd[i] * p.scale + mask[t * p.cap + i];
+            if (v > mx) mx = v;
+        }
+        float sum = 0.0;
+        for (uint i = 0u; i < nfill; ++i) {
+            const float v = sd[i] * p.scale + mask[t * p.cap + i];
+            sp[i] = exp(v - mx);
+            sum = sum + sp[i];
+        }
+        for (uint i = 0u; i < nfill; ++i) {
+            sp[i] = sp[i] / sum;
+            prob[row + i] = sp[i];
+        }
+        for (uint i = nfill; i < p.cap; ++i) {   // what a human reading the dump expects: zeros
+            sp[i] = 0.0;
+            prob[row + i] = 0.0;
+        }
+    }
+    barrier();
+
+    // ---- WIDE #2 (the one that is easy to miss): the fp16 pack. The narrow kernel needed only
+    // cap/2 <= 128 lanes, so a single "if (j < cap/2)" was enough. With NTILE = 256 lanes covering
+    // cap/2 = 1024 pairs, a non-strided write would silently leave probabilities above index 512
+    // holding the PREVIOUS token's packed bytes whenever round_probs = 1 - a long-context drift with
+    // no NaN and no error. Same stride rule as WIDE #1.
+    for (uint w2 = j; w2 < p.cap / 2u; w2 += NTILE)
+        p16[(t * p.nh + h) * (p.cap / 2u) + w2] = pack2_rne(vec2(sp[2u * w2], sp[2u * w2 + 1u]));
+}

@@ -1,0 +1,259 @@
+### build_mingw.bat
+== 0/2 reference oracle: inline the official dequant head ==
+wrote runtime_vk\shaders\dequant_ptq1_0_ref.comp  (110 lines: 45 head + 61 official)
+== 1/2 shaders: GLSL -> SPIR-V ==
+    add.comp
+shaders\add.comp
+    attn_norm_rope.comp
+shaders\attn_norm_rope.comp
+    attn_pv.comp
+shaders\attn_pv.comp
+    attn_qk_softmax.comp
+shaders\attn_qk_softmax.comp
+    attn_qk_softmax_wide.comp
+shaders\attn_qk_softmax_wide.comp
+    conv_silu.comp
+shaders\conv_silu.comp
+    deint_qg.comp
+shaders\deint_qg.comp
+    dequant_ptq1_0_ref.comp
+shaders\dequant_ptq1_0_ref.comp
+    embd_gather.comp
+shaders\embd_gather.comp
+    f16_map.comp
+shaders\f16_map.comp
+    f16_pack_probe.comp
+shaders\f16_pack_probe.comp
+    fwht.comp
+shaders\fwht.comp
+    gather_rows.comp
+shaders\gather_rows.comp
+    gdn_delta.comp
+shaders\gdn_delta.comp
+    gemv_f32.comp
+shaders\gemv_f32.comp
+    gemv_ternary.comp
+shaders\gemv_ternary.comp
+    hat4096.comp
+shaders\hat4096.comp
+    l2_norm.comp
+shaders\l2_norm.comp
+    math_probe.comp
+shaders\math_probe.comp
+    mul.comp
+shaders\mul.comp
+    mul_bcast.comp
+shaders\mul_bcast.comp
+    permute_vg.comp
+shaders\permute_vg.comp
+    reduce.comp
+shaders\reduce.comp
+    repack_ptq1_0.comp
+shaders\repack_ptq1_0.comp
+    rms_norm.comp
+shaders\rms_norm.comp
+    set_pos.comp
+shaders\set_pos.comp
+    sigmoid.comp
+shaders\sigmoid.comp
+    signs_mul.comp
+shaders\signs_mul.comp
+    silu.comp
+shaders\silu.comp
+    softplus.comp
+shaders\softplus.comp
+    swiglu.comp
+shaders\swiglu.comp
+    xsum.comp
+shaders\xsum.comp
+== 2/2 host: g++ -> bonsai_vk.exe + the four alignment tests ==
+    bonsai_vk.exe OK
+    align_tokenizer.exe OK
+    align_dequant.exe OK
+    align_f16.exe OK
+    align_attn.exe OK
+
+== run: one token-op of the hidden 4096 / ffn 12288 projection set ==
+device: Radeon RX 550X | driver 2.0.279 | device-local heap 3840 MiB | timestampPeriod 40.000 ns
+  queue family 0: flags=0xF COMPUTE TRANSFER GRAPHICS SPARSE   tiler=64  contexts=1
+  queue family 1: flags=0xE COMPUTE TRANSFER SPARSE   tiler=64  contexts=1
+  queue family 2: flags=0xC TRANSFER SPARSE   tiler=64  contexts=8
+  compute queue = family 0, transfer-only queue = family 2
+
+arena (single vkAllocateMemory, DEVICE_LOCAL):
+  ptq_src   size=  11010048 B  alignment=4  -> offset 0
+  codes     size=  12582912 B  alignment=4  -> offset 11010048
+  scales    size=   1572864 B  alignment=4  -> offset 23592960
+  x         size=     16384 B  alignment=4  -> offset 25165824
+  xsum      size=       128 B  alignment=4  -> offset 25182208
+  out       size=    196608 B  alignment=4  -> offset 25182336
+  tensors=24.2 MiB  alignment padding=0 B (0.0000%)  arena=24.2 MiB
+  upload on the transfer-only queue (family 2): 10.5 MiB, engine 1572.8 us = 7.01 GB/s, wall 1938.2 us
+repack: 11.0 MB -> 12.6 MB in 2.11 ms (11.2 GB/s effective, one-time cost)
+correctness: max|err|=0.00001  max|ref|=72.2  rel=1.06e-07  (expect ~1e-6 rel in f32 over K=4096)
+M=12288 K=4096 splits=4 : 0.284 ms/token-op  176.9 Gop/s  44.2 GB/s (packed weights)
+  cross-check: wall 0.285 ms vs timestamps 0.284 ms = 99.7% of wall -> limits.timestampPeriod 40.0 ns is trustworthy here
+WGSL reference on this card (probe 13): 143-155 Gop/s for these shapes.
+per-token projection cost for a 9B dense model: 9e9 MACs / rate; see report.
+### align_tokenizer
+usage: runtime_vk\align_tokenizer.exe <model.gguf> <probes.txt> <tok_ref.jsonl>
+### align_dequant
+[gguf] tensors=427  PTQ1_0(143)=202  data_start=11039616
+[dev]  Radeon RX 550X
+[feat] storageBuffer8Bit=1 storageBuffer16Bit=1 uniformAndStorage16Bit=1 shaderFloat16=0
+[gpu] nel=12800  blocks=100  local=256  groups=7 (7*2048 = 14336 >= 12800 weights)
+
+[blocks] 100 PTQ1_0 blocks (real, read from the checkpoint), 12800 weights compared
+[census] CPU-REF weights by class: -d 4224, 0 4194, +d 4382, NaN 0, Inf 0  (of 12800)
+[census] block scales: finite nonzero |d| in [0.0091095, 0.0519104]; d==0 0, subnormal 0, negative 0, non-finite 0
+[blocks] sample provenance (first 6 and last 2, so the bytes are re-derivable):
+   #  1  output.weight                      blk=7       file_off=11039812 d=0.0186005
+   #  2  blk.0.attn_gate.weight             blk=4103    file_off=456160324 d=0.0237427
+   #  3  blk.0.ffn_down.weight              blk=8199    file_off=467301444 d=0.013504
+   #  4  blk.0.ffn_up.weight                blk=12295   file_off=489436228 d=0.0116577
+   #  5  blk.1.attn_gate.weight             blk=16391   file_off=505427780 d=0.0195618
+   #  6  blk.1.ffn_down.weight              blk=20487   file_off=516568900 d=0.0117111
+   # 99  blk.31.attn_q.weight               blk=139271  file_off=1960081476 d=0.0176239
+   #100  blk.31.ffn_down.weight             blk=12295   file_off=1964784708 d=0.011528
+
+==== dequant fidelity (GPU-official-shader vs CPU-transcription vs our runtime) ====
+  max|GPU-REF - CPU-REF| = 0.00000  (over 12800 finite pairs, argmax weight 0)
+      bit-exact 12800/12800 (100.000%)   NaN/Inf-aware equal 12800/12800   non-finite mismatches 0
+  max|OURS    - CPU-REF| = 0.00000  (over 12800 finite pairs, argmax weight 0)
+      bit-exact 12800/12800 (100.000%)   NaN/Inf-aware equal 12800/12800   non-finite mismatches 0
+  max|OURS    - GPU-REF| = 0.00000  (over 12800 finite pairs, argmax weight 0)
+      bit-exact 12800/12800 (100.000%)   NaN/Inf-aware equal 12800/12800   non-finite mismatches 0
+  symbol agreement      = 12800/12800 weights, 0 disagreements (0 weights skipped: scale is 0/Inf/NaN, where w/d is not a symbol)
+  runtime dot form d*(cs-xs) vs sum(w_e*x_e): max abs 0.000e+00  max rel 0.000e+00  (100 blocks, 0 skipped for non-finite d)
+  (why this can be non-zero in principle: the folded form multiplies by d once per block
+   and the weight form multiplies per element, so a reassociation could show up in the
+   last bits. Measured 0.000e+00 here, which is what exactness requires: (trit-1) is
+   always -1/0/+1, so (trit-1)*d is representable and the two forms are the same number.)
+### align_f16
+[cpu] f16_to_f32 vs IEEE-754 definition: 0/65536 wrong numbers, 2045/65536 different bit patterns (+-0 and NaN payloads are counted here, not as errors), max 0 ulp
+[dev]  Radeon RX 550X
+[feat] storageBuffer16Bit=1 uniformAndStorage16Bit=1
+
+==== all 65536 patterns, five ways ====
+  GPU float(f16)             vs IEEE-754 definition        :    0/65536 wrong numbers, 2045/65536 different bit patterns (2045 of them payload-only), max 0 ulp
+  GPU unpackHalf2x16(.x)     vs IEEE-754 definition        :    0/65536 wrong numbers, 2045/65536 different bit patterns (2045 of them payload-only), max 0 ulp
+  GPU float(f16)             vs OURS f16_to_f32            :    0/65536 wrong numbers,    0/65536 different bit patterns (0 of them payload-only), max 0 ulp
+  GPU unpackHalf2x16(.x)     vs OURS f16_to_f32            :    0/65536 wrong numbers,    0/65536 different bit patterns (0 of them payload-only), max 0 ulp
+  GPU float(f16)             vs GPU unpackHalf2x16         :    0/65536 wrong numbers,    0/65536 different bit patterns (0 of them payload-only), max 0 ulp
+   (every one of the 65536 patterns agrees everywhere)
+
+==== verdict ====
+  our f16_to_f32 is exact over the whole binary16 domain:  YES (0 wrong numbers)
+  card's float(float16_t)  is IEEE-exact:                   YES (0 wrong, 2045 bit-diff)
+  card's float(unpackHalf2x16(x).x) is IEEE-exact:          YES (0 wrong, 2045 bit-diff)
+  BOTH shader expressions == our host conversion, bit for bit:  YES (0 / 0 bit-diff)
+### align_attn
+[cfg]  seq=8 cap=256  model=models/Ternary-Bonsai-2-9B-PTQ1_0.gguf
+[gguf] head_dim=256 n_head=16 n_head_kv=4 n_rot=64 eps=9.99999997e-07 freq_base=1e+07  scale=1/sqrt(hd)=0.062500
+[w]    blk.3.attn_q_norm/attn_k_norm loaded from the file: qn range 0.7383..2.0234, qn[0]=1.328125 kn[0]=1.396484
+[dev]  Radeon RX 550X
+
+== F. the fp16 packer: the card's packHalf2x16() vs RNE, four columns ==
+  4096 floats -> 2048 words  [0.084 ms]
+  host f32_to_f16_bits() vs GLSL pack2_rne():     0/2048 mismatching words (want 0)
+  host f32_to_f16_bits() vs packHalf2x16():       1366/2048 (66.6992%)
+  host f32_to_f16_bits_rtz() vs packHalf2x16():   0/2048 (want 0 - it truncates)
+  direction of every disagreement: 1366 never increase |value|, 0 do  (RTZ means the second number is 0)
+    word 2: host RNE 3B8FD015  card 3B8ED015  f[2k]=-32.664299 (f32 bits C202A83E, dropped 13 bits of mantissa = 2110)
+  the card's unpackHalf2x16() vs our f16_to_f32(): 0/4096 halves differ (want 0); RNE round-trip error vs the instruction's: max|err|=0.25000000 at i=24
+
+== A. GPU kernels vs the fp32 mirror (attn_forward<true>), real layer-3 shapes ==
+  q16  (fp16 Q operand)   words=16384    bit-exact=16382  mismatches=2
+  kc   (the fp16 K arena) words=131072   bit-exact=131072  mismatches=0
+  vc   (the fp16 V arena) words=131072   bit-exact=131072  mismatches=0
+  p16  (fp16 probs)       words=16384    bit-exact=16384  mismatches=0
+  score (raw kq)         n=32768     max|err|=0.00066948  at=6912      bit-exact=99.9786%  max rel=8.483e-04  hard=0  =6.396e-06 of full scale (104.675)
+  prob (f32)             n=32768     max|err|=0.00000221  at=6912      bit-exact=99.0601%  max rel=2.213e-05  hard=0  =2.205e-06 of full scale (1.000)
+  pregate (context)      n=32768     max|err|=0.00000000  at=0         bit-exact=100.0000%  max rel=0.000e+00  hard=0  =0.000e+00 of full scale (1.740)
+  gated (layer out)      n=32768     max|err|=0.00000012  at=525       bit-exact=85.5927%  max rel=2.354e-07  hard=0  =1.012e-07 of full scale (1.178)
+  worst score[t=1][h=11][j=0] (kv head 2): mirror=0.789211 card=0.789880  differing q words=1 k words=0  sum|term err|=0.000669
+    word  92: q 3AD13F1E (1.779297,0.852051) -> 3AD03F1E (1.779297,0.851562)   k BD7CB867 (-0.550293,-1.371094) -> BD7CB867 (-0.550293,-1.371094)   term err 0.000669
+  [time] norm_rope 0.145 ms   qk_softmax 0.285 ms   pv+gate 0.080 ms  (submit + kernel + fence, seq=8)
+  magnitudes: |kq|max=104.675  |context|max=1.740  |gated|max=1.178   max|sum(p)-1|=1.365e-07 (and every dead slot is exactly 0.0)
+
+== A2. stages 2+3 fed the MIRROR's own fp16 arena (stage 1 taken out of the loop) ==
+  p16 (fp16 probs)   words=16384    bit-exact=16384    mismatches=0
+  score (fed arena)      n=32768     max|err|=0.00000000  at=0         bit-exact=100.0000%  max rel=0.000e+00  hard=0  =0.000e+00 of full scale (104.675)
+  prob  (fed arena)      n=32768     max|err|=0.00000012  at=8962      bit-exact=99.0692%  max rel=3.666e-07  hard=0  =1.192e-07 of full scale (1.000)
+  pregate(fed arena)     n=32768     max|err|=0.00000000  at=0         bit-exact=100.0000%  max rel=0.000e+00  hard=0  =0.000e+00 of full scale (1.740)
+  gated (fed arena)      n=32768     max|err|=0.00000012  at=525       bit-exact=85.5927%  max rel=2.354e-07  hard=0  =1.012e-07 of full scale (1.178)
+  [time] qk_softmax 0.283 ms   pv+gate 0.082 ms, operands identical by construction
+
+== T. the card's pow/cos/sin/exp vs the C library's, on the arguments attention uses ==
+  [round-trip] the card's copy of the argument buffer differs from the host array in 0/33632 words (want 0; anything else makes every number below a statement about the harness, not about the card)
+  pow (theta)    n=32     bit-differ=27     (84.375%)  max|abs|=2.980e-08  max|rel|=8.796e-07
+  cos (angle)    n=256    bit-differ=88     (34.375%)  max|abs|=1.192e-07  max|rel|=3.143e-06
+  sin (angle)    n=256    bit-differ=205    (80.078%)  max|abs|=4.470e-07  max|rel|=1.689e-06
+  exp (softmax)  n=576    bit-differ=247    (42.882%)  max|abs|=5.960e-08  max|rel|=3.560e-07
+  exp (sigmoid)  n=32768  bit-differ=4321   (13.187%)  max|abs|=4.768e-07  max|rel|=1.223e-07
+  sqrt           n=33632  bit-differ=5203   (15.470%)  max|abs|=2.384e-07  max|rel|=1.192e-07
+  1/sqrt (norm inv) n=33632  bit-differ=9566   (28.443%)  max|abs|=1.221e-04  max|rel|=1.382e-07
+  1/x (div)      n=33632  bit-differ=3693   (10.981%)  max|abs|=6.250e-02  max|rel|=1.192e-07
+  [33632 indices, 0.104 ms] in fp32 ulp at |x|~1: pow max|abs| = 0.25 ulp (relative 7.38 ulp - theta spans 1e-07..1, so relative is the honest unit there), cos 1.00 ulp, sin 3.75 ulp (ABSOLUTE, because |cos|,|sin| <= 1; the largest angle this run feeds in is 7.0 rad, and argument reduction at that size is what puts the gap at tens of ulp, not a few), exp(softmax) 0.50 ulp absolute / 2.99 ulp relative. The arena rounds at 2^-11, so a flip needs an fp32 value that lands within that band of a halfway point: leg R measures the band, leg A counts the actual flips.
+  and the RMS-norm path, which has NO transcendental in it at all: sqrt and a division are the only arithmetic in it, so a difference there reaches EVERY dim of the row, the pass-through ones included. Judged on the arguments this run actually contains:
+     sqrt(x)           band: max|rel| =     1.00 fp32 ulp over  33460 samples | worst x=1.00069: host 1.0003426 card 1.0003425 | 172 samples outside the band (edge arguments), max|rel| there 1.112e-07
+     1/sqrt(x)=inv     band: max|rel| =     1.16 fp32 ulp over  33460 samples | worst x=0.335856: host 1.7255332 card 1.725533 | 172 samples outside the band (edge arguments), max|rel| there 9.034e-08
+     1/x               band: max|rel| =     1.00 fp32 ulp over  33460 samples | worst x=-0.999785: host -1.0002153 card -1.0002154 | 172 samples outside the band (edge arguments), max|rel| there 0.000e+00
+     leg R2 takes the next step and tests it per row: it moves the mirror's inv by k ulps for k in [-4,+4] and asks whether the card's pass-through dims come out bit-identical.
+
+== R. stage 1 BEFORE the pack: the fp32 gap behind leg A's flipped bits ==
+  Q: 6855/32768 fp32 values differ bit for bit (3251 inside dims<n_rot, 3604 pass-through), max|err|=1.192e-06 at 25376
+  K: 1224/262144 fp32 values differ (702 rotated, 522 pass-through), max|err|=7.153e-07 at 3104
+  rotated Q mismatches by pair index p: p0=186 p1=148 p2=151 p3=172 p4=143 p5=111 p6=160 p7=129  p8..31=2051
+  arena flips caused by that fp32 band: Q 2/32768 halves, K 0/262144 halves; the largest pattern delta is 1 fp16 ulp, and 0 flips land on a binade edge where the fp16 exponent field itself changes (that is legal rounding: 0.9995 becomes 1.000)
+    t=4  h=5  dim=36  mirror -0.101532 vs card -0.101532: gap 5.960e-08 = 0.001 of one fp16 cell; tie distance 0.0010 (side +1) vs 0.0000 (side +0) -> half AE7F becomes AE80 = 1 fp16 ulp
+    t=1  h=11 dim=185 mirror 0.851807 vs card 0.851807: gap 1.192e-07 = 0.000 of one fp16 cell; tie distance 0.0002 (side +1) vs 0.0000 (side +0) -> half 3AD1 becomes 3AD0 = 1 fp16 ulp
+  verdict: of the 2 flips, 0 have the two fp32 values on strictly OPPOSITE sides of the cell boundary and 2 have one side sitting EXACTLY on it (a true RNE tie, decided by the even-mantissa rule). No flip disagrees by more than 1 fp16 ulp for a reason that is not rounding: the ABSOLUTE disagreement peaks at 1.192e-07, inside leg R's own fp32 band of 1.192e-06, and the widest ulp counts belong to dims where the rotation nearly cancelled (small value, small cell). 2 of 294912 halves = 0.0007%.
+  the angle at pair p is position * 1e7^(-p/32): p0=1 p1=0.604296 p2=0.365174 p3=0.220673 and by p8 it is 1.8e-02, i.e. cos=1.000000 and sin=angle exactly in fp32 for every position we run. So a mismatch at large p is an algebra bug, and one confined to small p is the transcendental gap of leg T.
+
+== R2. one scalar per row: can an ulp shift of the norm constant explain the card? ==
+  Q: 128 rows - 108 have bit-clean pass-through dims at the host's inv, 20 become clean only when inv moves by 1..4 ulp, 0 are NOT reproducible by ANY inv in [host-4ulp, host+4ulp]
+     best-shift histogram: k-4=0 k-3=0 k-2=0 k-1=16 k+1=4 k+2=0 k+3=0 k+4=0 
+     pass-through mismatches at the host inv: 3604/6291456 (0.057%), of which 3604 (100.0%) sit in rows a single scalar shift reproduces EXACTLY
+     after that shift the residual is 2420 mismatches: 2420 in dims<n_rot (cos/sin, leg T's band) + 0 in pass-through dims (want 0). 96 rows are already clean on pass-through and differ ONLY in the rotation.
+  K: 32 rows - 29 have bit-clean pass-through dims at the host's inv, 3 become clean only when inv moves by 1..4 ulp, 0 are NOT reproducible by ANY inv in [host-4ulp, host+4ulp]
+     best-shift histogram: k-4=0 k-3=0 k-2=0 k-1=1 k+1=2 k+2=0 k+3=0 k+4=0 
+     pass-through mismatches at the host inv: 522/50331648 (0.001%), of which 522 (100.0%) sit in rows a single scalar shift reproduces EXACTLY
+     after that shift the residual is 615 mismatches: 615 in dims<n_rot (cos/sin, leg T's band) + 0 in pass-through dims (want 0). 25 rows are already clean on pass-through and differ ONLY in the rotation.
+
+== B. causal prefix and the -INF fill value ==
+  live slots=576  dead slots that are NOT exactly 0.00000000: 0
+  GPU dead-slot zeros agree with the mirror: max|err| over the whole prob tensor = 0.00000221
+  -INF in the live prefix: 7 rows tested, GPU wrote a non-zero probability in 0 of them
+  masked-row probabilities vs the mirror: max|err|=0.00000036 at 17668, bit-exact=99.3225%
+  after the kill, the row still sums to 1: max|sum-1| = 9.499e-08
+
+== C. rope: position 0, pass-through dims, and the frequency expression ==
+  position 0, kv head 0: the cached row differs from the norm-only value in 0/128 words (want 0)
+  dims 64..255 pass through: 0/3072 fp16 words differ (want 0)
+  powf(base,-2p/nrot) vs the fork's powf(powf(base,-2/nrot),p): max|d theta| = 1.490e-08 at p=3 (2.362e-07 relative)
+  propagated into a rotated row: max|err| = 2.384e-07 at token*hd+dim = 1797, i.e. 2.384e-07 of the value - the fp16 operand quantum here is ~6e-4, so the two forms cannot be told apart once cached
+
+== D. GQA: 16 q heads reading 4 kv heads ==
+  identical Q in all 16 heads: 192 head pairs share a kv head, 768 do not
+  pairs that SHARE a kv head and disagree: 0 (want 0)
+  pairs on DIFFERENT kv heads that agree:  0 (want 0 - they must read different K)
+
+== E. the KV arena: one prefill pass vs a token-at-a-time decode, bit for bit ==
+  8 decode steps against the same prefill: 0 head-rows differ in the gated output, 0 probability slots differ (want 0 and 0)
+  largest prefill/decode disagreement: 0.00000000 (token 0)
+
+== G. what each fp16 rounding costs (float64 ideal legs, same ascending order) ==
+  ideal(fp64, nothing rounded) -> +fp16 arena : max|err|=5.0724e-04 at 19219
+                               -> +fp16 Q     : max|err|=5.4971e-04 at 6196
+                               -> +fp16 probs : max|err|=2.6068e-04 at 27783
+  the fp32 mirror vs the all-fp16 ideal       : max|err|=5.7134e-04 at 27783  (float32 accumulation, not a layout error)
+  |gated|max = 1.178, so the whole fp16+fp32 chain costs at most 1.889e-03 absolute (1.604e-03 relative)
+
+  V. verdict - card vs mirror against the format's own floor:
+     card vs mirror   score=6.695e-04 (=6.40e-06 of |kq|max)  prob=2.205e-06  context=0.000e+00  layer-out=1.192e-07 (=1.01e-07 of |gated|max)
+     fp16 layout cost  arena=5.072e-04  Q=5.497e-04  probs=2.607e-04  sum=1.889e-03  (= the SAME tensor space the engine cannot opt out of)
+     ratio our/format = 0.000 -> our divergence is SMALLER than the error the official fp16 cache imposes; the remaining card/host difference is the last fp32 bits of a transcendental, not a term the official engine gets right and we get wrong
+
+[done]
+### DONE rc=0
