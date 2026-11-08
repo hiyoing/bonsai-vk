@@ -107,7 +107,7 @@ function paintBody(t) {
   const src = t.text.slice(0, t.shown);
   clearNode(t.bodyNode);
   if (src) t.bodyNode.appendChild(renderMarkdown(src));
-  else if (t.status === 'streaming') t.bodyNode.appendChild(mk('span', 'md-wait', '正在思考'));
+  else if (t.status === 'streaming') t.bodyNode.appendChild(mk('span', 'md-wait', i18n('thinking')));
   if (t.status === 'streaming' && t.shown > 0) {
     const caret = mk('span', 'caret');
     caret.setAttribute('aria-hidden', 'true');
@@ -127,7 +127,7 @@ function paintReason(t) {
   if (!has) return;
   t.reasonBody.textContent = t.reasoning.slice(0, t.reasonShown);
   const n = t.reasoning.length;
-  t.reasonCount.textContent = n + ' 字';
+  t.reasonCount.textContent = n + ' ' + i18n('charsUnit');
   if (t.status === 'streaming' && !t.reasonAutoDone) {
     // Open it once when thinking starts. A manual collapse afterwards must stick, so this is a
     // one-shot latch rather than a condition re-evaluated on every pump tick.
@@ -147,7 +147,7 @@ function paintMeta(t) {
   if (t.meta.tokS) bits.push(t.meta.tokS.toFixed(2) + ' tok/s');
   if (t.meta.ms) bits.push(Math.round(t.meta.ms) + ' ms');
   if (t.meta.finish) bits.push(t.meta.finish);
-  if (t.status === 'stopped') bits.push('已停止');
+  if (t.status === 'stopped') bits.push(i18n('stopped'));
   for (let i = 0; i < bits.length; i++) t.metaNode.appendChild(mk('span', null, bits[i]));
   t.metaNode.hidden = bits.length === 0;
 }
@@ -185,7 +185,7 @@ function buildAiNode(t) {
   toggle.setAttribute('aria-expanded', 'false');
   const arrow = mk('span', null, '▸');
   toggle.appendChild(arrow);
-  toggle.appendChild(mk('span', null, '思考过程'));
+  toggle.appendChild(mk('span', null, i18n('reasoning')));
   const count = mk('span', 'reason-count', '');
   toggle.appendChild(count);
   const rbody = mk('div', 'reason-body');
@@ -259,8 +259,8 @@ function setBadge() {
   const st = S.status;
   if (!S.online || !st) {
     dot.className = 'dot dot-down';
-    txt.textContent = '【未连接 | localhost:8080】';
-    b.title = S.statusError || '引擎尚未就绪：双击 bonsai_vk.exe 启动后会自动打开本页';
+    txt.textContent = i18n('badgeOffline');
+    b.title = S.statusError || i18n('badgeOfflineTitle');
     return;
   }
   dot.className = 'dot ' + (st.busy ? 'dot-busy' : 'dot-live');
@@ -271,7 +271,7 @@ function setBadge() {
   if (Number(st.last_tok_s) > 0) rate = fmtRate(st.last_tok_s);
   else if (Number(st.reference_tok_s) > 0) { rate = fmtRate(st.reference_tok_s); ref = true; }
   let s = '【' + dev + ' | ' + size + (rate ? ' | ' + rate + (ref ? ' ref' : '') : '') + '】';
-  if (st.busy) s += ' 生成中';
+  if (st.busy) s += ' ' + i18n('generating');
   txt.textContent = s;
   b.title = [
     'device: ' + st.device,
@@ -308,7 +308,7 @@ async function refreshStatus() {
     }
   } catch (err) {
     if (err && err.name === 'AbortError') {
-      S.statusError = '状态请求超时';
+      S.statusError = i18n('statusTimeout');
     } else {
       S.online = false;
       S.statusError = (err && err.message) || String(err);
@@ -325,9 +325,9 @@ function updateCtxNote() {
   if (!n) return;
   const st = S.status;
   if (S.online && st && st.cap) {
-    n.textContent = '上下文 ' + st.cap + ' slots · V ' + st.v_quant + ' · 内容本地生成，请自行核对';
+    n.textContent = i18n('ctxPrefix') + ' ' + st.cap + ' slots · V ' + st.v_quant + ' · ' + i18n('ctxSuffix');
   } else {
-    n.textContent = '内容由本地模型生成，请自行核对';
+    n.textContent = i18n('ctxDefault');
   }
 }
 
@@ -402,6 +402,36 @@ function finishTurn(t, status, errText) {
   }
 }
 
+// The Advanced Settings sliders are the only user-facing handle on the C++ Sampler. Values are
+// read fresh per send, so a slider moved mid-conversation takes effect on the very next reply.
+const ADV_CONTROLS = [
+  { key: 'temperature',       input: 'adv-temp', out: 'adv-temp-val' },
+  { key: 'presencePenalty',   input: 'adv-pres', out: 'adv-pres-val' },
+  { key: 'repetitionPenalty', input: 'adv-rep',  out: 'adv-rep-val' }
+];
+
+function samplerSettings() {
+  const s = {};
+  for (const c of ADV_CONTROLS) {
+    const node = el(c.input);
+    if (!node) continue;
+    const v = Number(node.value);
+    if (Number.isFinite(v)) s[c.key] = v;
+  }
+  return s;
+}
+
+function wireAdvanced() {
+  for (const c of ADV_CONTROLS) {
+    const node = el(c.input);
+    const out = el(c.out);
+    if (!node || !out) continue;
+    const paint = function () { out.textContent = Number(node.value).toFixed(2); };
+    on(node, 'input', paint);
+    paint();
+  }
+}
+
 async function sendText(raw) {
   const text = String(raw).trim();
   if (!text || S.busy) return false;
@@ -418,7 +448,7 @@ async function sendText(raw) {
   pumpSchedule();
 
   const messages = buildMessages(S.turns.slice(0, S.turns.length - 1), '');
-  const body = requestBody(messages, { maxTokens: 1024 });
+  const body = requestBody(messages, Object.assign({ maxTokens: 1024 }, samplerSettings()));
   S.requestsSent += 1;
   const ctl = new AbortController();
   S.abort = ctl;
@@ -454,9 +484,9 @@ async function sendText(raw) {
     } else {
       const status = err && err.status ? err.status : 0;
       let msg = (err && err.message) || String(err);
-      if (status === 429) msg = '引擎正在生成另一条回复（本构建一次只跑一个对话）。' + msg;
-      else if (status === 400) msg = '请求被拒绝：' + msg;
-      else if (!S.online) msg = '连不上引擎：' + msg + '（确认 bonsai_vk.exe 还在运行）';
+      if (status === 429) msg = i18n('err429') + msg;
+      else if (status === 400) msg = i18n('err400') + msg;
+      else if (!S.online) msg = i18n('errOffline') + msg + i18n('errOfflineSuffix');
       recordError('api', msg);
       finishTurn(ai, 'error', msg);
       toast(msg.slice(0, 160));
@@ -501,8 +531,8 @@ function copyCodeBlock(btn) {
   const code = wrap.querySelector('pre code');
   const text = code ? code.textContent : '';
   function done(ok) {
-    btn.textContent = ok ? '已复制' : '复制失败';
-    setTimeout(function () { btn.textContent = '复制'; }, 1400);
+    btn.textContent = ok ? i18n('copied') : i18n('copyFailed');
+    setTimeout(function () { btn.textContent = i18n('copy'); }, 1400);
   }
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(fallbackCopy(text)); });
@@ -535,6 +565,8 @@ function wire() {
   on(ta, 'input', function () { autoGrow(); syncSend(); });
   on(el('stop'), 'click', function () { stopGeneration(); });
   on(el('btn-new'), 'click', function () { newChat(); });
+  on(el('btn-lang'), 'click', function () { toggleLang(); });
+  wireAdvanced();
 
   let composing = false;
   on(ta, 'compositionstart', function () { composing = true; });
@@ -586,7 +618,7 @@ function wire() {
     // Say so in the badge instead. The self-test drives refreshStatus() explicitly with a mock
     // transport, so the offline branch does not weaken the streaming coverage.
     S.online = false;
-    S.statusError = '本页是从磁盘直接打开的。请双击 bonsai_vk.exe，由引擎在 localhost:8080 上提供本页。';
+    S.statusError = i18n('fileOffline');
     setBadge();
   }
   ta.focus();
@@ -594,6 +626,7 @@ function wire() {
 
 function boot() {
   installErrorCapture();
+  initLang();
   wire();
 }
 

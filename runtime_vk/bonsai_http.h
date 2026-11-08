@@ -596,10 +596,16 @@ static void run_completion(Serve &sv, bonsai_sock_t s, const hj::Val &req) {
     const double topp = hj::gd(req, "top_p", -1.0);
     const double topk = hj::gd(req, "top_k", -1.0);
     const double seed = hj::gd(req, "seed", 0.0);
+    const double rep  = hj::gd(req, "repetition_penalty", -1.0);
+    const double pres = hj::gd(req, "presence_penalty", -1.0);
+    const double freq = hj::gd(req, "frequency_penalty", -1.0);
     if (temp >= 0.0) g_req.temp = float(temp);
     if (topp >= 0.0) g_req.top_p = float(topp);
     if (topk >= 0.0) g_req.top_k = int(topk);
     if (seed > 0.0)  g_req.seed = uint64_t(seed);
+    if (rep  >= 0.0) g_req.rep_penalty = float(rep);
+    if (pres >= 0.0) g_req.presence = float(pres);
+    if (freq >= 0.0) g_req.freq = float(freq);
 
     if (stream) {
         if (!send_str(s, http_head(200, "text/event-stream; charset=utf-8", 0, true))) {

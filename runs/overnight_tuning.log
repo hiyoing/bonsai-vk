@@ -1,0 +1,205 @@
+
+==== sampler search 2026-11-08 05:08:52 (thinking=off daemon, max_tokens=300) ====
+engine: model=Ternary-Bonsai-2-9B-PTQ1_0 cap=2048 thinking=False
+COMBO control-greedy temp=0.00 pres=0.00 rep=1.00  fluent=5/5
+  q0 chars=465 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.04
+    text: 这是一个经典的逻辑谜题。我们可以通过逻辑推导来逐步推导真相。  ### 逻辑推导过程  **第一步：假设“甲说真话”是假前提设** 假设“甲”（即说话者）在撒谎。 1. 如果甲在撒谎，那么他的陈述“甲说 A 是假的”就是假的。 2. 这意味着“甲”这个陈述是假的，即“甲”这个陈述是假的。     *   如果“甲”是假的，那么“甲”这个陈述就是假的。     *   这意味着“甲”这个陈述是假的，即“甲”是假的。     这导致了一个矛
+  q1 chars=1186 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.04
+    text: Based on the logic provided in your question, here is the step-by-step logical deduction:  ### 1. Analyze the Premises First, let's break down the logical structure of your question based on the terms provided: *   **Pre
+  q2 chars=511 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.03
+    text: 这是一个经典的**蒙蒂·卡门问题**（Monty Hall Problem），这是一个经典的概率论问题。  ### 结论 **是的，你应该换门。**  如果你坚持换门，你赢得大奖（赢得那辆车）的概率将从 **1/3** 提升到 **2/3**；而如果你坚持原来的选择，你获胜的概率只有 1/3。  以下是详细的逻辑分析：  ### 1. 场景设定 假设三个门后分别藏着： *   **汽车**（车）     *   门 A：汽车     *
+  q3 chars=468 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.04
+    text: 这是一个经典的数列问题。我们可以通过观察数列的规律来推导通项公式。  ### 1. 分析已知项  首先，我们列出前几项来观察规律： - 第 1 项 ($a_1$) = 1   - 计算：$1 \times 1 = 1$   或者 $1 \times 1 = 1$      等等，让我们重新审视一下常见的数列模式。通常这类题目是求和或者乘积。   让我们重新审视常见的数列模式：   - 如果数列是 $1, 2, 6, 6, 6, \dot
+  q4 chars=594 wait=0 stutter=False loop=False deg=False fluent=True finish=stop tok_s=14.22
+    text: The sky appears blue because of a phenomenon called **Rayleigh scattering**. When sunlight (which contains all colors of the visible spectrum) passes through the Earth's atmosphere, it interacts with gas molecules like n
+COMBO ladder-1       temp=0.70 pres=0.80 rep=1.10  fluent=5/5
+  q0 chars=526 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=13.96
+    text: 这是一个经典的逻辑谜题，我们可以通过逻辑推理来逐步推导结论。  **第一步：假设反面情况（反证法）** 假设甲的话是真的。 1. 如果甲说“我是假的”，那么他就意味着他自己是错的。这与他在陈述过程中承认自己是诚实的矛盾。因此，这个前提不成立。 2. 或者我们可以这样分析：如果某人声称“我说的都是真话”，而实际上他是撒谎，那他就把自己搞混了；如果他是在说谎，那他说的话就是假话。  让我们换个角度来严谨地逻辑推导一下：  假设我们要找的是那
+  q1 chars=1177 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=13.98
+    text: Let's break down the logic step-by-step to determine if your conclusion is correct.  ### 1. Analyze the Premises First, let's establish what we know based on standard logical deduction rules (assuming this follows a syll
+  q2 chars=530 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.03
+    text: 这是一个经典的概率博弈问题，通常被称为**蒙特·侯利问题**（Monty Hall Problem）。  ### 结论 你的直觉可能会告诉你“门后是一只羊”或者“换也不如不换”，但实际上：  *   **原始问题的设定下：** 如果你坚持原来的选择（不选），你中奖的概率是 $1/3$。     *   如果选 A，概率为 $1/5$（假设共有 3 个门）。     *   或者更准确地说，这是一个经典的蒙牛问题变体：你有三个选项，一个是
+  q3 chars=499 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.04
+    text: 要找出这个数列的规律，我们可以先观察前几项（如果已知更多项的话）或者根据题目隐含的逻辑来推导通项公式。  不过，你提供的题目只给出了“求下一项”或类似的描述吗？实际上你并没有给出完整的序列数据，而是直接问了一个问题：“请找到一个数列，其第 n 项为 $n^2 + 1$。” 这似乎是一个典型的数学竞赛题或者逻辑推理题的开头。  不过，既然你没有给出具体的数字序列作为例子（比如“前几项是 1, 4, 6..."），我们只能假设这是一个经典的
+  q4 chars=717 wait=0 stutter=False loop=False deg=False fluent=True finish=stop tok_s=14.21
+    text: The sky appears blue because sunlight, which is white light containing all colors of the visible spectrum (red through violet), consists of many wavelengths. As this white light passes through Earth's atmosphere, molecul
+COMBO ladder-2       temp=0.60 pres=0.60 rep=1.05  fluent=5/5
+  q0 chars=471 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.05
+    text: 这是一个经典的逻辑谜题。我们可以通过逻辑推理来逐步推导结论：  **第一步：假设命题 A（甲说真话）为假，即假设“甲说的话是假的”。** 如果甲的话是假的，那么“甲、乙和 C 都撒谎”这个假设不成立。 如果这是真的，那意味着至少有一句话是不对的。  让我们尝试另一种方法：我们直接分析三种可能的情况（A、B、C），看看哪种情况是自洽的（即没有矛盾）。  **情况一：假设“甲说真话”是假的。** 这意味着 A 和 B 都是假人。那么，如果 
+  q1 chars=1085 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.06
+    text: Let's break down the logic step-by-step to determine if your conclusion is correct.  ### 1. Analyze the Premises First, let's break down the logical statements provided in your prompt:  *   **Statement A (Premise 1):** A
+  q2 chars=551 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.03
+    text: 这是一个经典的概率思维问题，通常被称为**蒙特·霍利问题**（Monty Hall Problem）。  ### 结论 **是的，你应该换门。**  在这个特定的情境下，你的直觉可能会告诉你“不需要改变”，但实际上**更换策略会大大提高你中奖的概率**。  以下是详细的逻辑分析：  ### 1. 为什么你会困惑？ 当你看到主持人打开一扇门，露出的是羊（失败选项）时，你会感到困惑：“既然我知道有一个门是错的，为什么我不应该换？”或者你可能
+  q3 chars=521 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.04
+    text: 要找出这个数列的规律，我们可以先观察前几项（如果已知前几项）或者根据题目隐含的“标准数列”逻辑来推导。不过，通常这类问题指的是**自然数阶乘排列**或类似的级数序列。  首先，我们需要明确题目的具体指向。你提到的“数列”可能指代一个特定的数列公式。让我们尝试推导一下：  1.  **假设这是一个简单的算术或等差数列：**     如果这是一个等差数列（Arithmetic Progression），我们需要知道首项 $a_1$ 和公差 
+  q4 chars=845 wait=0 stutter=False loop=False deg=False fluent=True finish=stop tok_s=14.2
+    text: The sky appears blue because sunlight, which is made of all colors of the visible spectrum, interacts with gas molecules in Earth's atmosphere through a process called **Rayleigh scattering**.  Sunlight consists of all c
+COMBO ladder-3       temp=0.60 pres=0.90 rep=1.10  fluent=5/5
+  q0 chars=506 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.05
+    text: 这是一个经典的逻辑谜题。我们可以通过设立变量来系统地分析这个问题，从而找到唯一的解。  ### 第一步：定义符号与假设 设三个人的身份为：A（说话者 A）、乙、C（对应题目中的甲、乙）。 我们设定三个命题的布尔值（True/真或假）： - $P_A$：甲说的话是真的（即“我”是诚实的，或者说我的陈述符合事实）。如果 P 说真话，则他是好人；否则为假。 这里我们将问题简化为逻辑推演模型：  设命题 A = “我是对的”（指说话者说的内容是
+  q1 chars=1050 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.04
+    text: Let's break down the logic step-by-step to determine if your conclusion is correct.  ### 1. Analyze the Premises First, let's establish what we know based on standard logical deduction rules (assuming this follows a syll
+  q2 chars=522 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.03
+    text: 这是一个经典的概率思维问题，通常被称为**蒙特·霍利问题（Monty Hall Problem）**。  ### 结论 **是的，你应该换门。**  在这个特定的情境下： 1.  **初始状态**：你选择一个车门（比如 A）。此时有 $\frac{2}{3}$ 的概率是空的，$2/3$ 的概率是你选错了（即车在另外两扇门中之一）。 2.  **关键逻辑**：当主持人告诉你“其中一扇门是坏的”或者暗示某个选项不是你的目标时，如果你坚持原来
+  q3 chars=526 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.04
+    text: 要找出这个数列的规律，我们可以先观察前几项（如果已知更多项的话）或者根据题目隐含的逻辑来推导通项公式。  不过，你提供的题目只给出了“求下一项”或类似的描述吗？实际上你并没有给出完整的序列数据，而是直接问了一个问题：“请列举出 100 个自然数中最大的那个数字”。这似乎是一个逻辑推理题或者是一个脑筋急转弯。  让我们重新审视这个问题： - **第一步**：观察题目中的“下一个整数”是否等于前一个数加一？如果是这样，那答案就是 $n+1$
+  q4 chars=623 wait=0 stutter=False loop=False deg=False fluent=True finish=stop tok_s=14.24
+    text: The sky appears blue because sunlight, which is made of all colors of the visible spectrum, interacts with Earth's atmosphere in a way that depends on wavelength. As sunlight travels through the atmosphere, molecules lik
+COMBO ladder-4       temp=0.70 pres=1.00 rep=1.15  fluent=5/5
+  q0 chars=546 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.05
+    text: 这是一个经典的逻辑谜题，我们可以通过反证法或假设假设法来逐步推导。  首先，我们梳理一下三个人的说法（虽然题目中没有直接给出甲、乙、丙的具体言论内容，但根据这类逻辑题的常规模式以及常见的“骑士与骗子”类谜题结构，通常隐含的是：三人中只有一人说了真话，或者每个人说的都是事实/假言。虽然你提供的描述比较简短，基于经典的逻辑谜题设定，我们假设这是一个标准的逻辑推理题目）。  让我们重新梳理一下这个特定的逻辑题模型（这是这类逻辑谜题的标准模板）
+  q1 chars=1231 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.05
+    text: Let's break down the logic step-by-step to determine if your conclusion is correct.  ### 1. Analyze the Premises First, let's establish what we know based on standard logical deduction rules (assuming this follows a syll
+  q2 chars=519 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.03
+    text: 这是一个经典的概率博弈问题，通常被称为**蒙特·侯利问题（Monty Hall Problem）**。  ### 结论 如果你坚持原来的选择，你赢得汽车的概率是 **1/3**。但如果你想最大化中奖几率，你应该**更换选项**。因此，正确的策略应该是：**换门获胜的概率为 2/3 (约 67%)**；而留在原地不选（即保持原选择）只有赢的 1/3 机会。  以下是详细的逻辑推导和分析：  ### 核心逻辑分析  #### 1. 初始设定
+  q3 chars=534 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.05
+    text: 要找出这个数列的规律，我们可以先观察前几项（如果已知更多项的话）或者根据题目隐含的逻辑来推导通项公式。  不过，你提供的描述中只提到了“求和”或类似的逻辑吗？等等，这里可能有个误解：**用户并没有给出具体的数字序列数据**。让我们重新梳理一下：如果你只是在问一个通用的数学问题，“请找出前 $n$ 个正整数之和”，那确实是标准的等差数列求和问题。  不过，根据你提供的信息，这是一个经典的**自然数求和公式**的问题。我们来一步步推导：  
+  q4 chars=1606 wait=1 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.08
+    text: The sky appears blue because sunlight, which is white light containing all colors of the visible spectrum (red through violet), consists of many wavelengths. As this light passes through Earth's atmosphere, shorter wavel
+COMBO ladder-5       temp=0.80 pres=0.90 rep=1.10  fluent=4/5
+  q0 chars=521 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.05
+    text: 这是一个经典的逻辑谜题，我们可以通过假设法（反证法）来逐步推导结论。以下是详细的推理过程：  ### 第一步：假设甲在撒谎 假设“甲说真话”这个命题是假的，或者更准确地说，我们先假设**前提本身成立**。但为了严谨起见，我们直接代入三种可能的人选情况来分析是否符合逻辑自洽性。  设 P1 = A（那男人的哥哥），B 为乙，C 为丙。 题目实际上是让三个角色——A、乙和 C——来相互指认他们的身份或状态，这其实是一个经典的逻辑谜题变体。让
+  q1 chars=1252 wait=1 stutter=True loop=False deg=False fluent=False finish=length tok_s=14.05
+    text: Let's break down the logical structure of this problem step by step.  ### 1. Analyze the Premises First, let's translate your question into symbolic logic to ensure clarity: *   Let **P** be "X is an X" (where $x$ is any
+  q2 chars=541 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.03
+    text: 这是一个经典的概率谜题，被称为**蒙特·霍尔问题（Monty Hall Problem）**。这个问题的核心在于区分“随机选择”和“策略性选择”，以及初始条件与后续事件的关系。  ### 结论先行 **是的，你应该换门。**  无论你之前选择了哪个门，只要你的逻辑是：**你选到了羊**（或者更准确地说，主持人根据规则只把门打开给你看），那么只要你坚持你最初的选择不改变策略，你就应该**更换**。但如果我们严格按照你描述的这个特定场景来拆
+  q3 chars=498 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.05
+    text: 要找出这个数列的规律，我们可以先观察前几项（如果已知更多项的话）或者根据题目隐含的含义来推导通项公式。  不过，从你给出的问题来看，“... (没有列出完整序列)" 这暗示可能存在一个常见的数学数列模式，例如： - 1, 4, 6, 8, ... （这是偶数列：$2n$） 或者另一个常见模式是平方数的差值等。  但结合用户提到的“求和”、“差分方程”，以及常见的数学问题结构，这里最可能的情况是**这是一个关于数列递推或通项公式的问题**
+  q4 chars=908 wait=0 stutter=False loop=False deg=False fluent=True finish=stop tok_s=14.18
+    text: The sky appears blue due to a phenomenon called **Rayleigh scattering**, which occurs when sunlight interacts with the molecules in Earth's atmosphere. Sunlight consists of all colors of the visible spectrum, but differe
+COMBO ladder-6       temp=0.80 pres=1.10 rep=1.20  fluent=4/5
+  q0 chars=538 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.04
+    text: 这是一个经典的逻辑谜题，我们可以通过**反证法（假设法）**来一步步推导结论。  ### 第一步：假设“甲说真话”是假的 首先我们假设：**陈述者 A、乙和丙都说的是谎言**。这意味着他们互相的话都是谎言。但这通常意味着至少有一方在说谎导致矛盾。让我们先尝试另一种逻辑路径，即直接测试三个人的可能身份（A=第一人称叙述者/说话人）。  更严谨的逻辑推导如下：  假设三人中有一个人是“骗子”，其余两人可能是真话或假说的组合？不，这太复杂了。
+  q1 chars=1289 wait=5 stutter=False loop=False deg=False fluent=False finish=length tok_s=14.04
+    text: Let's break down the logical structure of this problem step by step.  ### 1. Analyze the Premises First, let's translate your question into symbolic logic to ensure clarity: *   Let **P** be "X is an X" (where $x$ repres
+  q2 chars=540 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.03
+    text: 这是一个经典的概率谜题，被称为**蒙特·霍尔问题（Monty Hall Problem）**。这个问题的核心在于区分“随机选择”和基于特定信息的条件概率变化。  ### 逻辑推导过程：  1. **初始状态分析**      - 三扇门背后各隐藏一个奖或无奖金（此处假设门后有一辆羊和一个空位，即至少有一个是赢的）。    - 你选择一个选项（比如 A），主持人告诉你“不会是这个”，但这并不意味着另一扇门的概率会变化——关键在于剩下的两个
+  q3 chars=533 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.04
+    text: 要找出这个数列的规律，我们可以先观察前几项（如果已知更多数据的话）或者根据题目隐含的逻辑推导出通式。  不过，在你提供的描述中**并没有直接给出序列的前几个数字**。为了给你最准确的解答，我们需要确认具体的数值模式。通常这类问题有几种常见的规律类型： 1.  **等差数列 (Arithmetic Progression)**: 相邻两项的差是一个常数（例如 $2, 4, 6, \dots$）。     *   公式形式：$a_n = a
+  q4 chars=913 wait=0 stutter=False loop=False deg=False fluent=True finish=stop tok_s=14.19
+    text: The sky appears blue due to a phenomenon called **Rayleigh scattering**, which occurs when sunlight interacts with the molecules in Earth's atmosphere. Sunlight consists of all colors visible on the electromagnetic spect
+COMBO ladder-7       temp=0.90 pres=1.20 rep=1.20  fluent=5/5
+  q0 chars=541 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.04
+    text: 这是一个经典的逻辑谜题，我们可以通过**反证法（假设法）**来一步步推导结论。  ### 第一步：假设“甲说真话”是假的 首先我们假设：**所有人都在撒谎**。如果每个人的陈述都是错误的，那么三个人说的话就是谎言。但如果我们要验证这个情况是否成立，我们需要看这三种可能性中哪一个是自洽的。  让我们尝试三种可能的情况（A、B、C）来推导谁在发言：  **场景一：只有“甲说假话”是合理的解释？** 不行，题目没有直接问谁是坏人，而是要求我们
+  q1 chars=1469 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.05
+    text: Let's break down the logical structure of this problem step by step.  ### 1. Analyze the Premises First, let's translate your question into symbolic logic to ensure clarity: *   Let **P** be "X is an X" (Part A). In set 
+  q2 chars=555 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.02
+    text: 这是一个经典的概率谜题，被称为**蒙特·霍尔问题（Monty Hall Problem）**。这个问题的核心在于区分“随机选择”和基于特定信息的条件概率变化。  ### 逻辑推导过程：  1. **初始状态分析**      - 三扇门背后各隐藏一个奖或无价值物品。**假设你选的是 A、B、C，其中只有一个会有汽车（或藏有奖励）**     2. 当主持人告诉你“门 B"不是你的答案时；无论这个选择是随机的还是故意设计的。  ---  
+  q3 chars=529 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.05
+    text: 要找出这个数列的规律，我们可以先观察前几项（如果已知更多数据会更准确），或者根据常见的数学序列特征进行推导。  虽然你还没有给出完整的题目描述或具体的数字列表来确认这是一个特定的数列为 $f(n) = n^2 - 1$、$n!/(n-1)$ 还是某个特定数列的变体，但通常这类问题在标准竞赛题中指的是求 **前 $n$ 个自然数的和**（即累加），或者其对应的三角形数和三角数。  ### 推导过程分析：  #### 情况一：如果你是在问“
+  q4 chars=1617 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.08
+    text: The sky appears blue primarily due to a phenomenon known as **Rayleigh scattering**. When sunlight interacts with the atmosphere, it consists of light waves across various wavelengths (colors), ranging from violet and re
+COMBO ladder-8       temp=0.50 pres=0.50 rep=1.05  fluent=4/5
+  q0 chars=495 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.05
+    text: 这是一个经典的逻辑谜题。我们可以通过逻辑推理来逐步推导结论，而不需要猜测。  ### 第一步：假设并测试假设  我们假设其中一人的话是“真话”，然后看看是否会导致矛盾。如果产生矛盾，那么假设就是错误的。  **假设 A：甲（A）说“我是假的”（即 A 自己是假的）。** - 如果 A 是假的，那么 A 所说的“我说的都是真的”就是假的，这与“我是假的”相矛盾。 - 因此，如果一个人说“我撒谎”，那么他实际上一定是真话。  让我们重新梳理
+  q1 chars=1044 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.05
+    text: Let's break this down step-by-step using logic and set theory.  ### 1. Analyze the Premises First, let's translate your question into logical statements based on the terms provided:  *   **Premise 1:** All $X$ are $A$. (
+  q2 chars=523 wait=0 stutter=True loop=False deg=False fluent=False finish=length tok_s=14.03
+    text: 这是一个经典的概率论问题，通常被称为**蒙特·卡洛问题**（Monty Hall Problem）。  ### 结论 **是的，你应该换门。**  在这个特定的情境下，你的直觉可能会告诉你“交换一下”或者“不换”，但数学上的最优策略是：**你应当更换选择**。  以下是详细的逻辑分析：  ### 1. 场景设定与概率分析 假设我们有三扇门，分别标记为 A、B、和 C。 *   **汽车的位置**：随机分布在三个位置之一（概率各为 1/3
+  q3 chars=546 wait=0 stutter=False loop=False deg=False fluent=True finish=length tok_s=14.04
+    text: 这是一个经典的数列问题。我们可以通过观察数字之间的规律来找到规律，然后推导出通项公式。  ### 第一步：分析已知数据点 首先，我们需要确定题目中的“数字”实际上是指什么序列。通常这类问题是从整数序列中选取的特定项，或者是一个特定的数列（如自然数平方、阶乘等）。  让我们先假设这是一个标准的数学序列题。如果直接说“第 $n$ 个数为 $a_n$"，而没有给出具体的数列定义，我们通常默认这是在考察常见的数列规律。  但是，如果我们只给出一
+  q4 chars=903 wait=0 stutter=False loop=False deg=False fluent=True finish=stop tok_s=14.19
+    text: The sky appears blue because sunlight, which is made of all colors of the visible spectrum, interacts with gas molecules in Earth's atmosphere through a process called **Rayleigh scattering**.  Sunlight consists of all c
+
+WINNER: label=ladder-7 temp=0.90 presence=1.20 rep=1.20 fluent=5/5
+
+================================================================================
+==== TASK 12/14 HANDOVER FINAL 2026-11-08 10:46:43 +0800 ====
+================================================================================
+Scope: inherit the prior agent's uncommitted sampler work, bake release defaults,
+       add the WebUI Advanced Settings panel, rebuild, restart, end-to-end test.
+No forward-pass refactor, no Git history rewrite, README/LICENSE untouched.
+
+--- 1. What was already in the working tree (found, not rebuilt) ---
+  bonsai_forward.h : Sampler::pick(logits, n, hist) with presence / repetition /
+                     frequency penalties over a 64-token window, applied to a COPY
+                     of the logits so adjustments never leak into the next step.
+  bonsai_http.h    : per-request temperature / presence_penalty /
+                     repetition_penalty / frequency_penalty -> g_req -> fwd_run;
+                     g_req is reset both before and after every reply (no leakage).
+  tools/tune_sampler.py, runs/tuning_search_v1.json, the 9-combo ladder above.
+  GAP A: Sampler struct defaults were STILL temp=0.00 / presence=0.00 / rep=1.00,
+         i.e. the winning combo was never baked in. Any request without overrides
+         still took the greedy argmax path and still looped.
+  GAP B: no Advanced Settings panel existed. The +272/-36 in index.html was the
+         i18n English pass, unrelated to sampling. runtime_vk/index.html is a
+         BUILD PRODUCT of webui/build.mjs, so the source lives in webui/src/.
+
+--- 2. Changes made (incremental) ---
+  runtime_vk/bonsai_forward.h   Sampler defaults -> temp=0.70, presence_penalty=0.50,
+                                rep_penalty=1.15. Corrected the stale comment that
+                                claimed the overnight winner was already the default.
+                                pick() and the penalty math were NOT touched.
+  webui/src/template.html       collapsible <details id="advanced"> with 3 sliders
+  webui/src/style.css           panel layout (3 columns desktop, 1 column <=720px)
+  webui/src/js/10-api.js        requestBody() emits presence_penalty and
+                                repetition_penalty alongside temperature
+  webui/src/js/30-ui.js         samplerSettings() reads sliders per send; wireAdvanced()
+  webui/src/js/00-core.js       en/zh strings for the panel
+  webui/src/js/40-selftest.js   2 assertions for the new request fields
+  runtime_vk/index.html         regenerated by node webui/build.mjs (119360 B)
+
+--- 3. Build (build_mingw.bat, DEV=D:/dev, -Wall) ---
+  exit 0, WARNING LINES = 0. All 8 binaries rebuilt OK.
+  GPU selftest: 0.285 ms/token-op, 176.9 Gop/s, rel err 1.06e-07.
+  Full log: runs/build_task12_final.log
+  NOTE: the daemon had to be stopped BEFORE linking (Windows locks a running .exe).
+        Old PID 10100 killed; new daemon PID 23508, thinking=off, cap=2048.
+  Full log: runs/serve_task12_final.log
+
+--- 4. End-to-end test (seed=42, max_tokens=120, stream=false) ---
+  Server-side `sampler:` line proves which values actually reached pick():
+    no override      -> temp=0.70 rep=1.15 pres=0.50   (compiled defaults)
+    ui-params        -> temp=0.70 rep=1.15 pres=0.50   (what the sliders send)
+    greedy-control   -> temp=0.00 rep=1.00 pres=0.00   (HTTP override works)
+    winner-override  -> temp=0.90 rep=1.20 pres=1.20   (HTTP override works)
+
+  prompt                  config           chars  adjacent-dup    fluent   secs
+  What does the LOL mean? default           270   -               True     5.8
+  What does the LOL mean? ui-params        270   -               True     5.7
+  What does the LOL mean? greedy-control   446   joke/amusement  False   10.2
+  What does the LOL mean? winner-override  536   -               True    10.5
+  introduce yourself      default          562   stories         False   10.3
+  introduce yourself      ui-params        562   stories         False   10.3
+  introduce yourself      greedy-control   409   coding/stories  False    7.9
+  introduce yourself      winner-override  257   -               True     5.9
+
+  default and ui-params are BYTE-IDENTICAL at a fixed seed: the compiled defaults
+  and the WebUI sliders are the same numbers.
+
+  Greedy control, "What does the LOL mean?":
+    "...amusement or amusement at a joke, joke, or funny situation."    <- loop
+  Default, "What does the LOL mean?":
+    "**LOL** stands for **"Laughing Out Loud."** ..."                   <- clean
+  Greedy control, "introduce yourself":
+    "...like stories or stories. Whether you need help with coding, coding..." <- loop
+
+--- 5. Verdict (honest) ---
+  ROOT CAUSE CONFIRMED. Baking temp>0 + presence + repetition into the compiled
+  defaults removes the greedy loop on the short prompts the handover named.
+  "What does the LOL mean?" is fully clean on the shipped defaults.
+
+  RESIDUAL, NOT HIDDEN: "introduce yourself" still emits one adjacent repeat on
+  the shipped defaults - "Creative writing (stories, stories, scripts)". It is
+  much better than greedy (which had TWO repeats) but not spotless.
+  The ladder's WINNER (temp=0.90 / presence=1.20 / rep=1.20), sent as an HTTP
+  override, is clean on BOTH prompts (257 chars, concise, no repetition). It is
+  inside the slider ranges, so a user can reach it from Advanced Settings.
+  Recommendation for the architect: either raise the compiled defaults to the
+  winner, or ship 0.70/0.50/1.15 as specified and expose the winner as a preset.
+  This run keeps the handover-specified defaults verbatim.
+
+  Note on the earlier ladder: control-greedy scored fluent=5/5 there because its
+  5 logic questions do not trigger the short-prompt loop. The two prompts in this
+  section are the discriminating cases and were added for that reason.
+
+--- 6. Front-end gates ---
+  node webui/build.mjs                 119360 B, all build-time checks pass
+  audit-delivery.mjs                  13 passed / 0 failed / 1 pre-existing WARN
+                                      (accent value in JS near line 696, not from
+                                       this change)
+  __APP__.runAllTests() in Edge/CDP  177 passed / 0 failed,
+                                      exceptions 0, consoleErrors 0, logErrors 0
+                                      (incl. the 2 new request-field assertions)
+  GET / on :8080                     serves the rebuilt page with Advanced Settings
+================================================================================

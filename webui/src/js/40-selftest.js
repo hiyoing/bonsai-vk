@@ -264,11 +264,15 @@ function layerA(r) {
     { role: 'user', content: 'one' }, { role: 'assistant', content: 'two' }, { role: 'user', content: 'three' }
   ]);
   r.eq('A', 'system prompt is prepended when given', buildMessages(turns, 'sys')[0], { role: 'system', content: 'sys' });
-  const body = requestBody([{ role: 'user', content: 'x' }], { maxTokens: 64, temperature: 0.7, seed: 42 });
+  const body = requestBody([{ role: 'user', content: 'x' }], {
+    maxTokens: 64, temperature: 0.7, seed: 42, presencePenalty: 0.5, repetitionPenalty: 1.15
+  });
   r.eq('A', 'request asks for a stream', body.stream, true);
   r.eq('A', 'request carries max_tokens', body.max_tokens, 64);
   r.eq('A', 'request carries temperature', body.temperature, 0.7);
   r.eq('A', 'request carries seed', body.seed, 42);
+  r.eq('A', 'request carries presence_penalty', body.presence_penalty, 0.5);
+  r.eq('A', 'request carries repetition_penalty', body.repetition_penalty, 1.15);
   r.eq('A', 'request omits an unset top_p', Object.prototype.hasOwnProperty.call(body, 'top_p'), false);
   setSeed(seedBefore);   // layer A ran outside withTestEnv; leave the PRNG where the page had it
 }
@@ -513,7 +517,7 @@ async function layerC(r, api) {
     replies: [{ httpError: 429, message: 'the engine is generating another reply' }]
   }, ['被拒绝的问题']);
   r.eq('C', 'a 429 ends the turn as an error', busy.log[0].status, 'error');
-  r.ok('C', 'the 429 note explains the single-conversation limit', busy.log[0].error.indexOf('一次只跑一个对话') !== -1, busy.log[0].error);
+  r.ok('C', 'the 429 note explains the single-conversation limit', busy.log[0].error.indexOf(i18n('err429')) !== -1, busy.log[0].error);
   r.eq('C', 'a 429 releases the busy flag', S.busy, false);
   r.eq('C', 'a failed reply is not sent back in the next prompt', buildMessages(S.turns, '').length, 1);
 
@@ -613,7 +617,7 @@ async function layerD(r, api) {
   copyBtn.click();
   await settle();
   if (copied.length) r.eq('D', 'copy puts the code on the clipboard', copied[0], 'ls -l');
-  else r.ok('D', 'copy falls back without throwing', /复制/.test(copyBtn.textContent), copyBtn.textContent);
+  else r.ok('D', 'copy falls back without throwing', /复制|Copy/i.test(copyBtn.textContent), copyBtn.textContent);
   if (clipInstalled) {
     try {
       if (clipDesc) Object.defineProperty(navigator, 'clipboard', clipDesc);
@@ -666,6 +670,57 @@ async function layerD(r, api) {
   r.eq('D', 'new chat leaves the engine idle', S.busy, false);
 }
 
+// ------------------------------------------------------------------ E (i18n)
+// The bilingual chrome contract: English by default, an instant EN/中 toggle that repaints the DOM
+// without a reload, model output left verbatim, and a toggle that stays neutral (never the accent).
+function layerE(r) {
+  const savedLang = getLang();
+  const sentinel = window.__i18nSentinel;
+  window.__i18nSentinel = 42;            // survives a toggle => proof the page did not navigate/reload
+
+  setLang('en');
+  r.eq('E', 'default document language is English', document.documentElement.lang, 'en');
+  r.eq('E', 'empty title is English', el('empty-title').textContent, 'What can I help you with?');
+  r.eq('E', 'empty sub is English', el('empty-sub').textContent, 'Local inference · weights never leave this machine · no cloud dependency');
+  r.eq('E', 'composer placeholder is English', el('input').getAttribute('placeholder'), 'Message Bonsai…');
+  r.eq('E', 'new-chat label is English', el('btn-new').querySelector('span').textContent, 'New chat');
+  r.ok('E', 'EN option is marked active', el('btn-lang').querySelector('[data-lang="en"]').classList.contains('active'));
+  r.ok('E', 'ZH option is inactive in English', !el('btn-lang').querySelector('[data-lang="zh"]').classList.contains('active'));
+
+  // Model output belongs to the model; a chrome language switch must never rewrite it.
+  addUserTurn('Model output 你好 stays verbatim');
+  const userText = S.turns[S.turns.length - 1].text;
+
+  toggleLang();                          // en -> zh, instant
+  r.eq('E', 'toggle switches document language to Chinese', document.documentElement.lang, 'zh-CN');
+  r.eq('E', 'empty title becomes Chinese', el('empty-title').textContent, '有什么可以帮你的？');
+  r.eq('E', 'composer placeholder becomes Chinese', el('input').getAttribute('placeholder'), '给 Bonsai 发消息…');
+  r.ok('E', 'ZH option is marked active', el('btn-lang').querySelector('[data-lang="zh"]').classList.contains('active'));
+  r.eq('E', 'a chip prompt is localised too', document.querySelector('.chip').getAttribute('data-prompt'), i18n('chip1prompt'));
+  r.eq('E', 'model output is NOT translated by the toggle', S.turns[S.turns.length - 1].text, userText);
+  r.eq('E', 'the language switch did not reload the page', window.__i18nSentinel, 42);
+
+  toggleLang();                          // zh -> en
+  r.eq('E', 'toggling back restores English', document.documentElement.lang, 'en');
+  r.eq('E', 'toggling back restores the English title', el('empty-title').textContent, 'What can I help you with?');
+
+  // Geometry, measured at the runner's 1440x900: toggle in the header band, right of the badge,
+  // clear of the centred title, and painted with paper rather than the terracotta accent.
+  const hdrR = el('hdr').getBoundingClientRect();
+  const langR = el('btn-lang').getBoundingClientRect();
+  const badgeR = el('badge').getBoundingClientRect();
+  const titleR = el('hdr-title').getBoundingClientRect();
+  r.ok('E', 'the toggle is inside the header band', langR.top >= hdrR.top - 0.5 && langR.bottom <= hdrR.bottom + 0.5, JSON.stringify({ lang: langR.top, hdr: hdrR.top }));
+  r.ok('E', 'the toggle sits at the right edge', langR.right <= hdrR.right + 0.5 && langR.right > hdrR.right - 40, 'lang.right=' + langR.right);
+  r.ok('E', 'the badge is left of the toggle, no overlap', badgeR.right <= langR.left + 0.5, JSON.stringify({ badge: badgeR.right, lang: langR.left }));
+  r.ok('E', 'the centred title does not overlap the badge', titleR.right <= badgeR.left + 0.5, JSON.stringify({ title: titleR.right, badge: badgeR.left }));
+  r.eq('E', 'the toggle background is paper, not the accent', getComputedStyle(el('btn-lang')).backgroundColor, 'rgb(255, 255, 255)');
+
+  newChat();
+  window.__i18nSentinel = sentinel;
+  setLang(savedLang);
+}
+
 // ------------------------------------------------------------------ entry
 async function runAllTests() {
   const started = performance.now();
@@ -677,11 +732,12 @@ async function runAllTests() {
     await withTestEnv(async function (api) {
       await layerC(r, api);
       await layerD(r, api);
+      layerE(r);
     });
   } catch (err) {
     r.ok('C', 'the suite itself did not throw', false, (err && err.stack) || String(err));
   }
-  const totals = { A: 0, B: 0, C: 0, D: 0, passed: 0, failed: 0 };
+  const totals = { A: 0, B: 0, C: 0, D: 0, E: 0, passed: 0, failed: 0 };
   for (let i = 0; i < r.results.length; i++) {
     const x = r.results[i];
     totals[x.layer] = (totals[x.layer] || 0) + 1;
@@ -714,6 +770,10 @@ window.__APP__ = {
   advance: function (ms) { pumpAdvance(ms); },
   flush: function () { flushTypewriter(); },
   setSeed: setSeed,
+  setLang: setLang,
+  getLang: getLang,
+  toggleLang: toggleLang,
+  i18n: i18n,
   setTransport: function (t) { S.transport = t; },
   makeMockTransport: makeMockTransport,
   mockStatus: MOCK_STATUS,

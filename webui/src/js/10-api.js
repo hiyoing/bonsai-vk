@@ -184,5 +184,10 @@ function requestBody(messages, opts) {
   if (opts && typeof opts.temperature === 'number') b.temperature = opts.temperature;
   if (opts && typeof opts.topP === 'number') b.top_p = opts.topP;
   if (opts && typeof opts.seed === 'number') b.seed = opts.seed;
+  // Sampler knobs from the Advanced Settings panel. They are always sent, not only when they differ
+  // from the engine defaults: the server resets its per-request overrides at the end of every reply,
+  // so an omitted key would silently fall back to the compiled-in value instead of the slider value.
+  if (opts && typeof opts.presencePenalty === 'number') b.presence_penalty = opts.presencePenalty;
+  if (opts && typeof opts.repetitionPenalty === 'number') b.repetition_penalty = opts.repetitionPenalty;
   return b;
 }

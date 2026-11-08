@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -94,9 +94,16 @@ body {
 }
 .hdr-btn:hover { color: var(--ink); background: var(--wash); }
 
-#badge {
+#hdr-right {
   position: absolute;
   right: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 48vw;
+}
+
+#badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -112,6 +119,29 @@ body {
   cursor: default;
 }
 #badge-text { overflow: hidden; text-overflow: ellipsis; }
+
+/* The language toggle is chrome, not an action: it stays neutral grey so the terracotta accent keeps
+   meaning only "send / streaming / link / focus". The active language is ink + weight, never accent. */
+.lang-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+.lang-btn:hover { color: var(--ink); background: var(--wash); }
+.lang-opt { opacity: .45; }
+.lang-opt.active { opacity: 1; font-weight: 600; color: var(--ink); }
+.lang-slash { opacity: .35; }
 .dot {
   width: 5px; height: 5px;
   border-radius: 50%;
@@ -476,6 +506,73 @@ body {
   color: var(--muted);
 }
 
+/* ------------------------------------------------------------------ advanced settings */
+/* A collapsed <details> inside the fixed dock. It grows upward when opened, so the composer and
+   the hint keep their geometry; the three sliders sit in one row on desktop, one per row on phones. */
+#advanced {
+  max-width: var(--col);
+  margin: 0 auto 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+#advanced > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+#advanced > summary::-webkit-details-marker { display: none; }
+#advanced > summary::before {
+  content: '';
+  width: 0; height: 0;
+  border-left: 4px solid var(--faint);
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  transition: transform .14s;
+}
+#advanced[open] > summary::before { transform: rotate(90deg); }
+#advanced > summary:hover { color: var(--ink); }
+.adv-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px 18px;
+  margin-top: 6px;
+  padding: 10px 14px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--paper);
+}
+.adv-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
+}
+.adv-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adv-row input[type="range"] {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--terracotta);
+  cursor: pointer;
+}
+.adv-row output {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.adv-note {
+  margin: 6px 2px 0;
+  font-size: 10.5px;
+  color: var(--faint);
+}
+
 /* ------------------------------------------------------------------ toast */
 #toast {
   position: fixed;
@@ -506,13 +603,16 @@ body {
   .hdr-bar, .hdr-sub { display: none; }
   .hdr-btn span { display: none; }
   .hdr-btn { padding: 0 8px; }
-  #badge { font-size: 10px; max-width: 46vw; right: 12px; }
+  #hdr-right { right: 10px; gap: 6px; max-width: 54vw; }
+  #badge { font-size: 10px; max-width: 34vw; }
+  .lang-btn { height: 26px; padding: 0 7px; font-size: 11px; }
   #thread { padding: 24px 14px 156px; }
   #empty { padding: 8vh 0 18px; }
   #empty-title { font-size: 21px; }
   .bubble { max-width: 90%; }
   #dock { padding: 8px 12px 10px; }
   #hint { font-size: 10.5px; }
+  .adv-grid { grid-template-columns: 1fr; gap: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -524,13 +624,18 @@ body {
 <body>
 
 <header id="hdr">
-  <button id="btn-new" class="hdr-btn" type="button" title="开始新对话 (Ctrl+Shift+O)">
+  <button id="btn-new" class="hdr-btn" type="button" data-i18n-title="newChatTitle" title="New chat (Ctrl+Shift+O)">
     <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-    <span>新对话</span>
+    <span data-i18n="newChat">New chat</span>
   </button>
   <h1 id="hdr-title">Project Bonsai <span class="hdr-bar">|</span> <span class="hdr-sub">1.58-bit Engine</span></h1>
-  <div id="badge" aria-live="off" title="引擎状态">
-    <span id="badge-dot" class="dot"></span><span id="badge-text">connecting</span>
+  <div id="hdr-right">
+    <div id="badge" aria-live="off" data-i18n-title="badgeTitle" title="Engine status">
+      <span id="badge-dot" class="dot"></span><span id="badge-text">connecting</span>
+    </div>
+    <button id="btn-lang" class="lang-btn" type="button" title="Switch language" aria-label="Switch language">
+      <span class="lang-opt active" data-lang="en">EN</span><span class="lang-slash" aria-hidden="true">/</span><span class="lang-opt" data-lang="zh">中</span>
+    </button>
   </div>
 </header>
 
@@ -540,12 +645,12 @@ body {
       <div id="empty-mark" aria-hidden="true">
         <svg viewBox="0 0 48 48" width="44" height="44" focusable="false"><path d="M24 43V22M24 22c0-7 5-12 12-12 0 7-5 12-12 12Zm0 4c0-6-4.5-10.5-10.5-10.5C13.5 23.5 18 28 24 28Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 43h18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
       </div>
-      <h2 id="empty-title">有什么可以帮你的？</h2>
-      <p id="empty-sub">本地推理 · 权重不出这台机器 · 无云端依赖</p>
+      <h2 id="empty-title" data-i18n="emptyTitle">What can I help you with?</h2>
+      <p id="empty-sub" data-i18n="emptySub">Local inference · weights never leave this machine · no cloud dependency</p>
       <div id="chips">
-        <button class="chip" type="button" data-prompt="用三句话解释什么是三值量化（ternary quantization），并说明它为什么省显存。">解释三值量化</button>
-        <button class="chip" type="button" data-prompt="写一个 Python 函数，用 Vulkan 的 API 枚举本机所有支持 compute 的物理设备，只打印设备名。">写一段 Vulkan 代码</button>
-        <button class="chip" type="button" data-prompt="把下面这句话翻译成英文，并给出一个更口语化的版本：这张显卡只要一百块钱，但它能跑九十亿参数的大模型。">翻译一句话</button>
+        <button class="chip" type="button" data-i18n="chip1" data-i18n-prompt="chip1prompt" data-prompt="Explain in three sentences what ternary quantization is, and why it saves VRAM.">Explain ternary quantization</button>
+        <button class="chip" type="button" data-i18n="chip2" data-i18n-prompt="chip2prompt" data-prompt="Write a Python function that uses the Vulkan API to enumerate every physical device on this machine that supports compute, printing only the device name.">Write some Vulkan code</button>
+        <button class="chip" type="button" data-i18n="chip3" data-i18n-prompt="chip3prompt" data-prompt="Translate this sentence into English and give a more colloquial version: This graphics card costs only a hundred yuan, yet it can run a nine-billion-parameter large model.">Translate a sentence</button>
       </div>
     </section>
     <div id="msgs" aria-live="polite" aria-relevant="additions text"></div>
@@ -553,16 +658,37 @@ body {
 </main>
 
 <footer id="dock">
+  <details id="advanced">
+    <summary data-i18n="advancedTitle">Advanced Settings</summary>
+    <div class="adv-grid">
+      <label class="adv-row" for="adv-temp">
+        <span class="adv-name" data-i18n="advTemp">Temperature</span>
+        <output id="adv-temp-val" for="adv-temp">0.70</output>
+        <input id="adv-temp" type="range" min="0" max="2" step="0.05" value="0.7" data-i18n-aria="advTemp" aria-label="Temperature">
+      </label>
+      <label class="adv-row" for="adv-pres">
+        <span class="adv-name" data-i18n="advPres">Presence Penalty</span>
+        <output id="adv-pres-val" for="adv-pres">0.50</output>
+        <input id="adv-pres" type="range" min="0" max="2" step="0.05" value="0.5" data-i18n-aria="advPres" aria-label="Presence Penalty">
+      </label>
+      <label class="adv-row" for="adv-rep">
+        <span class="adv-name" data-i18n="advRep">Repetition Penalty</span>
+        <output id="adv-rep-val" for="adv-rep">1.15</output>
+        <input id="adv-rep" type="range" min="1" max="2" step="0.05" value="1.15" data-i18n-aria="advRep" aria-label="Repetition Penalty">
+      </label>
+    </div>
+    <p class="adv-note" data-i18n="advNote">Engine defaults 0.70 / 0.50 / 1.15 — sent with every request.</p>
+  </details>
   <form id="composer" autocomplete="off">
-    <textarea id="input" rows="1" placeholder="给 Bonsai 发消息…" aria-label="消息输入框"></textarea>
-    <button id="stop" class="pill-btn" type="button" title="停止生成" hidden>
+    <textarea id="input" rows="1" data-i18n-ph="inputPlaceholder" data-i18n-aria="inputAria" placeholder="Message Bonsai…" aria-label="Message input"></textarea>
+    <button id="stop" class="pill-btn" type="button" data-i18n-title="stopTitle" title="Stop generating" hidden>
       <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor"/></svg>
     </button>
-    <button id="send" type="submit" title="发送 (Enter)" aria-label="发送" disabled>
+    <button id="send" type="submit" data-i18n-title="sendTitle" data-i18n-aria="sendAria" title="Send (Enter)" aria-label="Send" disabled>
       <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
   </form>
-  <p id="hint"><span class="key">Enter</span> 发送 · <span class="key">Shift+Enter</span> 换行 · <span id="ctx-note">内容由本地模型生成，请自行核对</span></p>
+  <p id="hint"><span class="key">Enter</span> <span data-i18n="hintSend">to send</span> · <span class="key">Shift+Enter</span> <span data-i18n="hintNewline">for a newline</span> · <span id="ctx-note" data-i18n="ctxDefault">Content is generated by a local model; please verify it yourself.</span></p>
 </footer>
 
 <div id="toast" role="status" aria-live="polite" hidden></div>
@@ -731,6 +857,157 @@ function findTurn(id) {
 function lastAssistant() {
   for (let i = S.turns.length - 1; i >= 0; i--) if (S.turns[i].role === 'assistant') return S.turns[i];
   return null;
+}
+
+// ===== i18n =====
+// A deliberately tiny dictionary, not a library. Every user-facing string the chrome owns lives here
+// in two languages; model output is never translated (it is the model's, not ours). t(key) reads the
+// active language, applyLang() repaints the static [data-i18n] nodes plus the dynamic badge/transcript,
+// and setLang() persists the choice. Default is English; the header toggle swaps instantly, no reload.
+const I18N = {
+  en: {
+    langTitle: 'Switch language',
+    newChat: 'New chat',
+    newChatTitle: 'New chat (Ctrl+Shift+O)',
+    badgeTitle: 'Engine status',
+    emptyTitle: 'What can I help you with?',
+    emptySub: 'Local inference · weights never leave this machine · no cloud dependency',
+    chip1: 'Explain ternary quantization',
+    chip2: 'Write some Vulkan code',
+    chip3: 'Translate a sentence',
+    chip1prompt: 'Explain in three sentences what ternary quantization is, and why it saves VRAM.',
+    chip2prompt: 'Write a Python function that uses the Vulkan API to enumerate every physical device on this machine that supports compute, printing only the device name.',
+    chip3prompt: 'Translate this sentence into English and give a more colloquial version: This graphics card costs only a hundred yuan, yet it can run a nine-billion-parameter large model.',
+    inputPlaceholder: 'Message Bonsai…',
+    inputAria: 'Message input',
+    stopTitle: 'Stop generating',
+    sendTitle: 'Send (Enter)',
+    sendAria: 'Send',
+    hintSend: 'to send',
+    hintNewline: 'for a newline',
+    ctxDefault: 'Content is generated by a local model; please verify it yourself.',
+    thinking: 'Thinking',
+    charsUnit: 'chars',
+    stopped: 'Stopped',
+    reasoning: 'Thought process',
+    badgeOffline: '【Not connected | localhost:8080】',
+    badgeOfflineTitle: 'Engine not ready: double-click bonsai_vk.exe to start it; this page opens automatically.',
+    generating: 'generating',
+    statusTimeout: 'Status request timed out',
+    ctxPrefix: 'Context',
+    ctxSuffix: 'generated locally, please verify',
+    err429: 'The engine is generating another reply (this build runs one conversation at a time). ',
+    err400: 'Request rejected: ',
+    errOffline: 'Cannot reach the engine: ',
+    errOfflineSuffix: ' (make sure bonsai_vk.exe is still running)',
+    copied: 'Copied',
+    copyFailed: 'Copy failed',
+    copy: 'Copy',
+    fileOffline: 'This page was opened straight from disk. Double-click bonsai_vk.exe so the engine serves it at localhost:8080.',
+    advancedTitle: 'Advanced Settings',
+    advTemp: 'Temperature',
+    advPres: 'Presence Penalty',
+    advRep: 'Repetition Penalty',
+    advNote: 'Engine defaults 0.70 / 0.50 / 1.15 — sent with every request.'
+  },
+  zh: {
+    langTitle: '切换语言',
+    newChat: '新对话',
+    newChatTitle: '开始新对话 (Ctrl+Shift+O)',
+    badgeTitle: '引擎状态',
+    emptyTitle: '有什么可以帮你的？',
+    emptySub: '本地推理 · 权重不出这台机器 · 无云端依赖',
+    chip1: '解释三值量化',
+    chip2: '写一段 Vulkan 代码',
+    chip3: '翻译一句话',
+    chip1prompt: '用三句话解释什么是三值量化（ternary quantization），并说明它为什么省显存。',
+    chip2prompt: '写一个 Python 函数，用 Vulkan 的 API 枚举本机所有支持 compute 的物理设备，只打印设备名。',
+    chip3prompt: '把下面这句话翻译成英文，并给出一个更口语化的版本：这张显卡只要一百块钱，但它能跑九十亿参数的大模型。',
+    inputPlaceholder: '给 Bonsai 发消息…',
+    inputAria: '消息输入框',
+    stopTitle: '停止生成',
+    sendTitle: '发送 (Enter)',
+    sendAria: '发送',
+    hintSend: '发送',
+    hintNewline: '换行',
+    ctxDefault: '内容由本地模型生成，请自行核对',
+    thinking: '正在思考',
+    charsUnit: '字',
+    stopped: '已停止',
+    reasoning: '思考过程',
+    badgeOffline: '【未连接 | localhost:8080】',
+    badgeOfflineTitle: '引擎尚未就绪：双击 bonsai_vk.exe 启动后会自动打开本页',
+    generating: '生成中',
+    statusTimeout: '状态请求超时',
+    ctxPrefix: '上下文',
+    ctxSuffix: '内容本地生成，请自行核对',
+    err429: '引擎正在生成另一条回复（本构建一次只跑一个对话）。',
+    err400: '请求被拒绝：',
+    errOffline: '连不上引擎：',
+    errOfflineSuffix: '（确认 bonsai_vk.exe 还在运行）',
+    copied: '已复制',
+    copyFailed: '复制失败',
+    copy: '复制',
+    fileOffline: '本页是从磁盘直接打开的。请双击 bonsai_vk.exe，由引擎在 localhost:8080 上提供本页。',
+    advancedTitle: '高级设置',
+    advTemp: '温度 Temperature',
+    advPres: '存在惩罚 Presence Penalty',
+    advRep: '重复惩罚 Repetition Penalty',
+    advNote: '引擎默认值 0.70 / 0.50 / 1.15 —— 随每次请求发送。'
+  }
+};
+
+let LANG = 'en';
+
+function i18n(key) {
+  const d = I18N[LANG] || I18N.en;
+  if (Object.prototype.hasOwnProperty.call(d, key)) return d[key];
+  if (Object.prototype.hasOwnProperty.call(I18N.en, key)) return I18N.en[key];
+  return key;
+}
+
+function getLang() { return LANG; }
+
+// Repaint every node the chrome owns. Static text/placeholder/title/aria/prompt come from data-i18n*
+// attributes; the dynamic badge, context note and transcript are re-rendered through their own real
+// entry points so a language switch never diverges from what a fresh render would produce.
+function applyLang() {
+  document.documentElement.lang = (LANG === 'zh') ? 'zh-CN' : 'en';
+  const nodes = document.querySelectorAll('[data-i18n]');
+  for (let i = 0; i < nodes.length; i++) nodes[i].textContent = i18n(nodes[i].getAttribute('data-i18n'));
+  const ph = document.querySelectorAll('[data-i18n-ph]');
+  for (let i = 0; i < ph.length; i++) ph[i].setAttribute('placeholder', i18n(ph[i].getAttribute('data-i18n-ph')));
+  const ti = document.querySelectorAll('[data-i18n-title]');
+  for (let i = 0; i < ti.length; i++) ti[i].setAttribute('title', i18n(ti[i].getAttribute('data-i18n-title')));
+  const ar = document.querySelectorAll('[data-i18n-aria]');
+  for (let i = 0; i < ar.length; i++) ar[i].setAttribute('aria-label', i18n(ar[i].getAttribute('data-i18n-aria')));
+  const pr = document.querySelectorAll('[data-i18n-prompt]');
+  for (let i = 0; i < pr.length; i++) pr[i].setAttribute('data-prompt', i18n(pr[i].getAttribute('data-i18n-prompt')));
+  const opts = document.querySelectorAll('#btn-lang .lang-opt');
+  for (let i = 0; i < opts.length; i++) {
+    const on = opts[i].getAttribute('data-lang') === LANG;
+    opts[i].classList.toggle('active', on);
+  }
+  const lb = el('btn-lang');
+  if (lb) { lb.title = i18n('langTitle'); lb.setAttribute('aria-label', i18n('langTitle')); }
+  if (typeof setBadge === 'function') setBadge();
+  if (typeof updateCtxNote === 'function') updateCtxNote();
+  if (typeof renderAll === 'function') renderAll();
+}
+
+function setLang(lang) {
+  LANG = (lang === 'zh') ? 'zh' : 'en';
+  try { localStorage.setItem('bonsai-lang', LANG); } catch (err) { /* file:// or private mode: no persistence */ }
+  applyLang();
+}
+
+function toggleLang() { setLang(LANG === 'zh' ? 'en' : 'zh'); }
+
+function initLang() {
+  let saved = 'en';
+  try { const v = localStorage.getItem('bonsai-lang'); if (v === 'zh' || v === 'en') saved = v; } catch (err) { /* default English */ }
+  LANG = saved;
+  applyLang();
 }
 
 // ===== 10-api.js =====
@@ -920,6 +1197,11 @@ function requestBody(messages, opts) {
   if (opts && typeof opts.temperature === 'number') b.temperature = opts.temperature;
   if (opts && typeof opts.topP === 'number') b.top_p = opts.topP;
   if (opts && typeof opts.seed === 'number') b.seed = opts.seed;
+  // Sampler knobs from the Advanced Settings panel. They are always sent, not only when they differ
+  // from the engine defaults: the server resets its per-request overrides at the end of every reply,
+  // so an omitted key would silently fall back to the compiled-in value instead of the slider value.
+  if (opts && typeof opts.presencePenalty === 'number') b.presence_penalty = opts.presencePenalty;
+  if (opts && typeof opts.repetitionPenalty === 'number') b.repetition_penalty = opts.repetitionPenalty;
   return b;
 }
 
@@ -1350,7 +1632,7 @@ function mdCodeBlock(code, lang, closed) {
   const wrap = mk('div', 'codeblock');
   const bar = mk('div', 'codebar');
   const label = mk('span', 'code-lang', lang || 'text');
-  const btn = mk('button', 'copy-btn', '复制');
+  const btn = mk('button', 'copy-btn', i18n('copy'));
   btn.type = 'button';
   btn.setAttribute('data-copy', '1');
   bar.appendChild(label);
@@ -1576,7 +1858,7 @@ function paintBody(t) {
   const src = t.text.slice(0, t.shown);
   clearNode(t.bodyNode);
   if (src) t.bodyNode.appendChild(renderMarkdown(src));
-  else if (t.status === 'streaming') t.bodyNode.appendChild(mk('span', 'md-wait', '正在思考'));
+  else if (t.status === 'streaming') t.bodyNode.appendChild(mk('span', 'md-wait', i18n('thinking')));
   if (t.status === 'streaming' && t.shown > 0) {
     const caret = mk('span', 'caret');
     caret.setAttribute('aria-hidden', 'true');
@@ -1596,7 +1878,7 @@ function paintReason(t) {
   if (!has) return;
   t.reasonBody.textContent = t.reasoning.slice(0, t.reasonShown);
   const n = t.reasoning.length;
-  t.reasonCount.textContent = n + ' 字';
+  t.reasonCount.textContent = n + ' ' + i18n('charsUnit');
   if (t.status === 'streaming' && !t.reasonAutoDone) {
     // Open it once when thinking starts. A manual collapse afterwards must stick, so this is a
     // one-shot latch rather than a condition re-evaluated on every pump tick.
@@ -1616,7 +1898,7 @@ function paintMeta(t) {
   if (t.meta.tokS) bits.push(t.meta.tokS.toFixed(2) + ' tok/s');
   if (t.meta.ms) bits.push(Math.round(t.meta.ms) + ' ms');
   if (t.meta.finish) bits.push(t.meta.finish);
-  if (t.status === 'stopped') bits.push('已停止');
+  if (t.status === 'stopped') bits.push(i18n('stopped'));
   for (let i = 0; i < bits.length; i++) t.metaNode.appendChild(mk('span', null, bits[i]));
   t.metaNode.hidden = bits.length === 0;
 }
@@ -1654,7 +1936,7 @@ function buildAiNode(t) {
   toggle.setAttribute('aria-expanded', 'false');
   const arrow = mk('span', null, '▸');
   toggle.appendChild(arrow);
-  toggle.appendChild(mk('span', null, '思考过程'));
+  toggle.appendChild(mk('span', null, i18n('reasoning')));
   const count = mk('span', 'reason-count', '');
   toggle.appendChild(count);
   const rbody = mk('div', 'reason-body');
@@ -1728,8 +2010,8 @@ function setBadge() {
   const st = S.status;
   if (!S.online || !st) {
     dot.className = 'dot dot-down';
-    txt.textContent = '【未连接 | localhost:8080】';
-    b.title = S.statusError || '引擎尚未就绪：双击 bonsai_vk.exe 启动后会自动打开本页';
+    txt.textContent = i18n('badgeOffline');
+    b.title = S.statusError || i18n('badgeOfflineTitle');
     return;
   }
   dot.className = 'dot ' + (st.busy ? 'dot-busy' : 'dot-live');
@@ -1740,7 +2022,7 @@ function setBadge() {
   if (Number(st.last_tok_s) > 0) rate = fmtRate(st.last_tok_s);
   else if (Number(st.reference_tok_s) > 0) { rate = fmtRate(st.reference_tok_s); ref = true; }
   let s = '【' + dev + ' | ' + size + (rate ? ' | ' + rate + (ref ? ' ref' : '') : '') + '】';
-  if (st.busy) s += ' 生成中';
+  if (st.busy) s += ' ' + i18n('generating');
   txt.textContent = s;
   b.title = [
     'device: ' + st.device,
@@ -1777,7 +2059,7 @@ async function refreshStatus() {
     }
   } catch (err) {
     if (err && err.name === 'AbortError') {
-      S.statusError = '状态请求超时';
+      S.statusError = i18n('statusTimeout');
     } else {
       S.online = false;
       S.statusError = (err && err.message) || String(err);
@@ -1794,9 +2076,9 @@ function updateCtxNote() {
   if (!n) return;
   const st = S.status;
   if (S.online && st && st.cap) {
-    n.textContent = '上下文 ' + st.cap + ' slots · V ' + st.v_quant + ' · 内容本地生成，请自行核对';
+    n.textContent = i18n('ctxPrefix') + ' ' + st.cap + ' slots · V ' + st.v_quant + ' · ' + i18n('ctxSuffix');
   } else {
-    n.textContent = '内容由本地模型生成，请自行核对';
+    n.textContent = i18n('ctxDefault');
   }
 }
 
@@ -1871,6 +2153,36 @@ function finishTurn(t, status, errText) {
   }
 }
 
+// The Advanced Settings sliders are the only user-facing handle on the C++ Sampler. Values are
+// read fresh per send, so a slider moved mid-conversation takes effect on the very next reply.
+const ADV_CONTROLS = [
+  { key: 'temperature',       input: 'adv-temp', out: 'adv-temp-val' },
+  { key: 'presencePenalty',   input: 'adv-pres', out: 'adv-pres-val' },
+  { key: 'repetitionPenalty', input: 'adv-rep',  out: 'adv-rep-val' }
+];
+
+function samplerSettings() {
+  const s = {};
+  for (const c of ADV_CONTROLS) {
+    const node = el(c.input);
+    if (!node) continue;
+    const v = Number(node.value);
+    if (Number.isFinite(v)) s[c.key] = v;
+  }
+  return s;
+}
+
+function wireAdvanced() {
+  for (const c of ADV_CONTROLS) {
+    const node = el(c.input);
+    const out = el(c.out);
+    if (!node || !out) continue;
+    const paint = function () { out.textContent = Number(node.value).toFixed(2); };
+    on(node, 'input', paint);
+    paint();
+  }
+}
+
 async function sendText(raw) {
   const text = String(raw).trim();
   if (!text || S.busy) return false;
@@ -1887,7 +2199,7 @@ async function sendText(raw) {
   pumpSchedule();
 
   const messages = buildMessages(S.turns.slice(0, S.turns.length - 1), '');
-  const body = requestBody(messages, { maxTokens: 1024 });
+  const body = requestBody(messages, Object.assign({ maxTokens: 1024 }, samplerSettings()));
   S.requestsSent += 1;
   const ctl = new AbortController();
   S.abort = ctl;
@@ -1923,9 +2235,9 @@ async function sendText(raw) {
     } else {
       const status = err && err.status ? err.status : 0;
       let msg = (err && err.message) || String(err);
-      if (status === 429) msg = '引擎正在生成另一条回复（本构建一次只跑一个对话）。' + msg;
-      else if (status === 400) msg = '请求被拒绝：' + msg;
-      else if (!S.online) msg = '连不上引擎：' + msg + '（确认 bonsai_vk.exe 还在运行）';
+      if (status === 429) msg = i18n('err429') + msg;
+      else if (status === 400) msg = i18n('err400') + msg;
+      else if (!S.online) msg = i18n('errOffline') + msg + i18n('errOfflineSuffix');
       recordError('api', msg);
       finishTurn(ai, 'error', msg);
       toast(msg.slice(0, 160));
@@ -1970,8 +2282,8 @@ function copyCodeBlock(btn) {
   const code = wrap.querySelector('pre code');
   const text = code ? code.textContent : '';
   function done(ok) {
-    btn.textContent = ok ? '已复制' : '复制失败';
-    setTimeout(function () { btn.textContent = '复制'; }, 1400);
+    btn.textContent = ok ? i18n('copied') : i18n('copyFailed');
+    setTimeout(function () { btn.textContent = i18n('copy'); }, 1400);
   }
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(fallbackCopy(text)); });
@@ -2004,6 +2316,8 @@ function wire() {
   on(ta, 'input', function () { autoGrow(); syncSend(); });
   on(el('stop'), 'click', function () { stopGeneration(); });
   on(el('btn-new'), 'click', function () { newChat(); });
+  on(el('btn-lang'), 'click', function () { toggleLang(); });
+  wireAdvanced();
 
   let composing = false;
   on(ta, 'compositionstart', function () { composing = true; });
@@ -2055,7 +2369,7 @@ function wire() {
     // Say so in the badge instead. The self-test drives refreshStatus() explicitly with a mock
     // transport, so the offline branch does not weaken the streaming coverage.
     S.online = false;
-    S.statusError = '本页是从磁盘直接打开的。请双击 bonsai_vk.exe，由引擎在 localhost:8080 上提供本页。';
+    S.statusError = i18n('fileOffline');
     setBadge();
   }
   ta.focus();
@@ -2063,6 +2377,7 @@ function wire() {
 
 function boot() {
   installErrorCapture();
+  initLang();
   wire();
 }
 
@@ -2336,11 +2651,15 @@ function layerA(r) {
     { role: 'user', content: 'one' }, { role: 'assistant', content: 'two' }, { role: 'user', content: 'three' }
   ]);
   r.eq('A', 'system prompt is prepended when given', buildMessages(turns, 'sys')[0], { role: 'system', content: 'sys' });
-  const body = requestBody([{ role: 'user', content: 'x' }], { maxTokens: 64, temperature: 0.7, seed: 42 });
+  const body = requestBody([{ role: 'user', content: 'x' }], {
+    maxTokens: 64, temperature: 0.7, seed: 42, presencePenalty: 0.5, repetitionPenalty: 1.15
+  });
   r.eq('A', 'request asks for a stream', body.stream, true);
   r.eq('A', 'request carries max_tokens', body.max_tokens, 64);
   r.eq('A', 'request carries temperature', body.temperature, 0.7);
   r.eq('A', 'request carries seed', body.seed, 42);
+  r.eq('A', 'request carries presence_penalty', body.presence_penalty, 0.5);
+  r.eq('A', 'request carries repetition_penalty', body.repetition_penalty, 1.15);
   r.eq('A', 'request omits an unset top_p', Object.prototype.hasOwnProperty.call(body, 'top_p'), false);
   setSeed(seedBefore);   // layer A ran outside withTestEnv; leave the PRNG where the page had it
 }
@@ -2585,7 +2904,7 @@ async function layerC(r, api) {
     replies: [{ httpError: 429, message: 'the engine is generating another reply' }]
   }, ['被拒绝的问题']);
   r.eq('C', 'a 429 ends the turn as an error', busy.log[0].status, 'error');
-  r.ok('C', 'the 429 note explains the single-conversation limit', busy.log[0].error.indexOf('一次只跑一个对话') !== -1, busy.log[0].error);
+  r.ok('C', 'the 429 note explains the single-conversation limit', busy.log[0].error.indexOf(i18n('err429')) !== -1, busy.log[0].error);
   r.eq('C', 'a 429 releases the busy flag', S.busy, false);
   r.eq('C', 'a failed reply is not sent back in the next prompt', buildMessages(S.turns, '').length, 1);
 
@@ -2685,7 +3004,7 @@ async function layerD(r, api) {
   copyBtn.click();
   await settle();
   if (copied.length) r.eq('D', 'copy puts the code on the clipboard', copied[0], 'ls -l');
-  else r.ok('D', 'copy falls back without throwing', /复制/.test(copyBtn.textContent), copyBtn.textContent);
+  else r.ok('D', 'copy falls back without throwing', /复制|Copy/i.test(copyBtn.textContent), copyBtn.textContent);
   if (clipInstalled) {
     try {
       if (clipDesc) Object.defineProperty(navigator, 'clipboard', clipDesc);
@@ -2738,6 +3057,57 @@ async function layerD(r, api) {
   r.eq('D', 'new chat leaves the engine idle', S.busy, false);
 }
 
+// ------------------------------------------------------------------ E (i18n)
+// The bilingual chrome contract: English by default, an instant EN/中 toggle that repaints the DOM
+// without a reload, model output left verbatim, and a toggle that stays neutral (never the accent).
+function layerE(r) {
+  const savedLang = getLang();
+  const sentinel = window.__i18nSentinel;
+  window.__i18nSentinel = 42;            // survives a toggle => proof the page did not navigate/reload
+
+  setLang('en');
+  r.eq('E', 'default document language is English', document.documentElement.lang, 'en');
+  r.eq('E', 'empty title is English', el('empty-title').textContent, 'What can I help you with?');
+  r.eq('E', 'empty sub is English', el('empty-sub').textContent, 'Local inference · weights never leave this machine · no cloud dependency');
+  r.eq('E', 'composer placeholder is English', el('input').getAttribute('placeholder'), 'Message Bonsai…');
+  r.eq('E', 'new-chat label is English', el('btn-new').querySelector('span').textContent, 'New chat');
+  r.ok('E', 'EN option is marked active', el('btn-lang').querySelector('[data-lang="en"]').classList.contains('active'));
+  r.ok('E', 'ZH option is inactive in English', !el('btn-lang').querySelector('[data-lang="zh"]').classList.contains('active'));
+
+  // Model output belongs to the model; a chrome language switch must never rewrite it.
+  addUserTurn('Model output 你好 stays verbatim');
+  const userText = S.turns[S.turns.length - 1].text;
+
+  toggleLang();                          // en -> zh, instant
+  r.eq('E', 'toggle switches document language to Chinese', document.documentElement.lang, 'zh-CN');
+  r.eq('E', 'empty title becomes Chinese', el('empty-title').textContent, '有什么可以帮你的？');
+  r.eq('E', 'composer placeholder becomes Chinese', el('input').getAttribute('placeholder'), '给 Bonsai 发消息…');
+  r.ok('E', 'ZH option is marked active', el('btn-lang').querySelector('[data-lang="zh"]').classList.contains('active'));
+  r.eq('E', 'a chip prompt is localised too', document.querySelector('.chip').getAttribute('data-prompt'), i18n('chip1prompt'));
+  r.eq('E', 'model output is NOT translated by the toggle', S.turns[S.turns.length - 1].text, userText);
+  r.eq('E', 'the language switch did not reload the page', window.__i18nSentinel, 42);
+
+  toggleLang();                          // zh -> en
+  r.eq('E', 'toggling back restores English', document.documentElement.lang, 'en');
+  r.eq('E', 'toggling back restores the English title', el('empty-title').textContent, 'What can I help you with?');
+
+  // Geometry, measured at the runner's 1440x900: toggle in the header band, right of the badge,
+  // clear of the centred title, and painted with paper rather than the terracotta accent.
+  const hdrR = el('hdr').getBoundingClientRect();
+  const langR = el('btn-lang').getBoundingClientRect();
+  const badgeR = el('badge').getBoundingClientRect();
+  const titleR = el('hdr-title').getBoundingClientRect();
+  r.ok('E', 'the toggle is inside the header band', langR.top >= hdrR.top - 0.5 && langR.bottom <= hdrR.bottom + 0.5, JSON.stringify({ lang: langR.top, hdr: hdrR.top }));
+  r.ok('E', 'the toggle sits at the right edge', langR.right <= hdrR.right + 0.5 && langR.right > hdrR.right - 40, 'lang.right=' + langR.right);
+  r.ok('E', 'the badge is left of the toggle, no overlap', badgeR.right <= langR.left + 0.5, JSON.stringify({ badge: badgeR.right, lang: langR.left }));
+  r.ok('E', 'the centred title does not overlap the badge', titleR.right <= badgeR.left + 0.5, JSON.stringify({ title: titleR.right, badge: badgeR.left }));
+  r.eq('E', 'the toggle background is paper, not the accent', getComputedStyle(el('btn-lang')).backgroundColor, 'rgb(255, 255, 255)');
+
+  newChat();
+  window.__i18nSentinel = sentinel;
+  setLang(savedLang);
+}
+
 // ------------------------------------------------------------------ entry
 async function runAllTests() {
   const started = performance.now();
@@ -2749,11 +3119,12 @@ async function runAllTests() {
     await withTestEnv(async function (api) {
       await layerC(r, api);
       await layerD(r, api);
+      layerE(r);
     });
   } catch (err) {
     r.ok('C', 'the suite itself did not throw', false, (err && err.stack) || String(err));
   }
-  const totals = { A: 0, B: 0, C: 0, D: 0, passed: 0, failed: 0 };
+  const totals = { A: 0, B: 0, C: 0, D: 0, E: 0, passed: 0, failed: 0 };
   for (let i = 0; i < r.results.length; i++) {
     const x = r.results[i];
     totals[x.layer] = (totals[x.layer] || 0) + 1;
@@ -2786,6 +3157,10 @@ window.__APP__ = {
   advance: function (ms) { pumpAdvance(ms); },
   flush: function () { flushTypewriter(); },
   setSeed: setSeed,
+  setLang: setLang,
+  getLang: getLang,
+  toggleLang: toggleLang,
+  i18n: i18n,
   setTransport: function (t) { S.transport = t; },
   makeMockTransport: makeMockTransport,
   mockStatus: MOCK_STATUS,

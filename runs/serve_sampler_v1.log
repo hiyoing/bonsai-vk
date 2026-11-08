@@ -1,0 +1,160 @@
+  [serve] BONSAI_CAP unset: defaulting to 2048 slots for a conversation (set BONSAI_CAP to override)
+device: Radeon RX 550X | driver 2.0.279 | device-local heap 3840 MiB | timestampPeriod 40.000 ns
+  limits: maxComputeWorkGroupSize[0]=1024 maxComputeWorkGroupCount[0]=4294967295 bufferImageGranularity=1
+  limits: maxComputeSharedMemorySize=32768 B (= 32 KiB) maxComputeWorkGroupInvocations=1024
+  compute queue = family 0, transfer-only queue = family 2
+
+=== weight plan, read from the tensor table (实测, not estimated) ===
+  tensors 427 = 202 PTQ1_0 + 225 f32   weights 8953803264 elems = 8.954 B
+  per-tensor shapes are K x M; the activation widths this file declares (prism.hadamard.sign_widths) are [4096, 12288], which is what the rotation has to cover.
+  checkpoint's own block form : 1957036032 B = 1.823 GiB  (1.75 bpw)
+  our 2-bit random-access form: 2516189184 B = 2.343 GiB  (codes 2.083 GiB + scales 0.260 GiB, 2.125 bpw)
+  f32 blob                    :  29411328 B = 28.049 MiB
+  LAYOUT COST = 0.521 GiB extra = 17064 tokens of KV at 32768 B/token
+
+=== the rest of the footprint ===
+  metadata prefixes : general.architecture = qwen35 -> prefixes [qwen35,prism,general,<bare>]
+  layer typing    : qwen35.full_attention_interval = 4 -> (b+1) % interval == 0  [the 9B's spelling]
+  rotation        : version 1, block 4096, kernel hat4096.comp (the 9B's bit-frozen path), signs explicit
+  blocks: 24 recurrent + 8 softmax-attention of 32 (interval key = 4, explicit typing in force)
+  recurrent state, context-INDEPENDENT: 2097152 B/layer state + 98304 B/layer conv = 50.2 MiB over 24 layers
+  KV cache: 32768 B/token (32.0 MiB per 1k tokens), fp16, 8 layers | q8_0 V: 25088 B/token
+  device-local heap: 3840 MiB
+
+=== per-layer cache charge (structural: recurrent layers own state, never KV) ===
+  b0  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b1  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b2  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b3  attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  b4  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b5  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b6  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b7  attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  b8  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b9  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b10 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b11 attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  b12 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b13 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b14 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b15 attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  b16 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b17 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b18 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b19 attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  b20 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b21 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b22 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b23 attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  b24 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b25 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b26 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b27 attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  b28 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b29 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b30 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b31 attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  TOTAL over 32 layers: 8 attention -> 32768 B/token fp16-V | 25088 B/token q8_0-V; 24 recurrent -> 52690944 B of context-independent state
+
+arena (single DEVICE_LOCAL allocation; sizes are the plan's, offsets are the driver's):
+  codes           2236612608 B  align 4    -> offset 0
+  scales           279576576 B  align 4    -> offset 2236612608
+  f32blob           29411328 B  align 4    -> offset 2516189184
+  ptq_scratch       33554432 B  align 4    -> offset 2545600512
+  x                    65536 B  align 4    -> offset 2579154944
+  xsum                  4096 B  align 4    -> offset 2579220480
+  out                8388608 B  align 4    -> offset 2579224576
+  arena committed 2.410 GiB, alignment padding 0 B
+  KV V representation: q8_0 blocks (32 elements + 1 fp16 scale) (BONSAI_KV_V_QUANT) | KF debug stream: off | KV block: 64 positions | spill watch: every 32 tokens, soft 32 / hard 64 MiB, growth run >= 3
+  spill thresholds are measured as GROWTH over the first decode sample (default; BONSAI_SPILL_ABS=1 for the absolute reading); the reference is the first decode sample and is printed with the curve
+  attention QK kernel: GQA-MERGED attn_qk_softmax_gqa_h4_q*.comp (cap 2048; narrow <= 256, wide <= 2048, tiled row <= 65536; force=0 tile=2048)
+    GQA merge: grid 16 -> 4 workgroups per layer (HPK = 4 query heads served by one K gather), QK reference = wide-or-tiled, LDS 8224 B = 8.0 KiB per workgroup (HPK*4*QTILE + 8*HPK, QTILE = 512)
+    V path: frozen attn_pv_q8v.comp (BONSAI_GQA_PART bit1 off, or the fp16 V arena which has no merged twin)
+  rotation route: block_size = 4096 -> hat4096.comp (bit-frozen, the 9B's path), normalize = 0.015625 (exact in binary)
+
+=== forward bring-up ===
+  driver: minStorageBufferOffsetAlignment = 4 B, maxStorageBufferRange = 4096.000 MiB
+  split-K scratch sized from the plan: 65536 floats (0.2 MiB) - max S*M over 202 PTQ tensors (xsum needs 96 floats, region keeps 128)
+  KV geometry (derived from the kernel layout, not typed):
+    K  fp16             512 words/slot/layer =   2048 B   (never compressed)
+    V q8_0 data       256 words/slot/layer =   1024 B   (8 blocks of 32 per head row)
+    V q8_0 scales      16 words/slot/layer =     64 B   (1 fp16 per 32-element block)
+    per layer-slot     3136 B -> x8 attention layers = 25088 B/token = 24.50 KiB/token
+  arena invariants | KV span 12845056 == cap 2048 x 8 x 784 OK; ST 12582912 / CH 589824 are 24 GDN layers x per-layer state, cap-free OK
+  mixed-stack invariants | plan charges 12845056 KV words == arena 12845056 (+0 B/term of offset alignment); 24 recurrent layers charged 0 B of KV and 13172736 words of state == arena ST+CH; KV bytes per token 25088 (q8_0 V)
+  activation arena: 26565440 floats = 101.339 MiB (state 48.0 MiB + KV 49.0 MiB + logits 0.95 MiB)
+    P0 check | cap-proportional regions = SCORE+PROB+P16+MASK+POS (42 floats) + KF off (0) + KV 8 layers x 784 = 6314 floats/slot; GDN terms in it: 0 (ST = 12582912 floats total, independent of cap)
+  memory budget | device-local heap 3840.0 MiB, weights 2467.7 MiB already committed
+    activations at cap 2048 : 101.3 MiB = cap-independent 52.0 MiB + 2048 slots x 24.66 KiB/slot (q8_0-V + fp16-K arena 24.50 KiB + fp32 side 0.16 KiB)
+    headroom after this allocation: 1270.9 MiB (= 52766 more slots of cap, but the widest VALIDATED row for the wide QK kernel is 65536)
+  KV block hook: 2048 slots = 32 blocks of 64 positions, 1.53 MiB per block (24.50 KiB/slot x 8 layers x 64), ceiling 1270.94 MiB, evict off
+  [spill] PDH Shared Usage counter added as \GPU Process Memory(*)\Shared Usage (sum of every instance whose name contains "pid_6624_")
+  dxgi budget LOCAL (VRAM)      : budget 3323.3 MiB, current usage 2471.6 MiB, available for reservation 1834.2 MiB, current reservation 0.0 MiB   (AUXILIARY: a reservation budget, not an eviction signal)
+  dxgi budget NON_LOCAL (system): budget 7461.9 MiB, current usage 40.8 MiB, available for reservation 3858.9 MiB, current reservation 0.0 MiB   (AUXILIARY: a reservation budget, not an eviction signal)
+  act              106261760 B  align 4    -> offset 0
+  signs: sum(0..4095) = 60, sum(4096..16383) = -94   (the file's own values; 60 / -94
+  were the numbers read off the metadata, and they are what makes this upload checkable)
+  pipelines: 22 elementwise/GEMV + 8 layers x 5 attention descriptor sets (62 of 128 sets, 384 of 1024 descriptors) | V = q8_0 (attn_pv_q8v), K = fp16 | norm+rope+pack = attn_norm_rope2 | tiled QK = not built | GQA-merged QK = attn_qk_softmax_gqa_h4_q512 | GQA-merged PV = not built
+
+=== region table (float units; every offset is a multiple of 16) ===
+  RES      off         0  size      4096
+  NRM      off      4096  size      4096
+  AN       off      8192  size      4096
+  ROT      off     12288  size      4096
+  HR       off     16384  size      4096
+  EMB      off     20480  size      4096
+  QKV      off     24576  size      8192
+  K        off     32768  size      1024
+  V        off     33792  size      1024
+  Z        off     34816  size      4096
+  ALPHA    off     38912  size        32
+  BETA     off     38944  size        32
+  G1       off     38976  size        32
+  G2       off     39008  size        32
+  GATE32   off     39040  size        32
+  CONV     off     39072  size      8192
+  L2       off     47264  size      4096
+  GDNO     off     51360  size      4096
+  GDNORM   off     55456  size      4096
+  SWG      off     59552  size      4096
+  PERM     off     63648  size      4096
+  FG       off     67744  size     12288
+  FU       off     80032  size     12288
+  FS       off     92320  size     12288
+  PART     off    104608  size     65536
+  XS       off    170144  size       128
+  LOGITS   off    170272  size    248320
+  Q16      off    418592  size      2048
+  QF       off    420640  size      4096
+  QD       off    424736  size      4096
+  GD       off    428832  size      4096
+  SCORE    off    432928  size     32768
+  PROB     off    465696  size     32768
+  P16      off    498464  size     16384
+  PGATE    off    514848  size      4096
+  GOUT     off    518944  size      4096
+  MASK     off    523040  size      2048
+  POS      off    525088  size      2048
+  KF       off    527152  size        16
+  DUMMY    off    527136  size        16
+  QKWN     off    527168  size      4096
+  SIGNS    off    531264  size     16384
+  KV       off    547648  size  12845056
+  ST       off  13392704  size    524288
+  CH       off  25975616  size     24576
+  KV split  K(fp16) 512     V (q8_0 data)  256     V-scales 16       x8 layers, x2048 slots
+  signs on device: sum4096 = 60, sum12288 = -94, nonzero = 16384/16384
+
+  weight load 13240.2 ms, forward bring-up 704.7 ms
+  device-local total: weights 2.410 GiB + activations 101.339 MiB
+
+=== Bonsai HTTP shell ===
+  listening   http://localhost:8080  (127.0.0.1 only, no CORS)
+  model       Ternary-Bonsai-2-9B-PTQ1_0
+  device      Radeon RX 550X
+  engine      655844 B = 640 KiB (this executable, measured now)
+  WebUI       index.html
+  context     cap 2048, KV 24.50 KiB/token, V = q8_0, thinking on
+  endpoints   GET /  |  GET /v1/models  |  GET /v1/status  |  POST /v1/chat/completions
+  one reply at a time: a second concurrent completion gets HTTP 429, the status route stays live while the GPU is busy
+  opened http://localhost:8080 in the default browser

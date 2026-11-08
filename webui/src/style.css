@@ -86,9 +86,16 @@ body {
 }
 .hdr-btn:hover { color: var(--ink); background: var(--wash); }
 
-#badge {
+#hdr-right {
   position: absolute;
   right: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 48vw;
+}
+
+#badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -104,6 +111,29 @@ body {
   cursor: default;
 }
 #badge-text { overflow: hidden; text-overflow: ellipsis; }
+
+/* The language toggle is chrome, not an action: it stays neutral grey so the terracotta accent keeps
+   meaning only "send / streaming / link / focus". The active language is ink + weight, never accent. */
+.lang-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+.lang-btn:hover { color: var(--ink); background: var(--wash); }
+.lang-opt { opacity: .45; }
+.lang-opt.active { opacity: 1; font-weight: 600; color: var(--ink); }
+.lang-slash { opacity: .35; }
 .dot {
   width: 5px; height: 5px;
   border-radius: 50%;
@@ -468,6 +498,73 @@ body {
   color: var(--muted);
 }
 
+/* ------------------------------------------------------------------ advanced settings */
+/* A collapsed <details> inside the fixed dock. It grows upward when opened, so the composer and
+   the hint keep their geometry; the three sliders sit in one row on desktop, one per row on phones. */
+#advanced {
+  max-width: var(--col);
+  margin: 0 auto 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+#advanced > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+#advanced > summary::-webkit-details-marker { display: none; }
+#advanced > summary::before {
+  content: '';
+  width: 0; height: 0;
+  border-left: 4px solid var(--faint);
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  transition: transform .14s;
+}
+#advanced[open] > summary::before { transform: rotate(90deg); }
+#advanced > summary:hover { color: var(--ink); }
+.adv-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px 18px;
+  margin-top: 6px;
+  padding: 10px 14px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--paper);
+}
+.adv-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
+}
+.adv-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adv-row input[type="range"] {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--terracotta);
+  cursor: pointer;
+}
+.adv-row output {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.adv-note {
+  margin: 6px 2px 0;
+  font-size: 10.5px;
+  color: var(--faint);
+}
+
 /* ------------------------------------------------------------------ toast */
 #toast {
   position: fixed;
@@ -498,13 +595,16 @@ body {
   .hdr-bar, .hdr-sub { display: none; }
   .hdr-btn span { display: none; }
   .hdr-btn { padding: 0 8px; }
-  #badge { font-size: 10px; max-width: 46vw; right: 12px; }
+  #hdr-right { right: 10px; gap: 6px; max-width: 54vw; }
+  #badge { font-size: 10px; max-width: 34vw; }
+  .lang-btn { height: 26px; padding: 0 7px; font-size: 11px; }
   #thread { padding: 24px 14px 156px; }
   #empty { padding: 8vh 0 18px; }
   #empty-title { font-size: 21px; }
   .bubble { max-width: 90%; }
   #dock { padding: 8px 12px 10px; }
   #hint { font-size: 10.5px; }
+  .adv-grid { grid-template-columns: 1fr; gap: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

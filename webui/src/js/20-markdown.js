@@ -424,7 +424,7 @@ function mdCodeBlock(code, lang, closed) {
   const wrap = mk('div', 'codeblock');
   const bar = mk('div', 'codebar');
   const label = mk('span', 'code-lang', lang || 'text');
-  const btn = mk('button', 'copy-btn', '复制');
+  const btn = mk('button', 'copy-btn', i18n('copy'));
   btn.type = 'button';
   btn.setAttribute('data-copy', '1');
   bar.appendChild(label);

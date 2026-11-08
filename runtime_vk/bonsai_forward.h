@@ -36,6 +36,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "bonsai_tok.h"
@@ -386,7 +387,8 @@ static bool (*g_emit_token)(void *ctx, const char *utf8, int reasoning) = nullpt
 static void *g_emit_ctx = nullptr;
 // Per-request sampler overrides. Negative / zero = "not asked for", so the env knobs and the struct's
 // own deterministic defaults stay in force for every CLI run.
-struct ReqOverride { float temp = -1.0f, top_p = -1.0f; int top_k = -1; uint64_t seed = 0; };
+struct ReqOverride { float temp = -1.0f, top_p = -1.0f; int top_k = -1; uint64_t seed = 0;
+                     float rep_penalty = -1.0f, presence = -1.0f, freq = -1.0f; };
 static ReqOverride g_req;
 // A server keeps the PDH query and the DXGI factory open across requests: closing them per reply would
 // make the second request's spill watch inert, and the arena they watch is never freed anyway.
@@ -2515,19 +2517,54 @@ static int qk_audit(Fwd &f, uint32_t nfill) {
 }
 
 // ------------------------------------------------------------------ the sampler
-// Greedy by default: on a distilled model argmax is the reading an auditor can reproduce from the
-// logits alone. temperature/top-k/top-p are there because a base model left greedy runs into loops,
-// and because the user's report needs a token rate, not a poetry generator.
+// Sampled by default. A distilled 1.58-bit base model left on argmax falls into short token loops
+// ("a joke, joke, or funny situation" / "stories or stories") on short chat prompts; a temperature
+// above zero plus the presence/repetition penalties below break that without touching the forward
+// pass. Keep temp > 0: temp == 0 short-circuits to argmax in pick() and re-opens the loop. Every
+// one of these values is still overridable per CLI run (BONSAI_* env) or per HTTP request (g_req).
 struct Sampler {
-    float temp = 0.0f; int top_k = 0; float top_p = 1.0f; uint64_t rng = 88172645463325252ull;
+    float temp = 0.70f; int top_k = 0; float top_p = 1.0f; uint64_t rng = 88172645463325252ull;
     int eos = -1;
+    // Anti-repetition knobs (HF / llama.cpp semantics), applied to the raw logits over a window of
+    // the recent generation BEFORE temperature / top-k / top-p. 1.0 / 0.0 / 0.0 mean "off".
+    // These are the handover release defaults, verified on the two short prompts that actually
+    // reproduce the loop (runs/overnight_tuning.log, FINAL section). The overnight ladder's own
+    // 5-question WINNER was temp=0.90 / presence=1.20 / rep=1.20 (fluent 5/5 on logic questions);
+    // callers who prefer that combination can simply send it per request, with no rebuild.
+    float rep_penalty = 1.15f;      // >1 discourages re-use: divide a +logit, multiply a -logit
+    float presence_penalty = 0.50f; // subtract once per distinct token present in the window
+    float freq_penalty = 0.0f;      // subtract in proportion to the token's count in the window
+    int penalty_last_n = 64;        // history window the penalties read (<=0 = the whole history)
     uint64_t next_rand() {                       // xorshift64*, deterministic across runs
         rng ^= rng >> 12; rng ^= rng << 25; rng ^= rng >> 27;
         return rng * 2685821657736338717ull;
     }
     double uniform01() { return double(next_rand() >> 11) * (1.0 / 9007199254740992.0); }
 
-    int pick(const float *lg, uint32_t n) {
+    int pick(const float *lg, uint32_t n, const std::vector<int> *hist = nullptr) {
+        // Penalties mutate logits, so adjust a COPY: the caller's buffer is refilled by the next
+        // fwd_token and must not carry this step's adjustments into the next step's argmax.
+        std::vector<float> work;
+        if (hist && !hist->empty() &&
+            (rep_penalty != 1.0f || presence_penalty != 0.0f || freq_penalty != 0.0f)) {
+            const size_t win = penalty_last_n > 0 ? size_t(penalty_last_n) : hist->size();
+            const size_t begin = hist->size() > win ? hist->size() - win : 0;
+            std::unordered_map<int, int> cnt;
+            for (size_t k = begin; k < hist->size(); ++k) {
+                const int id = (*hist)[k];
+                if (id >= 0 && uint32_t(id) < n) ++cnt[id];
+            }
+            work.assign(lg, lg + n);
+            for (const auto &kv : cnt) {
+                const uint32_t id = uint32_t(kv.first);
+                float v = work[id];
+                if (rep_penalty != 1.0f) v = (v < 0.0f) ? v * rep_penalty : v / rep_penalty;
+                if (presence_penalty != 0.0f) v -= presence_penalty;
+                if (freq_penalty != 0.0f) v -= freq_penalty * float(kv.second);
+                work[id] = v;
+            }
+            lg = work.data();
+        }
         uint32_t best = 0; float bv = lg[0];
         for (uint32_t i = 1; i < n; ++i) if (lg[i] > bv) { bv = lg[i]; best = i; }
         if (temp <= 0.0f) return int(best);
@@ -2622,9 +2659,15 @@ static int fwd_run(Engine &e, Fwd &f, const char *prompt, int n_max, RunStats *o
     if (const char *v = getenv("BONSAI_TEMP"))  sp.temp  = float(atof(v));
     if (const char *v = getenv("BONSAI_TOPK"))  sp.top_k = atoi(v);
     if (const char *v = getenv("BONSAI_TOPP"))  sp.top_p = float(atof(v));
+    if (const char *v = getenv("BONSAI_REP_PENALTY")) sp.rep_penalty = float(atof(v));
+    if (const char *v = getenv("BONSAI_PRESENCE"))    sp.presence_penalty = float(atof(v));
+    if (const char *v = getenv("BONSAI_FREQ"))       sp.freq_penalty = float(atof(v));
     if (g_req.temp  >= 0.0f) sp.temp  = g_req.temp;
     if (g_req.top_k >= 0)    sp.top_k = g_req.top_k;
     if (g_req.top_p >= 0.0f) sp.top_p = g_req.top_p;
+    if (g_req.rep_penalty >= 0.0f) sp.rep_penalty = g_req.rep_penalty;
+    if (g_req.presence    >= 0.0f) sp.presence_penalty = g_req.presence;
+    if (g_req.freq        >= 0.0f) sp.freq_penalty = g_req.freq;
     if (g_req.seed)          sp.rng   = g_req.seed;
     sp.eos = tok.eos;
 
@@ -2698,8 +2741,9 @@ static int fwd_run(Engine &e, Fwd &f, const char *prompt, int n_max, RunStats *o
     }
     printf("  prompt %d tokens:", int(ids.size()));
     for (int t : ids) printf(" %d", t);
-    printf("\n  sampler: temp=%.2f top_k=%d top_p=%.2f eos=%d cap=%u\n",
-           sp.temp, sp.top_k, sp.top_p, sp.eos, f.cap);
+    printf("\n  sampler: temp=%.2f top_k=%d top_p=%.2f rep=%.2f pres=%.2f freq=%.2f eos=%d cap=%u\n",
+           sp.temp, sp.top_k, sp.top_p, sp.rep_penalty, sp.presence_penalty, sp.freq_penalty,
+           sp.eos, f.cap);
 
     std::vector<float> logits;
     double ms_prefill = 0.0, ms_gen = 0.0;
@@ -2845,7 +2889,7 @@ static int fwd_run(Engine &e, Fwd &f, const char *prompt, int n_max, RunStats *o
     const auto loop_t0 = std::chrono::steady_clock::now();
     for (int i = 0; i < n_max; ++i) {
         const auto s0 = std::chrono::steady_clock::now();
-        const int next = sp.pick(logits.data(), V);
+        const int next = sp.pick(logits.data(), V, &gen);
         const auto s1 = std::chrono::steady_clock::now();
         pf_samp += std::chrono::duration<double, std::milli>(s1 - s0).count();
         if (pos >= int(f.cap)) { printf("  [context cap %u reached]\n", f.cap); break; }

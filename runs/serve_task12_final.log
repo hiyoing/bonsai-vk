@@ -1,0 +1,1237 @@
+  [serve] BONSAI_CAP unset: defaulting to 2048 slots for a conversation (set BONSAI_CAP to override)
+device: Radeon RX 550X | driver 2.0.279 | device-local heap 3840 MiB | timestampPeriod 40.000 ns
+  limits: maxComputeWorkGroupSize[0]=1024 maxComputeWorkGroupCount[0]=4294967295 bufferImageGranularity=1
+  limits: maxComputeSharedMemorySize=32768 B (= 32 KiB) maxComputeWorkGroupInvocations=1024
+  compute queue = family 0, transfer-only queue = family 2
+
+=== weight plan, read from the tensor table (实测, not estimated) ===
+  tensors 427 = 202 PTQ1_0 + 225 f32   weights 8953803264 elems = 8.954 B
+  per-tensor shapes are K x M; the activation widths this file declares (prism.hadamard.sign_widths) are [4096, 12288], which is what the rotation has to cover.
+  checkpoint's own block form : 1957036032 B = 1.823 GiB  (1.75 bpw)
+  our 2-bit random-access form: 2516189184 B = 2.343 GiB  (codes 2.083 GiB + scales 0.260 GiB, 2.125 bpw)
+  f32 blob                    :  29411328 B = 28.049 MiB
+  LAYOUT COST = 0.521 GiB extra = 17064 tokens of KV at 32768 B/token
+
+=== the rest of the footprint ===
+  metadata prefixes : general.architecture = qwen35 -> prefixes [qwen35,prism,general,<bare>]
+  layer typing    : qwen35.full_attention_interval = 4 -> (b+1) % interval == 0  [the 9B's spelling]
+  rotation        : version 1, block 4096, kernel hat4096.comp (the 9B's bit-frozen path), signs explicit
+  blocks: 24 recurrent + 8 softmax-attention of 32 (interval key = 4, explicit typing in force)
+  recurrent state, context-INDEPENDENT: 2097152 B/layer state + 98304 B/layer conv = 50.2 MiB over 24 layers
+  KV cache: 32768 B/token (32.0 MiB per 1k tokens), fp16, 8 layers | q8_0 V: 25088 B/token
+  device-local heap: 3840 MiB
+
+=== per-layer cache charge (structural: recurrent layers own state, never KV) ===
+  b0  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b1  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b2  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b3  attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  b4  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b5  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b6  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b7  attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  b8  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b9  ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b10 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b11 attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  b12 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b13 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b14 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b15 attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  b16 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b17 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b18 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b19 attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  b20 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b21 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b22 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b23 attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  b24 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b25 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b26 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b27 attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  b28 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b29 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b30 ssm   kv fp16        0 B/token   kv q8_0-V        0 B/token   state    2195456 B
+  b31 attn  kv fp16     4096 B/token   kv q8_0-V     3136 B/token   state          0 B
+  TOTAL over 32 layers: 8 attention -> 32768 B/token fp16-V | 25088 B/token q8_0-V; 24 recurrent -> 52690944 B of context-independent state
+
+arena (single DEVICE_LOCAL allocation; sizes are the plan's, offsets are the driver's):
+  codes           2236612608 B  align 4    -> offset 0
+  scales           279576576 B  align 4    -> offset 2236612608
+  f32blob           29411328 B  align 4    -> offset 2516189184
+  ptq_scratch       33554432 B  align 4    -> offset 2545600512
+  x                    65536 B  align 4    -> offset 2579154944
+  xsum                  4096 B  align 4    -> offset 2579220480
+  out                8388608 B  align 4    -> offset 2579224576
+  arena committed 2.410 GiB, alignment padding 0 B
+  KV V representation: q8_0 blocks (32 elements + 1 fp16 scale) (BONSAI_KV_V_QUANT) | KF debug stream: off | KV block: 64 positions | spill watch: every 32 tokens, soft 32 / hard 64 MiB, growth run >= 3
+  spill thresholds are measured as GROWTH over the first decode sample (default; BONSAI_SPILL_ABS=1 for the absolute reading); the reference is the first decode sample and is printed with the curve
+  attention QK kernel: GQA-MERGED attn_qk_softmax_gqa_h4_q*.comp (cap 2048; narrow <= 256, wide <= 2048, tiled row <= 65536; force=0 tile=2048)
+    GQA merge: grid 16 -> 4 workgroups per layer (HPK = 4 query heads served by one K gather), QK reference = wide-or-tiled, LDS 8224 B = 8.0 KiB per workgroup (HPK*4*QTILE + 8*HPK, QTILE = 512)
+    V path: frozen attn_pv_q8v.comp (BONSAI_GQA_PART bit1 off, or the fp16 V arena which has no merged twin)
+  rotation route: block_size = 4096 -> hat4096.comp (bit-frozen, the 9B's path), normalize = 0.015625 (exact in binary)
+
+=== forward bring-up ===
+  driver: minStorageBufferOffsetAlignment = 4 B, maxStorageBufferRange = 4096.000 MiB
+  split-K scratch sized from the plan: 65536 floats (0.2 MiB) - max S*M over 202 PTQ tensors (xsum needs 96 floats, region keeps 128)
+  KV geometry (derived from the kernel layout, not typed):
+    K  fp16             512 words/slot/layer =   2048 B   (never compressed)
+    V q8_0 data       256 words/slot/layer =   1024 B   (8 blocks of 32 per head row)
+    V q8_0 scales      16 words/slot/layer =     64 B   (1 fp16 per 32-element block)
+    per layer-slot     3136 B -> x8 attention layers = 25088 B/token = 24.50 KiB/token
+  arena invariants | KV span 12845056 == cap 2048 x 8 x 784 OK; ST 12582912 / CH 589824 are 24 GDN layers x per-layer state, cap-free OK
+  mixed-stack invariants | plan charges 12845056 KV words == arena 12845056 (+0 B/term of offset alignment); 24 recurrent layers charged 0 B of KV and 13172736 words of state == arena ST+CH; KV bytes per token 25088 (q8_0 V)
+  activation arena: 26565440 floats = 101.339 MiB (state 48.0 MiB + KV 49.0 MiB + logits 0.95 MiB)
+    P0 check | cap-proportional regions = SCORE+PROB+P16+MASK+POS (42 floats) + KF off (0) + KV 8 layers x 784 = 6314 floats/slot; GDN terms in it: 0 (ST = 12582912 floats total, independent of cap)
+  memory budget | device-local heap 3840.0 MiB, weights 2467.7 MiB already committed
+    activations at cap 2048 : 101.3 MiB = cap-independent 52.0 MiB + 2048 slots x 24.66 KiB/slot (q8_0-V + fp16-K arena 24.50 KiB + fp32 side 0.16 KiB)
+    headroom after this allocation: 1270.9 MiB (= 52766 more slots of cap, but the widest VALIDATED row for the wide QK kernel is 65536)
+  KV block hook: 2048 slots = 32 blocks of 64 positions, 1.53 MiB per block (24.50 KiB/slot x 8 layers x 64), ceiling 1270.94 MiB, evict off
+  [spill] PDH Shared Usage counter added as \GPU Process Memory(*)\Shared Usage (sum of every instance whose name contains "pid_23508_")
+  dxgi budget LOCAL (VRAM)      : budget 3318.0 MiB, current usage 2471.6 MiB, available for reservation 1834.2 MiB, current reservation 0.0 MiB   (AUXILIARY: a reservation budget, not an eviction signal)
+  dxgi budget NON_LOCAL (system): budget 7461.9 MiB, current usage 40.8 MiB, available for reservation 3858.9 MiB, current reservation 0.0 MiB   (AUXILIARY: a reservation budget, not an eviction signal)
+  act              106261760 B  align 4    -> offset 0
+  signs: sum(0..4095) = 60, sum(4096..16383) = -94   (the file's own values; 60 / -94
+  were the numbers read off the metadata, and they are what makes this upload checkable)
+  pipelines: 22 elementwise/GEMV + 8 layers x 5 attention descriptor sets (62 of 128 sets, 384 of 1024 descriptors) | V = q8_0 (attn_pv_q8v), K = fp16 | norm+rope+pack = attn_norm_rope2 | tiled QK = not built | GQA-merged QK = attn_qk_softmax_gqa_h4_q512 | GQA-merged PV = not built
+
+=== region table (float units; every offset is a multiple of 16) ===
+  RES      off         0  size      4096
+  NRM      off      4096  size      4096
+  AN       off      8192  size      4096
+  ROT      off     12288  size      4096
+  HR       off     16384  size      4096
+  EMB      off     20480  size      4096
+  QKV      off     24576  size      8192
+  K        off     32768  size      1024
+  V        off     33792  size      1024
+  Z        off     34816  size      4096
+  ALPHA    off     38912  size        32
+  BETA     off     38944  size        32
+  G1       off     38976  size        32
+  G2       off     39008  size        32
+  GATE32   off     39040  size        32
+  CONV     off     39072  size      8192
+  L2       off     47264  size      4096
+  GDNO     off     51360  size      4096
+  GDNORM   off     55456  size      4096
+  SWG      off     59552  size      4096
+  PERM     off     63648  size      4096
+  FG       off     67744  size     12288
+  FU       off     80032  size     12288
+  FS       off     92320  size     12288
+  PART     off    104608  size     65536
+  XS       off    170144  size       128
+  LOGITS   off    170272  size    248320
+  Q16      off    418592  size      2048
+  QF       off    420640  size      4096
+  QD       off    424736  size      4096
+  GD       off    428832  size      4096
+  SCORE    off    432928  size     32768
+  PROB     off    465696  size     32768
+  P16      off    498464  size     16384
+  PGATE    off    514848  size      4096
+  GOUT     off    518944  size      4096
+  MASK     off    523040  size      2048
+  POS      off    525088  size      2048
+  KF       off    527152  size        16
+  DUMMY    off    527136  size        16
+  QKWN     off    527168  size      4096
+  SIGNS    off    531264  size     16384
+  KV       off    547648  size  12845056
+  ST       off  13392704  size    524288
+  CH       off  25975616  size     24576
+  KV split  K(fp16) 512     V (q8_0 data)  256     V-scales 16       x8 layers, x2048 slots
+  signs on device: sum4096 = 60, sum12288 = -94, nonzero = 16384/16384
+
+  weight load 13186.5 ms, forward bring-up 640.3 ms
+  device-local total: weights 2.410 GiB + activations 101.339 MiB
+
+=== Bonsai HTTP shell ===
+  listening   http://localhost:8080  (127.0.0.1 only, no CORS)
+  model       Ternary-Bonsai-2-9B-PTQ1_0
+  device      Radeon RX 550X
+  engine      655844 B = 640 KiB (this executable, measured now)
+  WebUI       index.html
+  context     cap 2048, KV 24.50 KiB/token, V = q8_0, thinking off
+  endpoints   GET /  |  GET /v1/models  |  GET /v1/status  |  POST /v1/chat/completions
+  one reply at a time: a second concurrent completion gets HTTP 429, the status route stays live while the GPU is busy
+
+[serve] chatcmpl-bonsai-1 unary | 1 messages -> 18 prompt tokens, id paths IDENTICAL
+  [serve] arena restored to its init state (101.3 MiB zeroed, weights untouched) in 24.7 ms
+  chat transcript: 18 ids supplied by the caller (thinking=off)
+  prompt 18 tokens: 248045 846 198 3710 1503 279 53476 2977 30 248046 198 248045 74455 198 248068 271 248069 271
+  sampler: temp=0.70 top_k=0 top_p=1.00 rep=1.15 pres=0.50 freq=0.00 eos=248046 cap=2048
+  prefill 1289.7 ms for 18 prompt tokens (13.96 tok/s)
+  logits after the prompt: max 18.4194 min -10.2090 mean -1.514516  nan 0 inf 0
+  top 8:  760(18.42"The")  1(18.07""")  623(16.81"In")  76431(16.63"Depending")  332(16.61"**")  2064(16.45"It")  175267(15.27""**")  25208(14.96"Without")
+    [spill] tok 18     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen  1  tok=    332     70.85 ms  **
+  gen  2  tok=   1537     71.49 ms  LO
+  gen  3  tok=     43     70.77 ms  L
+  gen  4  tok=    332     71.72 ms  **
+  gen  5  tok=  12965     70.75 ms   stands
+  gen  6  tok=    364     71.51 ms   for
+  gen  7  tok= 173976     70.94 ms   **"
+  gen  8  tok=  80974     71.59 ms  Laugh
+  gen  9  tok=    286     70.79 ms  ing
+  gen 10  tok=   4230     71.04 ms   Out
+  gen 11  tok=  76808     70.90 ms   Loud
+  gen 12  tok=   1149     70.98 ms  ."
+  gen 13  tok=    332     70.76 ms  **
+  gen 14  tok=    271     70.93 ms  
+
+
+  gen 15  tok=   2064     70.86 ms  It
+  gen 16  tok=    369     71.18 ms   is
+  gen 17  tok=    264     70.57 ms   a
+  gen 18  tok=   4047     71.10 ms   common
+  gen 19  tok=  77159     71.16 ms   slang
+  gen 20  tok=   4496     71.56 ms   term
+  gen 21  tok=   1429     71.04 ms   used
+  gen 22  tok=    310     71.12 ms   to
+  gen 23  tok=   3057     71.45 ms   express
+  gen 24  tok=  59295     70.98 ms   amusement
+  gen 25  tok=     11     71.61 ms  ,
+  gen 26  tok=  40720     70.85 ms   laughter
+  gen 27  tok=     11     71.67 ms  ,
+  gen 28  tok=    466     71.24 ms   or
+  gen 29  tok=  13818     71.40 ms   extreme
+  gen 30  tok=  59295     70.87 ms   amusement
+  gen 31  tok=    506     71.31 ms   at
+  gen 32  tok=   2414     71.10 ms   something
+    [spill] tok 50     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 33  tok=  14731     71.69 ms   funny
+  gen 34  tok=     13     72.52 ms  .
+  gen 35  tok=   1049     71.97 ms   It
+  gen 36  tok=  42303     72.96 ms   originated
+  gen 37  tok=    494     71.13 ms   from
+  gen 38  tok=    279     71.30 ms   the
+  gen 39  tok=   7361     71.37 ms   internet
+  gen 40  tok=    321     71.06 ms   and
+  gen 41  tok=    682     71.45 ms   has
+  gen 42  tok=   3512     70.96 ms   become
+  gen 43  tok=    799     71.64 ms   one
+  gen 44  tok=    314     70.93 ms   of
+  gen 45  tok=    279     71.86 ms   the
+  gen 46  tok=   1379     71.30 ms   most
+    [spill] tok 64     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 47  tok=  13177     71.75 ms   widely
+  gen 48  tok=  14541     72.49 ms   recognized
+  gen 49  tok=   1557     71.25 ms   ac
+  gen 50  tok=   2176     72.15 ms  ron
+  gen 51  tok=  72472     71.41 ms  yms
+  gen 52  tok=    303     71.52 ms   in
+  gen 53  tok=   7143     71.20 ms   digital
+  gen 54  tok=  10222     71.03 ms   communication
+  gen 55  tok=   3242     71.27 ms   today
+  gen 56  tok=     13     71.39 ms  .
+  [eos]
+
+=== pure-blood token rate (measured, this card) ===
+  56 generated tokens in 3993.7 ms  ->  14.02 tok/s
+  first generated token (prefill+1): 70.9 ms; steady-state: 71.3 ms/token
+  dispatches 110260, barriers 110186 per command buffer (one submit per token)
+  command buffers | load phase: 119 allocated (never reused, not counted below)
+                  | forward phase: 1 allocated + 100 reuses = 101 begins over 74 positions = 1.4 per position (BONSAI_CB_REUSE=1)
+  KV at the end: 74 live positions of cap 2048 (1.77 MiB of arena, 24.50 KiB/token, V = q8_0), blocks evicted 0, refused 0, soft-watched 0
+  guard actions (decisions taken at a block boundary) and spill samples (threshold crossings) are different counters - a refusal on the cap-geometry path needs no hard sample at all, so "refused > 0, hard = 0" is consistent, not a contradiction.
+    [spill] tok 74     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+
+=== PDH 'GPU Process Memory\Shared Usage' for this pid (the spill judge) ===
+  thresholds judge GROWTH over the first decode sample; reference sample 40.93 MiB, soft > 32 MiB, hard > 64 MiB with a growth run of >= 3
+  samples 4 of 4 tried, peak absolute 40.93 MiB, peak growth +0.00 MiB, soft 0, hard 0, monotonic-run(>=3 increases) 0
+  curve (every sample, MiB): 18:40.9 50:40.9 64:40.9 74:40.9
+
+=== text ===
+**LOL** stands for **"Laughing Out Loud."**
+
+It is a common slang term used to express amusement, laughter, or extreme amusement at something funny. It originated from the internet and has become one of the most widely recognized acronyms in digital communication today.
+[serve] chatcmpl-bonsai-1 done: 18 prompt + 56 generated (0 reasoning) in 3993.7 ms -> 14.02 tok/s, stop
+
+[serve] chatcmpl-bonsai-2 unary | 1 messages -> 18 prompt tokens, id paths IDENTICAL
+  [serve] arena restored to its init state (101.3 MiB zeroed, weights untouched) in 24.4 ms
+  chat transcript: 18 ids supplied by the caller (thinking=off)
+  prompt 18 tokens: 248045 846 198 3710 1503 279 53476 2977 30 248046 198 248045 74455 198 248068 271 248069 271
+  sampler: temp=0.70 top_k=0 top_p=1.00 rep=1.15 pres=0.50 freq=0.00 eos=248046 cap=2048
+  prefill 1295.9 ms for 18 prompt tokens (13.89 tok/s)
+  logits after the prompt: max 18.4194 min -10.2090 mean -1.514516  nan 0 inf 0
+  top 8:  760(18.42"The")  1(18.07""")  623(16.81"In")  76431(16.63"Depending")  332(16.61"**")  2064(16.45"It")  175267(15.27""**")  25208(14.96"Without")
+    [spill] tok 18     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen  1  tok=    332     70.98 ms  **
+  gen  2  tok=   1537     70.83 ms  LO
+  gen  3  tok=     43     71.19 ms  L
+  gen  4  tok=    332     71.02 ms  **
+  gen  5  tok=  12965     71.10 ms   stands
+  gen  6  tok=    364     71.12 ms   for
+  gen  7  tok= 173976     71.18 ms   **"
+  gen  8  tok=  80974     71.08 ms  Laugh
+  gen  9  tok=    286     71.05 ms  ing
+  gen 10  tok=   4230     71.82 ms   Out
+  gen 11  tok=  76808     70.96 ms   Loud
+  gen 12  tok=   1149     71.93 ms  ."
+  gen 13  tok=    332     71.17 ms  **
+  gen 14  tok=    271     71.76 ms  
+
+
+  gen 15  tok=   2064     70.89 ms  It
+  gen 16  tok=    369     71.41 ms   is
+  gen 17  tok=    264     70.98 ms   a
+  gen 18  tok=   4047     71.29 ms   common
+  gen 19  tok=  77159     71.23 ms   slang
+  gen 20  tok=   4496     71.41 ms   term
+  gen 21  tok=   1429     71.21 ms   used
+  gen 22  tok=    310     70.85 ms   to
+  gen 23  tok=   3057     71.50 ms   express
+  gen 24  tok=  59295     71.31 ms   amusement
+  gen 25  tok=     11     71.64 ms  ,
+  gen 26  tok=  40720     70.88 ms   laughter
+  gen 27  tok=     11     72.97 ms  ,
+  gen 28  tok=    466     71.95 ms   or
+  gen 29  tok=  13818     71.35 ms   extreme
+  gen 30  tok=  59295     71.69 ms   amusement
+  gen 31  tok=    506     71.15 ms   at
+  gen 32  tok=   2414     71.82 ms   something
+    [spill] tok 50     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 33  tok=  14731     70.98 ms   funny
+  gen 34  tok=     13     71.57 ms  .
+  gen 35  tok=   1049     70.84 ms   It
+  gen 36  tok=  42303     71.74 ms   originated
+  gen 37  tok=    494     70.87 ms   from
+  gen 38  tok=    279     71.55 ms   the
+  gen 39  tok=   7361     71.40 ms   internet
+  gen 40  tok=    321     71.37 ms   and
+  gen 41  tok=    682     71.81 ms   has
+  gen 42  tok=   3512     71.07 ms   become
+  gen 43  tok=    799     71.70 ms   one
+  gen 44  tok=    314     71.08 ms   of
+  gen 45  tok=    279     71.75 ms   the
+  gen 46  tok=   1379     71.10 ms   most
+    [spill] tok 64     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 47  tok=  13177     72.01 ms   widely
+  gen 48  tok=  14541     72.37 ms   recognized
+  gen 49  tok=   1557     71.06 ms   ac
+  gen 50  tok=   2176     72.03 ms  ron
+  gen 51  tok=  72472     72.35 ms  yms
+  gen 52  tok=    303     71.89 ms   in
+  gen 53  tok=   7143     71.53 ms   digital
+  gen 54  tok=  10222     71.57 ms   communication
+  gen 55  tok=   3242     72.43 ms   today
+  gen 56  tok=     13     71.51 ms  .
+  [eos]
+
+=== pure-blood token rate (measured, this card) ===
+  56 generated tokens in 4000.3 ms  ->  14.00 tok/s
+  first generated token (prefill+1): 71.0 ms; steady-state: 71.4 ms/token
+  dispatches 220520, barriers 220372 per command buffer (one submit per token)
+  command buffers | load phase: 119 allocated (never reused, not counted below)
+                  | forward phase: 1 allocated + 179 reuses = 180 begins over 74 positions = 2.4 per position (BONSAI_CB_REUSE=1)
+  KV at the end: 74 live positions of cap 2048 (1.77 MiB of arena, 24.50 KiB/token, V = q8_0), blocks evicted 0, refused 0, soft-watched 0
+  guard actions (decisions taken at a block boundary) and spill samples (threshold crossings) are different counters - a refusal on the cap-geometry path needs no hard sample at all, so "refused > 0, hard = 0" is consistent, not a contradiction.
+    [spill] tok 74     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+
+=== PDH 'GPU Process Memory\Shared Usage' for this pid (the spill judge) ===
+  thresholds judge GROWTH over the first decode sample; reference sample 40.93 MiB, soft > 32 MiB, hard > 64 MiB with a growth run of >= 3
+  samples 8 of 8 tried, peak absolute 40.93 MiB, peak growth +0.00 MiB, soft 0, hard 0, monotonic-run(>=3 increases) 0
+  curve (every sample, MiB): 18:40.9 50:40.9 64:40.9 74:40.9 18:40.9 50:40.9 64:40.9 74:40.9
+
+=== text ===
+**LOL** stands for **"Laughing Out Loud."**
+
+It is a common slang term used to express amusement, laughter, or extreme amusement at something funny. It originated from the internet and has become one of the most widely recognized acronyms in digital communication today.
+[serve] chatcmpl-bonsai-2 done: 18 prompt + 56 generated (0 reasoning) in 4000.3 ms -> 14.00 tok/s, stop
+
+[serve] chatcmpl-bonsai-3 unary | 1 messages -> 18 prompt tokens, id paths IDENTICAL
+  [serve] arena restored to its init state (101.3 MiB zeroed, weights untouched) in 24.4 ms
+  chat transcript: 18 ids supplied by the caller (thinking=off)
+  prompt 18 tokens: 248045 846 198 3710 1503 279 53476 2977 30 248046 198 248045 74455 198 248068 271 248069 271
+  sampler: temp=0.00 top_k=0 top_p=1.00 rep=1.00 pres=0.00 freq=0.00 eos=248046 cap=2048
+  prefill 1293.0 ms for 18 prompt tokens (13.92 tok/s)
+  logits after the prompt: max 18.4194 min -10.2090 mean -1.514516  nan 0 inf 0
+  top 8:  760(18.42"The")  1(18.07""")  623(16.81"In")  76431(16.63"Depending")  332(16.61"**")  2064(16.45"It")  175267(15.27""**")  25208(14.96"Without")
+    [spill] tok 18     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen  1  tok=    760     71.18 ms  The
+  gen  2  tok=   7063     70.58 ms   meaning
+  gen  3  tok=    314     71.51 ms   of
+  gen  4  tok= 173976     71.05 ms   **"
+  gen  5  tok=   1537     70.63 ms  LO
+  gen  6  tok=     43     71.79 ms  L
+  gen  7  tok= 175267     70.69 ms  "**
+  gen  8  tok=  13402     71.26 ms   depends
+  gen  9  tok=  11040     72.58 ms   entirely
+  gen 10  tok=    383     70.96 ms   on
+  gen 11  tok=    279     71.61 ms   the
+  gen 12  tok=   2193     70.91 ms   context
+  gen 13  tok=    303     70.66 ms   in
+  gen 14  tok=    864     71.50 ms   which
+  gen 15  tok=    424     70.88 ms   it
+  gen 16  tok=    369     70.98 ms   is
+  gen 17  tok=   1429     71.64 ms   used
+  gen 18  tok=     13     70.80 ms  .
+  gen 19  tok=   5514     71.82 ms   Here
+  gen 20  tok=    513     72.84 ms   are
+  gen 21  tok=    279     71.84 ms   the
+  gen 22  tok=   1379     71.37 ms   most
+  gen 23  tok=   4047     71.09 ms   common
+  gen 24  tok=  48028     71.81 ms   meanings
+  gen 25  tok=     25     70.94 ms  :
+  gen 26  tok=    271     71.09 ms  
+
+
+  gen 27  tok=  13962     71.45 ms  ###
+  gen 28  tok=    220     71.29 ms   
+  gen 29  tok=     16     71.95 ms  1
+  gen 30  tok=     13     70.68 ms  .
+  gen 31  tok=   2972     70.84 ms   **
+  gen 32  tok=  80974     71.71 ms  Laugh
+    [spill] tok 50     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 33  tok=    286     71.07 ms  ing
+  gen 34  tok=    318     71.26 ms   (
+  gen 35  tok=  12934     71.49 ms  Most
+  gen 36  tok=   7474     70.84 ms   Common
+  gen 37  tok=  31230     71.71 ms  )**
+  gen 38  tok=    198     71.16 ms  
+
+  gen 39  tok=    623     71.11 ms  In
+  gen 40  tok=   1379     71.51 ms   most
+  gen 41  tok=  15855     71.11 ms   casual
+  gen 42  tok=   2767     70.94 ms   online
+  gen 43  tok=  20319     71.75 ms   conversations
+  gen 44  tok=     11     70.91 ms  ,
+  gen 45  tok=    328     72.14 ms   "
+  gen 46  tok=   1537     71.73 ms  LO
+    [spill] tok 64     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 47  tok=     43     71.17 ms  L
+  gen 48  tok=      1     71.73 ms  "
+  gen 49  tok=  12965     71.40 ms   stands
+  gen 50  tok=    364     71.89 ms   for
+  gen 51  tok= 173976     71.59 ms   **"
+  gen 52  tok=  80974     71.28 ms  Laugh
+  gen 53  tok=    286     72.18 ms  ing
+  gen 54  tok=   1149     71.41 ms  ."
+  gen 55  tok=    332     71.75 ms  **
+  gen 56  tok=   1049     71.89 ms   It
+  gen 57  tok=    369     72.33 ms   is
+  gen 58  tok=   1429     71.52 ms   used
+  gen 59  tok=    310     71.10 ms   to
+  gen 60  tok=   3057     71.86 ms   express
+  gen 61  tok=  59295     71.56 ms   amusement
+  gen 62  tok=    466     71.70 ms   or
+  gen 63  tok=  59295     71.69 ms   amusement
+  gen 64  tok=    506     71.75 ms   at
+    [spill] tok 82     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 65  tok=    264     71.87 ms   a
+  gen 66  tok=  20983     71.34 ms   joke
+  gen 67  tok=     11     71.90 ms  ,
+  gen 68  tok=  20983     71.36 ms   joke
+  gen 69  tok=     11     71.25 ms  ,
+  gen 70  tok=    466     71.42 ms   or
+  gen 71  tok=  14731     71.57 ms   funny
+  gen 72  tok=   6331     71.72 ms   situation
+  gen 73  tok=     13     71.59 ms  .
+  gen 74  tok=    198     71.44 ms  
+
+  gen 75  tok=      9     71.99 ms  *
+  gen 76  tok=    256     71.49 ms    
+  gen 77  tok=    348     72.29 ms   *
+  gen 78  tok=  12929     72.27 ms  Example
+  gen 79  tok=  51595     72.45 ms  :*
+  gen 80  tok=    328     71.43 ms   "
+  gen 81  tok=   4639     71.51 ms  That
+  gen 82  tok=   3255     72.03 ms   story
+  gen 83  tok=    557     71.33 ms   was
+  gen 84  tok=  38934     71.79 ms   hilarious
+  gen 85  tok=   8687     71.98 ms  !"
+  gen 86  tok=  11069     71.50 ms   →
+  gen 87  tok=    328     72.19 ms   "
+  gen 88  tok=   1537     71.46 ms  LO
+  gen 89  tok=     43     72.05 ms  L
+  gen 90  tok=   1149     71.17 ms  ."
+  gen 91  tok=    271     72.18 ms  
+
+
+  gen 92  tok=  13962     73.26 ms  ###
+  gen 93  tok=   6728     72.07 ms   Other
+  gen 94  tok=   7474     71.94 ms   Common
+  gen 95  tok=   6180     71.43 ms   Ac
+  gen 96  tok=   2176     71.95 ms  ron
+    [spill] tok 114    shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 97  tok=  72472     71.49 ms  yms
+  gen 98  tok=    198     71.49 ms  
+
+  gen 99  tok=  76431     72.03 ms  Depending
+  gen 100  tok=    383     71.56 ms   on
+  gen 101  tok=    279     72.00 ms   the
+  gen 102  tok=   2193     71.49 ms   context
+  gen 103  tok=     11     71.47 ms  ,
+  gen 104  tok=    328     71.87 ms   "
+  gen 105  tok=   1537     71.66 ms  LO
+  gen 106  tok=     43     72.30 ms  L
+  gen 107  tok=      1     72.20 ms  "
+  gen 108  tok=    628     74.13 ms   can
+  gen 109  tok=   1048     72.05 ms   also
+  gen 110  tok=   2418     71.99 ms   stand
+    [spill] tok 128    shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 111  tok=    364     71.81 ms   for
+  gen 112  tok=     25     72.26 ms  :
+  gen 113  tok=    198     71.99 ms  
+
+  gen 114  tok=      9     71.76 ms  *
+  gen 115  tok=    256     72.63 ms    
+  gen 116  tok=   2972     71.91 ms   **
+  gen 117  tok=     43     72.32 ms  L
+  gen 118  tok=   2856     71.83 ms  oud
+  gen 119  tok=    391     72.47 ms  ly
+  gen 120  tok=  64700     71.80 ms  :**
+
+=== pure-blood token rate (measured, this card) ===
+  120 generated tokens in 8596.2 ms  ->  13.96 tok/s
+  first generated token (prefill+1): 71.2 ms; steady-state: 71.6 ms/token
+  dispatches 426140, barriers 425854 per command buffer (one submit per token)
+  command buffers | load phase: 119 allocated (never reused, not counted below)
+                  | forward phase: 1 allocated + 322 reuses = 323 begins over 138 positions = 2.3 per position (BONSAI_CB_REUSE=1)
+  KV at the end: 138 live positions of cap 2048 (3.30 MiB of arena, 24.50 KiB/token, V = q8_0), blocks evicted 0, refused 0, soft-watched 0
+  guard actions (decisions taken at a block boundary) and spill samples (threshold crossings) are different counters - a refusal on the cap-geometry path needs no hard sample at all, so "refused > 0, hard = 0" is consistent, not a contradiction.
+    [spill] tok 138    shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+
+=== PDH 'GPU Process Memory\Shared Usage' for this pid (the spill judge) ===
+  thresholds judge GROWTH over the first decode sample; reference sample 40.93 MiB, soft > 32 MiB, hard > 64 MiB with a growth run of >= 3
+  samples 15 of 15 tried, peak absolute 40.93 MiB, peak growth +0.00 MiB, soft 0, hard 0, monotonic-run(>=3 increases) 0
+  curve (every sample, MiB): 18:40.9 50:40.9 64:40.9 74:40.9 18:40.9 50:40.9 64:40.9 74:40.9 18:40.9 50:40.9 64:40.9 82:40.9 114:40.9 128:40.9 138:40.9
+
+=== text ===
+The meaning of **"LOL"** depends entirely on the context in which it is used. Here are the most common meanings:
+
+### 1. **Laughing (Most Common)**
+In most casual online conversations, "LOL" stands for **"Laughing."** It is used to express amusement or amusement at a joke, joke, or funny situation.
+*   *Example:* "That story was hilarious!" → "LOL."
+
+### Other Common Acronyms
+Depending on the context, "LOL" can also stand for:
+*   **Loudly:**
+[serve] chatcmpl-bonsai-3 done: 18 prompt + 120 generated (0 reasoning) in 8596.2 ms -> 13.96 tok/s, length
+
+[serve] chatcmpl-bonsai-4 unary | 1 messages -> 18 prompt tokens, id paths IDENTICAL
+  [serve] arena restored to its init state (101.3 MiB zeroed, weights untouched) in 24.4 ms
+  chat transcript: 18 ids supplied by the caller (thinking=off)
+  prompt 18 tokens: 248045 846 198 3710 1503 279 53476 2977 30 248046 198 248045 74455 198 248068 271 248069 271
+  sampler: temp=0.90 top_k=0 top_p=1.00 rep=1.20 pres=1.20 freq=0.00 eos=248046 cap=2048
+  prefill 1290.7 ms for 18 prompt tokens (13.95 tok/s)
+  logits after the prompt: max 18.4194 min -10.2090 mean -1.514516  nan 0 inf 0
+  top 8:  760(18.42"The")  1(18.07""")  623(16.81"In")  76431(16.63"Depending")  332(16.61"**")  2064(16.45"It")  175267(15.27""**")  25208(14.96"Without")
+    [spill] tok 18     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen  1  tok=    332     71.02 ms  **
+  gen  2  tok=   1537     71.33 ms  LO
+  gen  3  tok=     43     70.95 ms  L
+  gen  4  tok=  93868     71.30 ms  **,
+  gen  5  tok=    864     70.87 ms   which
+  gen  6  tok=  12965     71.33 ms   stands
+  gen  7  tok=    364     70.88 ms   for
+  gen  8  tok= 173976     71.32 ms   **"
+  gen  9  tok=  80974     70.72 ms  Laugh
+  gen 10  tok=    286     71.42 ms  ing
+  gen 11  tok=   1288     71.36 ms  ,"
+  gen 12  tok=    332     71.30 ms  **
+  gen 13  tok=    369     70.71 ms   is
+  gen 14  tok=    264     71.39 ms   a
+  gen 15  tok=   1546     70.93 ms   very
+  gen 16  tok=   4047     71.45 ms   common
+  gen 17  tok=   7361     70.90 ms   internet
+  gen 18  tok=  77159     71.25 ms   slang
+  gen 19  tok=  71979     71.01 ms   acronym
+  gen 20  tok=     13     72.30 ms  .
+  gen 21  tok=   1049     71.57 ms   It
+  gen 22  tok=  42303     71.10 ms   originated
+  gen 23  tok=    383     71.82 ms   on
+  gen 24  tok=    279     70.66 ms   the
+  gen 25  tok=   3988     71.77 ms   early
+  gen 26  tok=   2243     71.24 ms   version
+  gen 27  tok=    314     71.75 ms   of
+  gen 28  tok=  89944     70.82 ms   AOL
+  gen 29  tok=    318     71.47 ms   (
+  gen 30  tok=  30014     70.99 ms  America
+  gen 31  tok=   7849     71.52 ms   Online
+  gen 32  tok=      8     71.16 ms  )
+    [spill] tok 50     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 33  tok=    321     71.03 ms   and
+  gen 34  tok=   5964     71.12 ms   quickly
+  gen 35  tok=   5924     71.34 ms   became
+  gen 36  tok=   5129     71.00 ms   standard
+  gen 37  tok=  54731     70.93 ms   terminology
+  gen 38  tok=    303     71.78 ms   in
+  gen 39  tok=   2767     71.11 ms   online
+  gen 40  tok=  10222     71.82 ms   communication
+  gen 41  tok=    310     71.14 ms   to
+  gen 42  tok=   3057     71.56 ms   express
+  gen 43  tok=  59295     70.82 ms   amusement
+  gen 44  tok=    466     71.77 ms   or
+  gen 45  tok=  40720     71.06 ms   laughter
+  gen 46  tok=   1973     71.40 ms   without
+    [spill] tok 64     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 47  tok=   3322     71.00 ms   having
+  gen 48  tok=    310     71.73 ms   to
+  gen 49  tok=    913     71.77 ms   type
+  gen 50  tok=    680     71.13 ms   out
+  gen 51  tok=   2400     71.69 ms   full
+  gen 52  tok=  22157     71.41 ms   sentences
+  gen 53  tok=   1040     71.73 ms   like
+  gen 54  tok=    328     71.39 ms   "
+  gen 55  tok=   2194     71.64 ms  oh
+  gen 56  tok=    821     71.01 ms   my
+  gen 57  tok=   9593     71.38 ms   god
+  gen 58  tok=    353     71.35 ms   I
+  gen 59  tok=    628     71.42 ms   can
+  gen 60  tok=    914     71.61 ms  't
+  gen 61  tok=   4267     71.21 ms   believe
+  gen 62  tok=    411     71.79 ms   this
+  gen 63  tok=   1149     71.23 ms  ."
+  gen 64  tok=    271     72.31 ms  
+
+
+    [spill] tok 82     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 65  tok=  76431     72.04 ms  Depending
+  gen 66  tok=    383     71.62 ms   on
+  gen 67  tok=    279     72.01 ms   the
+  gen 68  tok=   2193     71.49 ms   context
+  gen 69  tok=     11     71.86 ms  ,
+  gen 70  tok=    424     71.20 ms   it
+  gen 71  tok=   5802     72.07 ms   usually
+  gen 72  tok=  23197     71.32 ms   implies
+  gen 73  tok=    799     71.72 ms   one
+  gen 74  tok=    314     71.57 ms   of
+  gen 75  tok=   2250     71.67 ms   three
+  gen 76  tok=   2433     71.99 ms   things
+  gen 77  tok=     25     71.26 ms  :
+  gen 78  tok=    198     71.81 ms  
+
+  gen 79  tok=      9     72.12 ms  *
+  gen 80  tok=    256     72.53 ms    
+  gen 81  tok=   2972     71.54 ms   **
+  gen 82  tok=   5901     75.22 ms  Am
+  gen 83  tok=  41250     72.30 ms  usement
+  gen 84  tok=  64700     71.91 ms  :**
+  gen 85  tok=   1394     71.61 ms   You
+  gen 86  tok=   1423     72.10 ms   find
+  gen 87  tok=   2414     71.57 ms   something
+  gen 88  tok=  34032     72.08 ms   genuinely
+  gen 89  tok=  14731     72.28 ms   funny
+  gen 90  tok=     13     72.48 ms  .
+  gen 91  tok=    198     72.58 ms  
+
+  gen 92  tok=    262     71.56 ms     
+  gen 93  tok=    348     72.58 ms   *
+  gen 94  tok=    256     71.49 ms    
+  gen 95  tok=    348     72.13 ms   *
+  gen 96  tok=  12929     72.20 ms  Example
+    [spill] tok 114    shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 97  tok=  51595     71.61 ms  :*
+  gen 98  tok=   2844     72.12 ms   That
+  gen 99  tok=   5522     71.26 ms   movie
+  gen 100  tok=   5918     71.87 ms   scene
+  gen 101  tok=    557     72.15 ms   was
+  gen 102  tok=  38934     71.28 ms   hilarious
+  gen 103  tok=      0     72.23 ms  !
+  gen 104  tok=    593     71.34 ms   /
+  gen 105  tok=    462     72.23 ms   H
+  gen 106  tok=  13154     72.87 ms  aha
+  gen 107  tok=     11     71.84 ms  ,
+  gen 108  tok=    488     72.25 ms   you
+  gen 109  tok=   2597     71.61 ms   got
+  gen 110  tok=    728     72.20 ms   me
+    [spill] tok 128    shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 111  tok=   1017     71.65 ms   there
+  gen 112  tok=     13     72.04 ms  .
+  gen 113  tok=    198     72.20 ms  
+
+  gen 114  tok=      9     71.71 ms  *
+  gen 115  tok=    256     72.37 ms    
+  gen 116  tok=   2972     71.75 ms   **
+  gen 117  tok= 238473     72.08 ms  Sar
+  gen 118  tok=   3701     72.20 ms  cast
+  gen 119  tok=    291     71.86 ms  ic
+  gen 120  tok=  11046     72.65 ms  /S
+
+=== pure-blood token rate (measured, this card) ===
+  120 generated tokens in 8595.6 ms  ->  13.96 tok/s
+  first generated token (prefill+1): 71.0 ms; steady-state: 71.6 ms/token
+  dispatches 631760, barriers 631336 per command buffer (one submit per token)
+  command buffers | load phase: 119 allocated (never reused, not counted below)
+                  | forward phase: 1 allocated + 465 reuses = 466 begins over 138 positions = 3.4 per position (BONSAI_CB_REUSE=1)
+  KV at the end: 138 live positions of cap 2048 (3.30 MiB of arena, 24.50 KiB/token, V = q8_0), blocks evicted 0, refused 0, soft-watched 0
+  guard actions (decisions taken at a block boundary) and spill samples (threshold crossings) are different counters - a refusal on the cap-geometry path needs no hard sample at all, so "refused > 0, hard = 0" is consistent, not a contradiction.
+    [spill] tok 138    shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+
+=== PDH 'GPU Process Memory\Shared Usage' for this pid (the spill judge) ===
+  thresholds judge GROWTH over the first decode sample; reference sample 40.93 MiB, soft > 32 MiB, hard > 64 MiB with a growth run of >= 3
+  samples 22 of 22 tried, peak absolute 40.93 MiB, peak growth +0.00 MiB, soft 0, hard 0, monotonic-run(>=3 increases) 0
+  curve (every sample, MiB): 18:40.9 50:40.9 64:40.9 74:40.9 18:40.9 50:40.9 64:40.9 74:40.9 18:40.9 50:40.9 64:40.9 82:40.9 114:40.9 128:40.9 138:40.9 18:40.9 50:40.9 64:40.9 82:40.9 114:40.9 128:40.9 138:40.9
+
+=== text ===
+**LOL**, which stands for **"Laughing,"** is a very common internet slang acronym. It originated on the early version of AOL (America Online) and quickly became standard terminology in online communication to express amusement or laughter without having to type out full sentences like "oh my god I can't believe this."
+
+Depending on the context, it usually implies one of three things:
+*   **Amusement:** You find something genuinely funny.
+    *   *Example:* That movie scene was hilarious! / Haha, you got me there.
+*   **Sarcastic/S
+[serve] chatcmpl-bonsai-4 done: 18 prompt + 120 generated (0 reasoning) in 8595.6 ms -> 13.96 tok/s, length
+
+[serve] chatcmpl-bonsai-5 unary | 1 messages -> 15 prompt tokens, id paths IDENTICAL
+  [serve] arena restored to its init state (101.3 MiB zeroed, weights untouched) in 24.6 ms
+  chat transcript: 15 ids supplied by the caller (thinking=off)
+  prompt 15 tokens: 248045 846 198 390 46250 5941 248046 198 248045 74455 198 248068 271 248069 271
+  sampler: temp=0.70 top_k=0 top_p=1.00 rep=1.15 pres=0.50 freq=0.00 eos=248046 cap=2048
+  prefill 1080.0 ms for 15 prompt tokens (13.89 tok/s)
+  logits after the prompt: max 24.3461 min -8.8528 mean -1.130705  nan 0 inf 0
+  top 8:  9419(24.35"Hello")  12675(21.60"Hi")  18103(18.16"Hey")  40(17.82"I")  109266(16.67"你好")  88621(14.50"Greetings")  2064(14.38"It")  48(14.24"Q")
+    [spill] tok 15     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen  1  tok=   9419     71.79 ms  Hello
+  gen  2  tok=      0     71.48 ms  !
+  gen  3  tok=    353     71.47 ms   I
+  gen  4  tok=   2688     70.80 ms  'm
+  gen  5  tok=   1167     71.25 ms   Q
+  gen  6  tok=  16451     70.74 ms  wen
+  gen  7  tok=     18     70.86 ms  3
+  gen  8  tok=     13     70.94 ms  .
+  gen  9  tok=     20     71.04 ms  5
+  gen 10  tok=     11     70.92 ms  ,
+  gen 11  tok=    264     71.24 ms   a
+  gen 12  tok=   3349     71.25 ms   large
+  gen 13  tok=   3992     71.52 ms   language
+  gen 14  tok=   1558     71.74 ms   model
+  gen 15  tok=   7633     70.96 ms   developed
+  gen 16  tok=    539     71.32 ms   by
+  gen 17  tok=  52540     70.46 ms   Alibaba
+  gen 18  tok=  14388     71.42 ms   Cloud
+  gen 19  tok=    579     70.84 ms  's
+  gen 20  tok=  48696     72.24 ms   Tong
+  gen 21  tok=  36814     71.69 ms  yi
+  gen 22  tok=  11274     71.78 ms   Lab
+  gen 23  tok=     13     71.03 ms  .
+  gen 24  tok=    353     71.03 ms   I
+  gen 25  tok=    628     71.08 ms   can
+  gen 26  tok=   7543     71.25 ms   assist
+  gen 27  tok=    488     71.18 ms   you
+  gen 28  tok=    440     71.11 ms   with
+  gen 29  tok=    264     71.44 ms   a
+  gen 30  tok=   6669     70.96 ms   wide
+  gen 31  tok=   2020     71.50 ms   range
+  gen 32  tok=    314     71.15 ms   of
+    [spill] tok 47     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 33  tok=   8806     71.36 ms   tasks
+  gen 34  tok=   2583     71.19 ms   including
+  gen 35  tok=    694     71.81 ms   but
+  gen 36  tok=    524     70.83 ms   not
+  gen 37  tok=   6973     71.20 ms   limited
+  gen 38  tok=    310     71.10 ms   to
+  gen 39  tok=     25     71.43 ms  :
+  gen 40  tok=    271     71.00 ms  
+
+
+  gen 41  tok=     12     71.14 ms  -
+  gen 42  tok=   2972     71.14 ms   **
+  gen 43  tok=  30118     71.17 ms  Complex
+  gen 44  tok=  31626     71.09 ms   reasoning
+  gen 45  tok=  92217     71.47 ms  **:
+  gen 46  tok=  11144     71.59 ms   Sol
+  gen 47  tok=   4261     71.35 ms  ving
+  gen 48  tok=   6150     71.88 ms   complex
+  gen 49  tok=   5154     71.06 ms   problems
+    [spill] tok 64     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 50  tok=  21998     71.73 ms   requiring
+  gen 51  tok=  19214     71.39 ms   logical
+  gen 52  tok=  31626     71.65 ms   reasoning
+  gen 53  tok=    321     71.23 ms   and
+  gen 54  tok=   7072     71.46 ms   multi
+  gen 55  tok=  28253     71.11 ms  -step
+  gen 56  tok=  31626     71.45 ms   reasoning
+  gen 57  tok=    198     71.84 ms  
+
+  gen 58  tok=     17     71.60 ms  2
+  gen 59  tok=     13     72.16 ms  .
+  gen 60  tok=  11106     71.22 ms   Language
+  gen 61  tok=   8396     72.01 ms   understanding
+  gen 62  tok=    321     72.02 ms   and
+  gen 63  tok=   9191     71.52 ms   generation
+  gen 64  tok=    303     71.82 ms   in
+    [spill] tok 79     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 65  tok=   5081     73.42 ms   multiple
+  gen 66  tok=  15005     73.00 ms   languages
+  gen 67  tok=    198     72.15 ms  
+
+  gen 68  tok=      9     71.51 ms  *
+  gen 69  tok=    256     71.86 ms    
+  gen 70  tok=   5927     71.16 ms   Code
+  gen 71  tok=   9191     72.07 ms   generation
+  gen 72  tok=    321     71.33 ms   and
+  gen 73  tok=  26805     71.75 ms   debugging
+  gen 74  tok=    198     72.01 ms  
+
+  gen 75  tok=     18     71.77 ms  3
+  gen 76  tok=     13     71.96 ms  .
+  gen 77  tok=  36189     71.48 ms   Analy
+  gen 78  tok=  19752     71.93 ms  zing
+  gen 79  tok=    795     71.36 ms   data
+  gen 80  tok=     11     71.90 ms  ,
+  gen 81  tok=   4237     71.56 ms   writing
+  gen 82  tok=   1970     71.59 ms   code
+  gen 83  tok=     11     72.05 ms  ,
+  gen 84  tok=    466     71.60 ms   or
+  gen 85  tok=  21156     72.00 ms   solving
+  gen 86  tok=   6150     71.44 ms   complex
+  gen 87  tok=  34780     72.17 ms   mathematical
+  gen 88  tok=  32364     71.44 ms  /sc
+  gen 89  tok=   1128     71.66 ms  ient
+  gen 90  tok=   1051     73.49 ms  ific
+  gen 91  tok=   5154     72.33 ms   problems
+  gen 92  tok=    198     72.08 ms  
+
+  gen 93  tok=     19     72.12 ms  4
+  gen 94  tok=     13     71.50 ms  .
+  gen 95  tok=  23502     72.15 ms   Creative
+  gen 96  tok=   4237     71.53 ms   writing
+    [spill] tok 111    shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 97  tok=    318     72.31 ms   (
+  gen 98  tok=  65928     71.59 ms  stories
+  gen 99  tok=     11     71.81 ms  ,
+  gen 100  tok=   7112     72.19 ms   stories
+  gen 101  tok=     11     71.48 ms  ,
+  gen 102  tok=  18910     72.22 ms   scripts
+  gen 103  tok=      8     71.39 ms  )
+  gen 104  tok=    198     71.89 ms  
+
+  gen 105  tok=     20     71.80 ms  5
+  gen 106  tok=     13     71.72 ms  .
+  gen 107  tok=   3922     72.43 ms   Trans
+  gen 108  tok=     75     71.69 ms  l
+  gen 109  tok=   1060     72.41 ms  ating
+  gen 110  tok=   1881     71.67 ms   between
+  gen 111  tok=   5081     72.29 ms   multiple
+  gen 112  tok=  15005     71.95 ms   languages
+  gen 113  tok=    271     71.63 ms  
+
+
+    [spill] tok 128    shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 114  tok=   4199     72.36 ms  How
+  gen 115  tok=    628     71.76 ms   can
+  gen 116  tok=    353     71.92 ms   I
+  gen 117  tok=   7543     71.52 ms   assist
+  gen 118  tok=    488     71.96 ms   you
+  gen 119  tok=   3242     72.17 ms   today
+  gen 120  tok=     30     71.82 ms  ?
+
+=== pure-blood token rate (measured, this card) ===
+  120 generated tokens in 8592.8 ms  ->  13.97 tok/s
+  first generated token (prefill+1): 71.8 ms; steady-state: 71.6 ms/token
+  dispatches 832910, barriers 832351 per command buffer (one submit per token)
+  command buffers | load phase: 119 allocated (never reused, not counted below)
+                  | forward phase: 1 allocated + 605 reuses = 606 begins over 135 positions = 4.5 per position (BONSAI_CB_REUSE=1)
+  KV at the end: 135 live positions of cap 2048 (3.23 MiB of arena, 24.50 KiB/token, V = q8_0), blocks evicted 0, refused 0, soft-watched 0
+  guard actions (decisions taken at a block boundary) and spill samples (threshold crossings) are different counters - a refusal on the cap-geometry path needs no hard sample at all, so "refused > 0, hard = 0" is consistent, not a contradiction.
+    [spill] tok 135    shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+
+=== PDH 'GPU Process Memory\Shared Usage' for this pid (the spill judge) ===
+  thresholds judge GROWTH over the first decode sample; reference sample 40.93 MiB, soft > 32 MiB, hard > 64 MiB with a growth run of >= 3
+  samples 29 of 29 tried, peak absolute 40.93 MiB, peak growth +0.00 MiB, soft 0, hard 0, monotonic-run(>=3 increases) 0
+  curve (every sample, MiB): 18:40.9 50:40.9 64:40.9 74:40.9 18:40.9 50:40.9 64:40.9 74:40.9 18:40.9 50:40.9 64:40.9 82:40.9 114:40.9 128:40.9 138:40.9 18:40.9 50:40.9 64:40.9 82:40.9 114:40.9 128:40.9 138:40.9 15:40.9 47:40.9 64:40.9 79:40.9 111:40.9 128:40.9 135:40.9
+
+=== text ===
+Hello! I'm Qwen3.5, a large language model developed by Alibaba Cloud's Tongyi Lab. I can assist you with a wide range of tasks including but not limited to:
+
+- **Complex reasoning**: Solving complex problems requiring logical reasoning and multi-step reasoning
+2. Language understanding and generation in multiple languages
+*   Code generation and debugging
+3. Analyzing data, writing code, or solving complex mathematical/scientific problems
+4. Creative writing (stories, stories, scripts)
+5. Translating between multiple languages
+
+How can I assist you today?
+[serve] chatcmpl-bonsai-5 done: 15 prompt + 120 generated (0 reasoning) in 8592.8 ms -> 13.97 tok/s, length
+
+[serve] chatcmpl-bonsai-6 unary | 1 messages -> 15 prompt tokens, id paths IDENTICAL
+  [serve] arena restored to its init state (101.3 MiB zeroed, weights untouched) in 24.8 ms
+  chat transcript: 15 ids supplied by the caller (thinking=off)
+  prompt 15 tokens: 248045 846 198 390 46250 5941 248046 198 248045 74455 198 248068 271 248069 271
+  sampler: temp=0.70 top_k=0 top_p=1.00 rep=1.15 pres=0.50 freq=0.00 eos=248046 cap=2048
+  prefill 1082.9 ms for 15 prompt tokens (13.85 tok/s)
+  logits after the prompt: max 24.3461 min -8.8528 mean -1.130705  nan 0 inf 0
+  top 8:  9419(24.35"Hello")  12675(21.60"Hi")  18103(18.16"Hey")  40(17.82"I")  109266(16.67"你好")  88621(14.50"Greetings")  2064(14.38"It")  48(14.24"Q")
+    [spill] tok 15     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen  1  tok=   9419     71.49 ms  Hello
+  gen  2  tok=      0     70.87 ms  !
+  gen  3  tok=    353     70.89 ms   I
+  gen  4  tok=   2688     71.91 ms  'm
+  gen  5  tok=   1167     70.88 ms   Q
+  gen  6  tok=  16451     70.85 ms  wen
+  gen  7  tok=     18     70.98 ms  3
+  gen  8  tok=     13     71.09 ms  .
+  gen  9  tok=     20     71.11 ms  5
+  gen 10  tok=     11     71.23 ms  ,
+  gen 11  tok=    264     70.81 ms   a
+  gen 12  tok=   3349     71.63 ms   large
+  gen 13  tok=   3992     70.91 ms   language
+  gen 14  tok=   1558     71.31 ms   model
+  gen 15  tok=   7633     70.91 ms   developed
+  gen 16  tok=    539     71.50 ms   by
+  gen 17  tok=  52540     71.07 ms   Alibaba
+  gen 18  tok=  14388     71.97 ms   Cloud
+  gen 19  tok=    579     71.00 ms  's
+  gen 20  tok=  48696     71.87 ms   Tong
+  gen 21  tok=  36814     72.50 ms  yi
+  gen 22  tok=  11274     71.35 ms   Lab
+  gen 23  tok=     13     71.56 ms  .
+  gen 24  tok=    353     70.94 ms   I
+  gen 25  tok=    628     71.44 ms   can
+  gen 26  tok=   7543     71.01 ms   assist
+  gen 27  tok=    488     71.76 ms   you
+  gen 28  tok=    440     70.86 ms   with
+  gen 29  tok=    264     71.48 ms   a
+  gen 30  tok=   6669     71.17 ms   wide
+  gen 31  tok=   2020     71.15 ms   range
+  gen 32  tok=    314     70.78 ms   of
+    [spill] tok 47     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 33  tok=   8806     71.18 ms   tasks
+  gen 34  tok=   2583     70.73 ms   including
+  gen 35  tok=    694     71.14 ms   but
+  gen 36  tok=    524     70.93 ms   not
+  gen 37  tok=   6973     71.25 ms   limited
+  gen 38  tok=    310     70.98 ms   to
+  gen 39  tok=     25     71.04 ms  :
+  gen 40  tok=    271     71.50 ms  
+
+
+  gen 41  tok=     12     71.37 ms  -
+  gen 42  tok=   2972     71.86 ms   **
+  gen 43  tok=  30118     71.04 ms  Complex
+  gen 44  tok=  31626     71.61 ms   reasoning
+  gen 45  tok=  92217     71.33 ms  **:
+  gen 46  tok=  11144     71.63 ms   Sol
+  gen 47  tok=   4261     70.85 ms  ving
+  gen 48  tok=   6150     71.53 ms   complex
+  gen 49  tok=   5154     70.94 ms   problems
+    [spill] tok 64     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 50  tok=  21998     71.37 ms   requiring
+  gen 51  tok=  19214     71.45 ms   logical
+  gen 52  tok=  31626     71.48 ms   reasoning
+  gen 53  tok=    321     71.98 ms   and
+  gen 54  tok=   7072     71.35 ms   multi
+  gen 55  tok=  28253     72.48 ms  -step
+  gen 56  tok=  31626     73.29 ms   reasoning
+  gen 57  tok=    198     72.30 ms  
+
+  gen 58  tok=     17     72.16 ms  2
+  gen 59  tok=     13     71.07 ms  .
+  gen 60  tok=  11106     71.47 ms   Language
+  gen 61  tok=   8396     71.64 ms   understanding
+  gen 62  tok=    321     71.47 ms   and
+  gen 63  tok=   9191     71.77 ms   generation
+  gen 64  tok=    303     71.37 ms   in
+    [spill] tok 79     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 65  tok=   5081     72.14 ms   multiple
+  gen 66  tok=  15005     71.44 ms   languages
+  gen 67  tok=    198     71.58 ms  
+
+  gen 68  tok=      9     71.24 ms  *
+  gen 69  tok=    256     72.24 ms    
+  gen 70  tok=   5927     71.80 ms   Code
+  gen 71  tok=   9191     71.23 ms   generation
+  gen 72  tok=    321     72.03 ms   and
+  gen 73  tok=  26805     71.35 ms   debugging
+  gen 74  tok=    198     71.92 ms  
+
+  gen 75  tok=     18     71.29 ms  3
+  gen 76  tok=     13     71.50 ms  .
+  gen 77  tok=  36189     71.16 ms   Analy
+  gen 78  tok=  19752     72.03 ms  zing
+  gen 79  tok=    795     71.80 ms   data
+  gen 80  tok=     11     71.35 ms  ,
+  gen 81  tok=   4237     71.86 ms   writing
+  gen 82  tok=   1970     71.39 ms   code
+  gen 83  tok=     11     72.31 ms  ,
+  gen 84  tok=    466     71.56 ms   or
+  gen 85  tok=  21156     72.03 ms   solving
+  gen 86  tok=   6150     72.05 ms   complex
+  gen 87  tok=  34780     71.40 ms   mathematical
+  gen 88  tok=  32364     72.02 ms  /sc
+  gen 89  tok=   1128     71.53 ms  ient
+  gen 90  tok=   1051     73.37 ms  ific
+  gen 91  tok=   5154     73.08 ms   problems
+  gen 92  tok=    198     71.34 ms  
+
+  gen 93  tok=     19     72.05 ms  4
+  gen 94  tok=     13     71.82 ms  .
+  gen 95  tok=  23502     72.02 ms   Creative
+  gen 96  tok=   4237     71.58 ms   writing
+    [spill] tok 111    shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 97  tok=    318     71.90 ms   (
+  gen 98  tok=  65928     72.80 ms  stories
+  gen 99  tok=     11     71.71 ms  ,
+  gen 100  tok=   7112     72.03 ms   stories
+  gen 101  tok=     11     71.87 ms  ,
+  gen 102  tok=  18910     71.94 ms   scripts
+  gen 103  tok=      8     72.08 ms  )
+  gen 104  tok=    198     71.53 ms  
+
+  gen 105  tok=     20     71.91 ms  5
+  gen 106  tok=     13     71.69 ms  .
+  gen 107  tok=   3922     72.18 ms   Trans
+  gen 108  tok=     75     71.51 ms  l
+  gen 109  tok=   1060     71.67 ms  ating
+  gen 110  tok=   1881     72.26 ms   between
+  gen 111  tok=   5081     71.87 ms   multiple
+  gen 112  tok=  15005     72.55 ms   languages
+  gen 113  tok=    271     71.88 ms  
+
+
+    [spill] tok 128    shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 114  tok=   4199     72.08 ms  How
+  gen 115  tok=    628     72.55 ms   can
+  gen 116  tok=    353     71.49 ms   I
+  gen 117  tok=   7543     72.09 ms   assist
+  gen 118  tok=    488     71.54 ms   you
+  gen 119  tok=   3242     72.05 ms   today
+  gen 120  tok=     30     72.17 ms  ?
+
+=== pure-blood token rate (measured, this card) ===
+  120 generated tokens in 8592.7 ms  ->  13.97 tok/s
+  first generated token (prefill+1): 71.5 ms; steady-state: 71.6 ms/token
+  dispatches 1034060, barriers 1033366 per command buffer (one submit per token)
+  command buffers | load phase: 119 allocated (never reused, not counted below)
+                  | forward phase: 1 allocated + 745 reuses = 746 begins over 135 positions = 5.5 per position (BONSAI_CB_REUSE=1)
+  KV at the end: 135 live positions of cap 2048 (3.23 MiB of arena, 24.50 KiB/token, V = q8_0), blocks evicted 0, refused 0, soft-watched 0
+  guard actions (decisions taken at a block boundary) and spill samples (threshold crossings) are different counters - a refusal on the cap-geometry path needs no hard sample at all, so "refused > 0, hard = 0" is consistent, not a contradiction.
+    [spill] tok 135    shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+
+=== PDH 'GPU Process Memory\Shared Usage' for this pid (the spill judge) ===
+  thresholds judge GROWTH over the first decode sample; reference sample 40.93 MiB, soft > 32 MiB, hard > 64 MiB with a growth run of >= 3
+  samples 36 of 36 tried, peak absolute 40.93 MiB, peak growth +0.00 MiB, soft 0, hard 0, monotonic-run(>=3 increases) 0
+  curve (every sample, MiB): 18:40.9 50:40.9 64:40.9 74:40.9 18:40.9 50:40.9 64:40.9 74:40.9 18:40.9 50:40.9 64:40.9 82:40.9 114:40.9 128:40.9 138:40.9 18:40.9 50:40.9 64:40.9 82:40.9 114:40.9 128:40.9 138:40.9 15:40.9 47:40.9 64:40.9 79:40.9 111:40.9 128:40.9 135:40.9 15:40.9 47:40.9 64:40.9 79:40.9 111:40.9 128:40.9 135:40.9
+
+=== text ===
+Hello! I'm Qwen3.5, a large language model developed by Alibaba Cloud's Tongyi Lab. I can assist you with a wide range of tasks including but not limited to:
+
+- **Complex reasoning**: Solving complex problems requiring logical reasoning and multi-step reasoning
+2. Language understanding and generation in multiple languages
+*   Code generation and debugging
+3. Analyzing data, writing code, or solving complex mathematical/scientific problems
+4. Creative writing (stories, stories, scripts)
+5. Translating between multiple languages
+
+How can I assist you today?
+[serve] chatcmpl-bonsai-6 done: 15 prompt + 120 generated (0 reasoning) in 8592.7 ms -> 13.97 tok/s, length
+
+[serve] chatcmpl-bonsai-7 unary | 1 messages -> 15 prompt tokens, id paths IDENTICAL
+  [serve] arena restored to its init state (101.3 MiB zeroed, weights untouched) in 25.3 ms
+  chat transcript: 15 ids supplied by the caller (thinking=off)
+  prompt 15 tokens: 248045 846 198 390 46250 5941 248046 198 248045 74455 198 248068 271 248069 271
+  sampler: temp=0.00 top_k=0 top_p=1.00 rep=1.00 pres=0.00 freq=0.00 eos=248046 cap=2048
+  prefill 1081.4 ms for 15 prompt tokens (13.87 tok/s)
+  logits after the prompt: max 24.3461 min -8.8528 mean -1.130705  nan 0 inf 0
+  top 8:  9419(24.35"Hello")  12675(21.60"Hi")  18103(18.16"Hey")  40(17.82"I")  109266(16.67"你好")  88621(14.50"Greetings")  2064(14.38"It")  48(14.24"Q")
+    [spill] tok 15     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen  1  tok=   9419     71.35 ms  Hello
+  gen  2  tok=      0     70.96 ms  !
+  gen  3  tok=    353     71.19 ms   I
+  gen  4  tok=   2688     70.90 ms  'm
+  gen  5  tok=   1167     70.88 ms   Q
+  gen  6  tok=  16451     72.19 ms  wen
+  gen  7  tok=     18     71.01 ms  3
+  gen  8  tok=     13     70.70 ms  .
+  gen  9  tok=     20     71.43 ms  5
+  gen 10  tok=     11     70.61 ms  ,
+  gen 11  tok=    264     70.82 ms   a
+  gen 12  tok=   3349     71.39 ms   large
+  gen 13  tok=   3992     71.40 ms   language
+  gen 14  tok=   1558     72.61 ms   model
+  gen 15  tok=   7633     71.30 ms   developed
+  gen 16  tok=    539     71.53 ms   by
+  gen 17  tok=  52540     70.89 ms   Alibaba
+  gen 18  tok=  14388     71.72 ms   Cloud
+  gen 19  tok=    579     72.37 ms  's
+  gen 20  tok=  48696     70.95 ms   Tong
+  gen 21  tok=  36814     71.59 ms  yi
+  gen 22  tok=  11274     73.50 ms   Lab
+  gen 23  tok=     13     71.42 ms  .
+  gen 24  tok=    353     71.58 ms   I
+  gen 25  tok=   2688     71.55 ms  'm
+  gen 26  tok=   5995     71.56 ms   designed
+  gen 27  tok=    310     71.58 ms   to
+  gen 28  tok=   7543     71.57 ms   assist
+  gen 29  tok=    440     71.97 ms   with
+  gen 30  tok=    264     71.22 ms   a
+  gen 31  tok=   6669     71.62 ms   wide
+  gen 32  tok=   2020     71.83 ms   range
+    [spill] tok 47     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 33  tok=    314     70.94 ms   of
+  gen 34  tok=   8806     71.56 ms   tasks
+  gen 35  tok=     11     71.63 ms  ,
+  gen 36  tok=    494     71.32 ms   from
+  gen 37  tok=  34579     71.46 ms   answering
+  gen 38  tok=   4602     71.07 ms   questions
+  gen 39  tok=    321     71.80 ms   and
+  gen 40  tok=  21156     71.18 ms   solving
+  gen 41  tok=   6150     70.87 ms   complex
+  gen 42  tok=   5154     71.82 ms   problems
+  gen 43  tok=    310     71.03 ms   to
+  gen 44  tok=  22440     71.73 ms   generating
+  gen 45  tok=   1970     71.76 ms   code
+  gen 46  tok=     11     71.36 ms  ,
+  gen 47  tok=  39664     71.55 ms   analyzing
+  gen 48  tok=    795     70.97 ms   data
+  gen 49  tok=     11     71.01 ms  ,
+    [spill] tok 64     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 50  tok=    321     71.47 ms   and
+  gen 51  tok=   1442     71.24 ms   even
+  gen 52  tok=   6611     71.79 ms   creating
+  gen 53  tok=  11190     71.58 ms   creative
+  gen 54  tok=   2144     71.93 ms   content
+  gen 55  tok=   1040     71.50 ms   like
+  gen 56  tok=   7112     72.21 ms   stories
+  gen 57  tok=    466     71.76 ms   or
+  gen 58  tok=   7112     71.26 ms   stories
+  gen 59  tok=     13     75.93 ms  .
+  gen 60  tok=  12757     72.04 ms   Whether
+  gen 61  tok=    488     71.89 ms   you
+  gen 62  tok=   1144     71.43 ms   need
+  gen 63  tok=   1438     71.73 ms   help
+  gen 64  tok=    440     71.45 ms   with
+    [spill] tok 79     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 65  tok=  10505     71.50 ms   coding
+  gen 66  tok=     11     71.99 ms  ,
+  gen 67  tok=  10505     71.26 ms   coding
+  gen 68  tok=     11     71.88 ms  ,
+  gen 69  tok=    466     71.45 ms   or
+  gen 70  tok=   1066     71.50 ms   just
+  gen 71  tok=   1318     71.97 ms   want
+  gen 72  tok=    310     71.34 ms   to
+  gen 73  tok=   6040     72.67 ms   chat
+  gen 74  tok=     11     71.51 ms  ,
+  gen 75  tok=   2579     71.71 ms   feel
+  gen 76  tok=   1845     72.21 ms   free
+  gen 77  tok=    310     71.36 ms   to
+  gen 78  tok=   2466     71.79 ms   ask
+  gen 79  tok=    728     71.37 ms   me
+  gen 80  tok=   3977     71.53 ms   anything
+  gen 81  tok=      0     71.74 ms  !
+  gen 82  tok=   2500     71.43 ms   How
+  gen 83  tok=    628     72.04 ms   can
+  gen 84  tok=    353     71.73 ms   I
+  gen 85  tok=   7543     71.86 ms   assist
+  gen 86  tok=    488     71.48 ms   you
+  gen 87  tok=   3242     71.72 ms   today
+  gen 88  tok=     30     72.40 ms  ?
+  gen 89  tok=  25677     71.28 ms   �
+  gen 90  tok=    232     71.79 ms  �
+  [eos]
+
+=== pure-blood token rate (measured, this card) ===
+  90 generated tokens in 6444.0 ms  ->  13.97 tok/s
+  first generated token (prefill+1): 71.3 ms; steady-state: 71.6 ms/token
+  dispatches 1190510, barriers 1189711 per command buffer (one submit per token)
+  command buffers | load phase: 119 allocated (never reused, not counted below)
+                  | forward phase: 1 allocated + 855 reuses = 856 begins over 105 positions = 8.2 per position (BONSAI_CB_REUSE=1)
+  KV at the end: 105 live positions of cap 2048 (2.51 MiB of arena, 24.50 KiB/token, V = q8_0), blocks evicted 0, refused 0, soft-watched 0
+  guard actions (decisions taken at a block boundary) and spill samples (threshold crossings) are different counters - a refusal on the cap-geometry path needs no hard sample at all, so "refused > 0, hard = 0" is consistent, not a contradiction.
+    [spill] tok 105    shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+
+=== PDH 'GPU Process Memory\Shared Usage' for this pid (the spill judge) ===
+  thresholds judge GROWTH over the first decode sample; reference sample 40.93 MiB, soft > 32 MiB, hard > 64 MiB with a growth run of >= 3
+  samples 41 of 41 tried, peak absolute 40.93 MiB, peak growth +0.00 MiB, soft 0, hard 0, monotonic-run(>=3 increases) 0
+  curve (every sample, MiB): 18:40.9 50:40.9 64:40.9 74:40.9 18:40.9 50:40.9 64:40.9 74:40.9 18:40.9 50:40.9 64:40.9 82:40.9 114:40.9 128:40.9 138:40.9 18:40.9 50:40.9 64:40.9 82:40.9 114:40.9 128:40.9 138:40.9 15:40.9 47:40.9 64:40.9 79:40.9 111:40.9 128:40.9 135:40.9 15:40.9 47:40.9 64:40.9 79:40.9 111:40.9 128:40.9 135:40.9 15:40.9 47:40.9 64:40.9 79:40.9 105:40.9
+
+=== text ===
+Hello! I'm Qwen3.5, a large language model developed by Alibaba Cloud's Tongyi Lab. I'm designed to assist with a wide range of tasks, from answering questions and solving complex problems to generating code, analyzing data, and even creating creative content like stories or stories. Whether you need help with coding, coding, or just want to chat, feel free to ask me anything! How can I assist you today? 😊
+[serve] chatcmpl-bonsai-7 done: 15 prompt + 90 generated (0 reasoning) in 6444.0 ms -> 13.97 tok/s, stop
+
+[serve] chatcmpl-bonsai-8 unary | 1 messages -> 15 prompt tokens, id paths IDENTICAL
+  [serve] arena restored to its init state (101.3 MiB zeroed, weights untouched) in 23.9 ms
+  chat transcript: 15 ids supplied by the caller (thinking=off)
+  prompt 15 tokens: 248045 846 198 390 46250 5941 248046 198 248045 74455 198 248068 271 248069 271
+  sampler: temp=0.90 top_k=0 top_p=1.00 rep=1.20 pres=1.20 freq=0.00 eos=248046 cap=2048
+  prefill 1075.4 ms for 15 prompt tokens (13.95 tok/s)
+  logits after the prompt: max 24.3461 min -8.8528 mean -1.130705  nan 0 inf 0
+  top 8:  9419(24.35"Hello")  12675(21.60"Hi")  18103(18.16"Hey")  40(17.82"I")  109266(16.67"你好")  88621(14.50"Greetings")  2064(14.38"It")  48(14.24"Q")
+    [spill] tok 15     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen  1  tok=   9419     70.76 ms  Hello
+  gen  2  tok=      0     71.57 ms  !
+  gen  3  tok=    353     71.52 ms   I
+  gen  4  tok=   2688     71.95 ms  'm
+  gen  5  tok=   1167     70.71 ms   Q
+  gen  6  tok=  16451     71.04 ms  wen
+  gen  7  tok=     18     71.07 ms  3
+  gen  8  tok=     13     70.96 ms  .
+  gen  9  tok=     20     70.87 ms  5
+  gen 10  tok=     11     71.33 ms  ,
+  gen 11  tok=    264     71.18 ms   a
+  gen 12  tok=   3349     70.98 ms   large
+  gen 13  tok=   3992     71.04 ms   language
+  gen 14  tok=   1558     70.77 ms   model
+  gen 15  tok=   7633     71.46 ms   developed
+  gen 16  tok=    539     71.16 ms   by
+  gen 17  tok=  48696     71.38 ms   Tong
+  gen 18  tok=  36814     70.67 ms  yi
+  gen 19  tok=  11274     71.49 ms   Lab
+  gen 20  tok=     13     70.87 ms  .
+  gen 21  tok=   2500     71.78 ms   How
+  gen 22  tok=    628     71.09 ms   can
+  gen 23  tok=    353     71.56 ms   I
+  gen 24  tok=   7543     70.92 ms   assist
+  gen 25  tok=    488     71.64 ms   you
+  gen 26  tok=   3242     70.88 ms   today
+  gen 27  tok=     30     71.57 ms  ?
+  gen 28  tok=  12757     71.09 ms   Whether
+  gen 29  tok=    424     71.70 ms   it
+  gen 30  tok=    579     70.73 ms  's
+  gen 31  tok=  34579     71.23 ms   answering
+  gen 32  tok=   4602     71.01 ms   questions
+    [spill] tok 47     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 33  tok=     11     71.19 ms  ,
+  gen 34  tok=  21156     71.53 ms   solving
+  gen 35  tok=   5154     70.93 ms   problems
+  gen 36  tok=     11     71.85 ms  ,
+  gen 37  tok=   6611     71.07 ms   creating
+  gen 38  tok=   2144     71.64 ms   content
+  gen 39  tok=     11     70.90 ms  ,
+  gen 40  tok=    466     71.78 ms   or
+  gen 41  tok=   1066     71.03 ms   just
+  gen 42  tok=   3322     71.74 ms   having
+  gen 43  tok=    264     72.32 ms   a
+  gen 44  tok=  11321     71.25 ms   friendly
+  gen 45  tok=   6040     71.58 ms   chat
+  gen 46  tok=  48952     71.19 ms  —I
+  gen 47  tok=   2688     71.89 ms  'm
+  gen 48  tok=   1532     71.14 ms   here
+  gen 49  tok=    310     72.22 ms   to
+    [spill] tok 64     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+  gen 50  tok=   1438     71.33 ms   help
+  gen 51  tok=     13     71.46 ms  .
+  gen 52  tok=   3437     71.41 ms   What
+  gen 53  tok=   1000     71.43 ms   would
+  gen 54  tok=    488     73.17 ms   you
+  gen 55  tok=   1040     71.72 ms   like
+  gen 56  tok=    310     72.57 ms   to
+  gen 57  tok=  12804     71.31 ms   explore
+  gen 58  tok=   3658     71.66 ms   together
+  gen 59  tok=     30     71.85 ms  ?
+  gen 60  tok=  25677     71.37 ms   �
+  gen 61  tok=    232     72.15 ms  �
+  [eos]
+
+=== pure-blood token rate (measured, this card) ===
+  61 generated tokens in 4354.7 ms  ->  14.01 tok/s
+  first generated token (prefill+1): 70.8 ms; steady-state: 71.4 ms/token
+  dispatches 1303750, barriers 1302875 per command buffer (one submit per token)
+  command buffers | load phase: 119 allocated (never reused, not counted below)
+                  | forward phase: 1 allocated + 936 reuses = 937 begins over 76 positions = 12.3 per position (BONSAI_CB_REUSE=1)
+  KV at the end: 76 live positions of cap 2048 (1.82 MiB of arena, 24.50 KiB/token, V = q8_0), blocks evicted 0, refused 0, soft-watched 0
+  guard actions (decisions taken at a block boundary) and spill samples (threshold crossings) are different counters - a refusal on the cap-geometry path needs no hard sample at all, so "refused > 0, hard = 0" is consistent, not a contradiction.
+    [spill] tok 76     shared    40.93 MiB (growth   +0.00 over the reference    40.93, dedicated  2582.47 MiB, growth run 0)
+
+=== PDH 'GPU Process Memory\Shared Usage' for this pid (the spill judge) ===
+  thresholds judge GROWTH over the first decode sample; reference sample 40.93 MiB, soft > 32 MiB, hard > 64 MiB with a growth run of >= 3
+  samples 45 of 45 tried, peak absolute 40.93 MiB, peak growth +0.00 MiB, soft 0, hard 0, monotonic-run(>=3 increases) 0
+  curve (every sample, MiB): 18:40.9 50:40.9 64:40.9 74:40.9 18:40.9 50:40.9 64:40.9 74:40.9 18:40.9 50:40.9 64:40.9 82:40.9 114:40.9 128:40.9 138:40.9 18:40.9 50:40.9 64:40.9 82:40.9 114:40.9 128:40.9 138:40.9 15:40.9 47:40.9 64:40.9 79:40.9 111:40.9 128:40.9 135:40.9 15:40.9 47:40.9 64:40.9 79:40.9 111:40.9 128:40.9 135:40.9 15:40.9 47:40.9 64:40.9 79:40.9 105:40.9 15:40.9 47:40.9 64:40.9 76:40.9
+
+=== text ===
+Hello! I'm Qwen3.5, a large language model developed by Tongyi Lab. How can I assist you today? Whether it's answering questions, solving problems, creating content, or just having a friendly chat—I'm here to help. What would you like to explore together? 😊
+[serve] chatcmpl-bonsai-8 done: 15 prompt + 61 generated (0 reasoning) in 4354.7 ms -> 14.01 tok/s, stop
